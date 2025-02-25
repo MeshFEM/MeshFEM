@@ -49,7 +49,6 @@ struct DynamicSimulator {
     DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms, bool useLumpedMass, double dt_)
         : dt(dt_), m_obj(eo), m_noninertiaTerms(terms)
     {
-
         v.setZero(m_obj->numVars());
 
         m_noninertiaTerms.push_back(eo);
@@ -64,7 +63,7 @@ struct DynamicSimulator {
 
         m_opt = std::make_shared<NewtonOptimizer>(m_prob);
 
-        // Set good defaults for dynamic simulation
+        // Set good defaults
         HessianProjectionAdaptive hpc;
         hpc.startWithProjectionActive = false;             // Dynamics problems are highly regularized by the inertia term and therefore usually do not need projection
         hpc.numConsecutiveIndefiniteStepsBeforeEnable = 0; // Enable projection immediately if the Hessian is indefinite
@@ -90,7 +89,6 @@ struct DynamicSimulator {
         // excluding inertia forces
         VXd f;
         f.setZero(m_obj->numVars());
-        //m_obj->accumulateGradient(-1.0, f);
         for (const auto &term : m_noninertiaTerms)
             term->accumulateGradient(-1.0, f);
 
@@ -100,21 +98,37 @@ struct DynamicSimulator {
     const Loads::Inertia<EO> &inertiaLoad() const { return *m_inertiaLoad; }
 
     CholeskyFactorizerBase &massMatrixFactorization() {
+        if (m_inertiaLoad->usingLumpedMass())
+            throw std::runtime_error("Lumped mass matrix does not require a Cholesky factorization; call applyMinv instead.");
+
         if (m_massCholesky.second && (m_massCholesky.first == m_inertiaLoad->getMassMatrixID()))
             return *(m_massCholesky.second);
 
         m_massCholesky.first  = m_inertiaLoad->getMassMatrixID();
         m_massCholesky.second = make_cholesky_factorizer(m_opt->options.factorizer);
         try {
-            m_massCholesky.second->factorize(m_inertiaLoad->M, m_prob->fixedVars());
+            auto M_scalar = m_inertiaLoad->M_full.toScalar();
+            m_massCholesky.second->factorize(M_scalar, m_prob->fixedVars());
         }
         catch (const std::exception &e) {
             std::cout << "Exception encountered when factorizing Mass matrix: " << e.what() << std::endl;
             std::cout << "Warning: lumped mass matrix is not positive definite for quadratic FEM" << std::endl;
-            m_inertiaLoad->M.dumpBinary("failed_mass_matrix.bin");
+            m_inertiaLoad->M_full.dump("failed_mass_matrix.nh");
             throw e;
         }
         return *(m_massCholesky.second);
+    }
+
+    VXd applyMinv(const VXd &b) {
+        VXd result;
+        if (m_inertiaLoad->usingLumpedMass()) {
+            result = b.array() / m_inertiaLoad->M_lumped.array();
+            for (size_t fv : m_prob->fixedVars())
+                result[fv] = 0.0;
+        } else {
+            result = massMatrixFactorization().solve(b);
+        }
+        return result;
     }
 
     VXd configureInertiaForTimeStep(Real alpha = 1){
@@ -129,8 +143,8 @@ struct DynamicSimulator {
         else if (method == TimesteppingMethod::ImplicitNewmark) {
             m_inertiaLoad->weight = 1.0 / (beta * alpha_dt * alpha_dt);
             f_xt = computeNoninertiaForces();
-            VXd x = massMatrixFactorization().solve(f_xt);
-            m_inertiaLoad->xhat = xt + alpha_dt * v + (alpha_dt * alpha_dt * (1.0 - 2.0 * beta) / 2.0) * x;
+            m_inertiaLoad->xhat = xt + alpha_dt * v
+                                    + (alpha_dt * alpha_dt * (1.0 - 2.0 * beta) / 2.0) * applyMinv(f_xt);
         }
         else throw std::runtime_error("Method is not implemented");
 
@@ -160,14 +174,14 @@ struct DynamicSimulator {
         if (method == TimesteppingMethod::BackwardEuler) {
             v = (getVars() - xt) / alpha_dt;
             // Debugging: compare `(x^{t + 1} - x^t) / dt` with `v^t + dt * M^{-1} f(x^{t + 1})`.
-            // VXd v_recompute_from_accel = v + dt * massMatrixFactorization().solve(computeForces());
+            // VXd v_recompute_from_accel = v + dt * applyMinv(computeForces());
             // std::cout << "v_manual norm: " << v_recompute_from_accel.norm() << std::endl;
             // std::cout << "v norm: " <<  v.norm() << std::endl;
             // std::cout << "v_manual relative error: " << (v_recompute_from_accel - v).norm() / v.norm() << std::endl;
         }
         else if (method == TimesteppingMethod::ImplicitNewmark) {
             VXd b = alpha_dt * ((1.0 - gamma) * f_xt + gamma * computeNoninertiaForces());
-            v += massMatrixFactorization().solve(b);
+            v += applyMinv(b);
         }
 
         m_kineticEnergy.push_back(kineticEnergy());
@@ -208,7 +222,6 @@ struct DynamicSimulator {
     }
 
     std::vector<ConvergenceReport> run(const double initTime, const double finalTime) {
-        
         if (initTime >= finalTime) std::runtime_error("Time mismatch: initTime >= finalTime.");
 
         double time = 0.0;
@@ -247,7 +260,7 @@ struct DynamicSimulator {
 
     std::shared_ptr<NewtonMultiobjectiveProblem> getProblem() const { return m_prob; }
 
-    double dt = 0.1;  // time step size
+    double dt = 0.1;  // Time step size
     
     TimesteppingMethod method = TimesteppingMethod::BackwardEuler;
 

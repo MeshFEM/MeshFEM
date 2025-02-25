@@ -102,12 +102,34 @@ struct Impl {
         return result;
     }
 
+    // Vector-valued version of `elementMatrix`
+    template<class _FEMMesh, size_t Dim>
+    static auto elementMatrixVectorValued() {
+        auto M_e_scalar = elementMatrix<_FEMMesh>();
+        Eigen::Matrix<Real, Dim * M_e_scalar.rows(), Dim * M_e_scalar.cols()> M_e;
+        M_e.setZero();
+        for (int i = 0; i < M_e_scalar.rows(); ++i)
+            for (int j = 0; j < M_e_scalar.cols(); ++j)
+                M_e.template block<Dim, Dim>(i * Dim, j * Dim).diagonal().setConstant(M_e_scalar(i, j));
+        return M_e;
+    }
+
     // HRZ-lumped version of `elementMatrix`
     template<class _FEMMesh>
     static auto lumpedElementMatrix() {
         auto result = elementMatrix<_FEMMesh>().diagonal().eval();
         result /= result.sum();
         return result;
+    }
+
+    // HRZ-lumped version of `elementMatrixVectorValued`
+    template<class _FEMMesh, size_t Dim>
+    static auto lumpedElementMatrixVectorValued() {
+        auto M_e_scalar = lumpedElementMatrix<_FEMMesh>();
+        Eigen::Matrix<Real, Dim * M_e_scalar.rows(), 1> M_e;
+        for (int i = 0; i < M_e_scalar.rows(); ++i)
+            M_e.template segment<Dim>(i * Dim).setConstant(M_e_scalar[i]);
+        return M_e;
     }
 };
 

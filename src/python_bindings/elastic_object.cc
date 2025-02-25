@@ -37,7 +37,8 @@ void bind(py::module &m) {
 
         .def("hessian", [](const EO &eo, bool projectionMask) { return eo.hessian(projectionMask); }, py::arg("projectionMask") = false)
         .def("hessianSparsityPattern",    [](const EO &eo, VM vm) { return eo.hessianSparsityPattern(vm); }, py::arg("vmask") = VM::Defo)
-        .def("massMatrix",                [](const EO &eo, bool up, bool l) { return eo.massMatrix(up, l); }, py::arg("updatedParametrization") = false, py::arg("lumped") = false)
+        .def("massMatrix",                [](const EO &eo, bool up) { return eo.massMatrix(up); }, py::arg("updatedParametrization") = false)
+        .def("lumpedMass",                [](const EO &eo, bool up) { return eo.lumpedMass(up); }, py::arg("updatedParametrization") = false)
         .def("sobolevInnerProductMatrix", &EO::sobolevInnerProductMatrix, py::arg("Mscale") = 1.0)
 
         .def("updateParametrization",     &EO::updateParametrization)

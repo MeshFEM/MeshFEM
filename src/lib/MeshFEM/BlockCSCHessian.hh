@@ -27,6 +27,7 @@
 
 #include "SparseMatrices.hh"
 #include "VarStructure.hh"
+#include "ParallelAssembly.hh"
 #include <type_traits>
 
 namespace detail {
@@ -467,7 +468,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 
     void mergeSparsityPattern(const BlockCSCHessianBase &other) {
         if (this->blockVarSizesAndCounts() != other.blockVarSizesAndCounts())
-            throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible block variable sizes/counts");
+            throw std::runtime_error("BlockCSCHessian::mergeSparsityPattern: incompatible block variable structure");
         const CSCMat &other_csc = other;
         auto result = CSCMat::template addWithDistinctSparsityPattern</* SparsityOnly = */ true>(*this, other_csc);
         this->Ai = std::move(result.Ai);
@@ -505,20 +506,38 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
         if (size_t(x.size()) != numScalarCols())
             throw std::runtime_error("BlockCSCHessian::apply: input vector has incorrect size");
         Eigen::VectorXd result(numScalarCols());
-        applyRaw(x.data(), result.data());
+        applyRawParallel(x.data(), result.data());
         return result;
     }
 
     virtual void applyRaw(const double *x, double *result) const = 0;
+    virtual void applyRawParallel(const double *x, double *result) const = 0;
+    virtual double evalQuadraticForm(Eigen::Ref<const Eigen::VectorXd> x) const = 0;
 
     // (Probably very) slow emulation of the legacy, scalar `SuiteSparseMatrix::addNZ` and `addNZBlock` implementations.
     virtual void addNZScalar(size_t vi, size_t vj, double val) = 0;
     virtual void addNZBlockAtScalarLocation(size_t vi, size_t vj, const Eigen::Ref<Eigen::MatrixXd> &block) = 0;
 
+    virtual void addWithSubSparsityFast(const BlockCSCHessianBase &b, const double alpha = 1.0, bool parallel = true) = 0;
+
     template<class _InVector>
     void addDiag(const _InVector &d) {
         assert(size_t(d.size()) == numScalarCols());
         m_addDiag(d.data());
+    }
+
+    void setIdentity(bool preserveSparsity = false) {
+        if (!preserveSparsity) {
+            nz = m;
+            Ap.resize(n + 1);
+            Ai.resize(nz);
+            std::iota(Ap.begin(), Ap.end(), 0);
+            std::iota(Ai.begin(), Ai.end(), 0);
+            finalize();
+        }
+
+        Ax.assign(scalarNNZ(), 0);
+        m_setDiag(1.0);
     }
 
     virtual const OptimizationVarStructureBase   &vars() const = 0;
@@ -547,6 +566,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 private:
     using CSCMat::apply; // hide
     virtual void m_addDiag(const double *d) = 0;
+    virtual void m_setDiag(double d) = 0;
 };
 
 template<class VarStructure, bool _ContiguousBlocks, template<class> class BlockToScalarPolicy>
@@ -557,6 +577,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     using _Real = double;
     using IdxVector = std::vector<_Index>;
     using CSCMat = typename BlockCSCHessianBase::CSCMat;
+    using VXd = Eigen::VectorXd;
     constexpr static bool ContiguousBlocks = _ContiguousBlocks;
 
     using SymmetryMode = typename CSCMat::SymmetryMode;
@@ -716,24 +737,38 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.applyRaw");
         if (isSparsityOnly()) throw std::runtime_error("BlockCSCHessian::applyRaw: cannot apply a sparsity-only matrix");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is currently supported");
-        static constexpr int BlockSize = VarStructure::SingleBlockDim ? int(VarStructure::MaxBlockDim) : Eigen::Dynamic;
-        Eigen::Matrix<_Real, BlockSize, BlockSize, Eigen::ColMajor,
-                      /* maxRows = */ VarStructure::MaxBlockDim,
-                      /* maxCols = */ VarStructure::MaxBlockDim> H_block;
-        Eigen::Matrix<_Real, BlockSize, 1, Eigen::ColMajor, /* maxCols = */ VarStructure::MaxBlockDim> x_j;
+        Eigen::Map<VXd>(result, m_vars.numVars()).setZero();
+        applyRawColumnRangeAccum(0, n, x, result);
+    }
 
-        using  VecMap = Eigen::Map<      Eigen::Matrix<_Real, BlockSize, 1>>;
-        using CVecMap = Eigen::Map<const Eigen::Matrix<_Real, BlockSize, 1>>;
-        Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(result, m_vars.numVars()).setZero();
+    virtual void applyRawParallel(const _Real *x, _Real *result) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.applyRaw");
+        if (isSparsityOnly()) throw std::runtime_error("BlockCSCHessian::applyRaw: cannot apply a sparsity-only matrix");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is currently supported");
 
+        Eigen::Map<VXd> resultMap(result, numScalarCols());
+        assemble_parallel([&](const tbb::blocked_range<size_t> &r, const Eigen::Ref<VXd> &out) {
+                    applyRawColumnRangeAccum(r.begin(), r.end(), x, const_cast<double *>(out.data()));
+                }, resultMap, n);
+    }
+
+    static constexpr int BlockSize = VarStructure::SingleBlockDim ? int(VarStructure::MaxBlockDim) : Eigen::Dynamic;
+    using MatrixBlock = Eigen::Matrix<_Real, BlockSize, BlockSize, Eigen::ColMajor,
+                                      /* maxRows = */ VarStructure::MaxBlockDim,
+                                      /* maxCols = */ VarStructure::MaxBlockDim>;
+    using BlockValue = Eigen::Matrix<_Real, BlockSize, 1, Eigen::ColMajor, /* maxCols = */ VarStructure::MaxBlockDim>;
+    using  VecMap = Eigen::Map<      Eigen::Matrix<_Real, BlockSize, 1>>;
+    using CVecMap = Eigen::Map<const Eigen::Matrix<_Real, BlockSize, 1>>;
+
+    // result[:] += H[:, bj_begin:bj_end] @ x[bj_begin:bj_end]
+    void applyRawColumnRangeAccum(_Index bj_begin, _Index bj_end, const _Real *x, _Real *result) const {
         // TODO: speed up the nonuniform case by blocking by type (doing type 0-type 0 block, then
         // type 0-type 1 block, etc.) so that variable dimensions are fixed within each block.
-        // This could be done using recursive templates to iterate over the type
-        // pairs.
-
-        for (_Index bj = 0; bj < n; ++bj) {
+        // This could be done using recursive templates to iterate over the type pairs.
+        MatrixBlock H_block;
+        for (_Index bj = bj_begin; bj < bj_end; ++bj) {
             auto [gvar_j, bsj] = vars().blockInfo(bj);
-            x_j = CVecMap(x + gvar_j, bsj);
+            BlockValue x_j = CVecMap(x + gvar_j, bsj);
             // Iterate over all blocks in column bj
             for (auto cs = columnScanner(bj); !cs.atEnd(); ++cs) {
                 _Index bi = Ai[cs.blockLoc()];
@@ -765,6 +800,47 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
                 }
             }
         }
+    }
+
+    _Real evalQuadraticForm(Eigen::Ref<const VXd> x) const override {
+        if (size_t(x.rows()) != size_t(numScalarRows())) throw std::runtime_error("BlockCSCHessian::evalQuadraticForm: size mismatch; expected " + std::to_string(numScalarRows()) + " got " + std::to_string(x.rows()));
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("evalQuadraticForm: only `UPPER_TRIANGLE` symmetry mode is implemented");
+
+        return summation_parallel([&](size_t bj) {
+            value_type result = 0;
+            auto [gvar_j, bsj] = vars().blockInfo(bj);
+            MatrixBlock H_block;
+            BlockValue H_i_t_x_i = BlockValue::Zero(bsj);
+            for (auto cs = columnScanner(bj); !cs.atEnd(); ++cs) {
+                size_t bi = Ai[cs.blockLoc()];
+                auto [gvar_i, bsi] = vars().blockInfoKnownType(bi, cs.blockType());
+
+                if constexpr (!VarStructure::SingleBlockDim)
+                    H_block.resize(bsi, bsj);
+
+                if (bi != bj) {
+                    const _Real *ptr = Ax.data() + cs.scalarLoc();
+                    for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                        H_block.col(c_j) = Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(ptr, bsi);
+                        ptr += cs.colStride(c_j); // Advance to next scalar column
+                    }
+
+                    H_i_t_x_i += 2 * H_block.transpose() * CVecMap(x.data() + gvar_i, bsi);
+                }
+                else {
+                    const _Real *ptr = Ax.data() + cs.diagBlockScalarLoc();
+                    for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                        H_block.col(c_j).topRows(c_j + 1) = Eigen::Map<const Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(ptr, c_j + 1);
+                        ptr += cs.diagBlockColStride(c_j); // Advance to next scalar column
+                    }
+
+                    // Multiply by symmetric view of H_block
+                    H_i_t_x_i += H_block.template selfadjointView<Eigen::Upper>() * CVecMap(x.data() + gvar_j, bsj);
+                }
+            }
+
+            return CVecMap(x.data() + gvar_j, bsj).dot(H_i_t_x_i);
+        }, n);
     }
 
     _Index findScalarLoc(size_t vi, size_t vj) const {
@@ -819,6 +895,56 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         }
     }
 
+    // Perform the operation:
+    //  (*this) += alpha * b
+    // Assumes RHS sparsity pattern is a subset of LHS.
+    virtual void addWithSubSparsityFast(const BlockCSCHessianBase &b_base, const _Real alpha = 1.0, bool parallel = true) override {
+        if (blockVarSizesAndCounts() != b_base.blockVarSizesAndCounts())
+            throw std::runtime_error("BlockCSCHessian::addWithSubSparsityFast: incompatible variable block structure");
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("addWithSubSparsityFast: only `UPPER_TRIANGLE` symmetry mode is implemented");
+        const BlockCSCHessian &b = cast(b_base);
+
+        auto addColumn = [&](_Index j) {
+            auto csB = b.columnScanner(j);
+            size_t bsj = csB.colBlockSize();
+
+            for (auto csA = columnScanner(j); !csA.atEnd() && !csB.atEnd(); ++csA) {
+                _Index rA = Ai[csA.blockLoc()];
+                _Index rB = b.Ai[csB.blockLoc()];
+
+                if (rA == rB) {
+                          _Real *ptr_A =   Ax.data() + csA.scalarLoc();
+                    const _Real *ptr_B = b.Ax.data() + csB.scalarLoc();
+                    if (rA != j) {
+                        // Add upper-tri block
+                        for (size_t c = 0; c < bsj; ++c) {
+                            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_A, csA.rowBlockSize()) +=
+                                alpha * Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_B, csB.rowBlockSize());
+                            ptr_A += csA.colStride(c);
+                            ptr_B += csB.colStride(c);
+                        }
+                    }
+                    else {
+                        // Add the diagonal block
+                        for (size_t c = 0; c < bsj; ++c) {
+                            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_A, c + 1) +=
+                                alpha * Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, 1>>(ptr_B, c + 1);
+                            ptr_A += csA.diagBlockColStride(c);
+                            ptr_B += csB.diagBlockColStride(c);
+                        }
+                    }
+                    ++csB;
+                }
+                else {
+                    assert(rA < rB && "b's sparsity not a subset of ours");
+                }
+            }
+            assert(csB.atEnd() && "Hit end of column A before end of column B :(");
+        };
+
+        parallel_for_range(n, addColumn, /* grain_size = */ 50, /*parallelism_threshold = */ parallel ? 500 : std::numeric_limits<size_t>::max());
+    }
+
     std::unique_ptr<BlockCSCHessianBase> clone() const override;
 
     using ColumnScanner = detail::ColumnScanner<BlockCSCHessian>;
@@ -833,6 +959,10 @@ private:
 
     virtual void m_addDiag(const _Real *d) override {
         visitDiagonalScalarEntries([d, this](size_t j, _Index loc) { Ax[loc] += d[j]; });
+    }
+
+    virtual void m_setDiag(_Real d) override {
+        visitDiagonalScalarEntries([d, this](size_t /* j */, _Index loc) { Ax[loc] = d; });
     }
 
     BlockCSCHessian(const VarStructure &varStructure)

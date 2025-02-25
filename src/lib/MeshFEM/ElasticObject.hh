@@ -129,7 +129,9 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     // means updating the source frame used for parallel transport.
     virtual CSCMat sobolevInnerProductMatrix(Real /* Mscale */ = 1.0) const { throw std::runtime_error("Unimplemented"); }
 
-    virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool /* lumped */) const { M.setIdentity(true); }
+    // Store the full mass matrix in `M`, preserving its sparsity pattern.
+    virtual void massMatrix(NewtonHessian &M, bool /* updatedParametrization */) const { M.setIdentity(true); }
+    virtual VXd  lumpedMass(bool /* updatedParametrization */) const { return VXd::Ones(numDefoVars()); }
 
     // Whether the mass matrix depends on the deformed configuration.
     virtual bool hasVariableMassMatrix() const { return false; }
@@ -153,9 +155,9 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
     ////////////////////////////////////////////////////////////////////////////
-    CSCMat massMatrix(bool updatedParametrization, bool lumped = false) const {
-        CSCMat M(hessianSparsityPattern().toScalar());
-        massMatrix(M, updatedParametrization, lumped);
+    NewtonHessian massMatrix(bool updatedParametrization) const {
+        NewtonHessian M = hessianSparsityPattern();
+        massMatrix(M, updatedParametrization);
         return M;
     }
 

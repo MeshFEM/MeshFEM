@@ -116,6 +116,9 @@ struct MESHFEM_EXPORT NewtonHessian {
         return H_ss->vars();
     }
 
+    size_t numSparseVars() const { return varStructure().numSparseVars(); }
+    size_t numDenseVars()  const { return varStructure().numDenseVars(); }
+
     void mergeSparsityPattern(const NewtonHessian &other) {
         if (other.H_ss) {
             if (!H_ss)  H_ss = other.H_ss->clone();
@@ -170,6 +173,15 @@ struct MESHFEM_EXPORT NewtonHessian {
         V_d.resize(ndv, 0);
     }
 
+    void setIdentity(bool preserveSparsity = false) {
+        validate();
+        if (H_ss) H_ss->setIdentity(preserveSparsity);
+        H_sd.setZero();
+        H_dd.setIdentity();
+        V_s.resize(0, 0);
+        V_d.resize(0, 0);
+    }
+
     // Trace of the matrix:
     //   [H_ss H_sd] + [V_s][V_s]^T
     //   [H_ds H_dd]   [V_d][V_d]
@@ -220,7 +232,7 @@ struct MESHFEM_EXPORT NewtonHessian {
         if (!os.is_open()) throw std::runtime_error("Failed to open output file " + path);
         size_t nsv = 0, ndv = 0, lrr = low_rank_rank();
         if (H_ss) {
-            nsv = varStructure().numSparseVars();
+            nsv = numSparseVars();
             if (!H_ss->uniformBlockSize()) throw std::runtime_error("Dumping non-uniform block sizes not supported");
         }
 

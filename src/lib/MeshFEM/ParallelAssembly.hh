@@ -84,16 +84,21 @@ struct DenseAssemblerData {
 template<class DenseMatrixType>
 using DALocalData = tbb::enumerable_thread_specific<DenseAssemblerData<DenseMatrixType>>;
 
-template<class F, class DenseMatrixType>
+template<class F>
+struct accepts_integer_index { static constexpr bool value = std::is_integral<typename function_traits<F>::template arg<0>::type>::value; };
+
+// Note: `DenseMatrixType` is a storage-backed version of `DestinationType`
+// (needed for cases, e.g., where `DestinationType` is really an Eigen::Map).
+template<class F, class DestinationType, class DenseMatrixType>
 struct DenseAssembler {
-    template<class Derived>
-    DenseAssembler(const F &f, Eigen::MatrixBase<Derived> &A, DALocalData<DenseMatrixType> &locals)
+    DenseAssembler(const F &f, DestinationType &A, DALocalData<DenseMatrixType> &locals)
         : m_f(f), m_nrows(A.rows()), m_ncols(A.cols()), m_locals(locals), m_A(A.derived()) { }
 
     void operator()(const tbb::blocked_range<size_t> &r) const {
         // First thread accumulates directly to m_A
         if (tbb::this_task_arena::current_thread_index() == 0) {
-            for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, m_A); }
+            if constexpr (accepts_integer_index<F>::value) { for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, m_A.derived()); } }
+            else { m_f(r, m_A.derived()); }
             return;
         }
 
@@ -103,28 +108,34 @@ struct DenseAssembler {
             data.A.setZero(m_nrows, m_ncols);
             data.needs_reset = false;
         }
-        for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, data.A); }
+        if constexpr (accepts_integer_index<F>::value) { for (size_t si = r.begin(); si < r.end(); ++si) { m_f(si, data.A); } }
+        else { m_f(r, data.A); }
     }
 private:
     const F &m_f;
     size_t m_nrows, m_ncols;
     DALocalData<DenseMatrixType> &m_locals;
-    DenseMatrixType &m_A;
+    DestinationType &m_A;
 };
 
 template<typename PerElemAssembler, class Derived, class DenseMatrixType>
 void assemble_parallel_noarena(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems, DALocalData<DenseMatrixType> &localData) {
-    if (get_max_num_tbb_threads() == 1) {
-        for (size_t i = 0; i < numElems; ++i)
-            assembler(i, A.derived());
+    const size_t parallelism_threshold = 256;
+    if ((numElems < parallelism_threshold) || (get_max_num_tbb_threads() == 1)) {
+        if constexpr (accepts_integer_index<PerElemAssembler>::value) {
+            for (size_t i = 0; i < numElems; ++i)
+                assembler(i, A.derived());
+        } else {
+            assembler(tbb::blocked_range<size_t>(0, numElems), A.derived());
+        }
         return;
     }
 
     for (auto &d : localData)
         d.needs_reset = true;
 
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems, 100),
-                      DenseAssembler<PerElemAssembler, DenseMatrixType>(assembler, A, localData));
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, numElems, /* grain_size = */ 100),
+                      DenseAssembler<PerElemAssembler, Eigen::MatrixBase<Derived>, DenseMatrixType>(assembler, A, localData));
 
     if (A.rows() < 10 * 1024) { // Threshold for parallel reduction of per-thread results.
         for (const auto &d : localData)
@@ -165,7 +176,8 @@ void assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Deri
 // Returns thread local storage collection so that it might be re-used.
 template<typename PerElemAssembler, class Derived>
 auto assemble_parallel(const PerElemAssembler &assembler, Eigen::MatrixBase<Derived> &A, const size_t numElems) {
-    using DenseMatrixType = Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime, Derived::Options>;
+    using DenseMatrixType = std::decay_t<decltype(A.eval())>;
+        // Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime, Derived::Options>;
     auto daLocalData = std::make_unique<DALocalData<DenseMatrixType>>();
     assemble_parallel(assembler, A, numElems, *daLocalData);
     return daLocalData;

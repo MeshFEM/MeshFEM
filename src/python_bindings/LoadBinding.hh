@@ -30,7 +30,8 @@ static void bindInertia(py::module &m, py::module &detail_module) {
     py::class_<ILoad, Load, std::shared_ptr<ILoad>>(detail_module, ("Inertia" + NameMangler<Object>::name()).c_str())
         .def_readonly("xhat", &ILoad::xhat)
         .def_readonly("weight", &ILoad::xhat)
-        .def_readonly("M",      &ILoad::M, py::return_value_policy::reference_internal)
+        .def_readonly("M_full",   &ILoad::M_full,   py::return_value_policy::reference_internal)
+        .def_readonly("M_lumped", &ILoad::M_lumped, py::return_value_policy::reference_internal)
        ;
 
     m.def("Inertia", [&](const std::shared_ptr<Object> &obj, bool lumpedMass) {
