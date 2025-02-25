@@ -27,8 +27,8 @@ namespace Loads {
             static constexpr size_t Deg = Object::Deg;
             static VXd compute(const Gravity<Object> &g) {
                 const auto &o = g.getObj();
-                auto M = o.massMatrix(/* updatedParametrization */ false, /* useLumpedMass */ false);
-                VXd neg_g_rep = (-g.get_g()).replicate(M.n / N, 1); // Assumes all variables are nodal displacements... (like ElasticSolid)
+                auto M = o.massMatrix(/* updatedParametrization */ false);
+                VXd neg_g_rep = (-g.get_g()).replicate(M.numSparseVars() / N, 1); // Assumes all variables are nodal displacements... (like ElasticSolid)
                 return M.apply(neg_g_rep);
             }
         };

@@ -14,68 +14,52 @@ def compute_vibrational_modes(obj, fixedVars = [], mtype = MassMatrixType.FULL, 
     """
     Compute the vibrational modes of an elastic object `obj`
     """
-    H = obj.hessian()
-    Htrip = H if isinstance(H, sparse_matrices.TripletMatrix) else H.getTripletMatrix()
-
-    M_scipy = None
+    H = obj.hessian().toScalar()
+    M = None
 
     if (mtype != MassMatrixType.IDENTITY):
         objectMethods = dir(obj)
-        if ((mtype == MassMatrixType.FULL) or (mtype == MassMatrixType.LUMPED)):
+        if (mtype == MassMatrixType.FULL):
             if ("massMatrix" in objectMethods):
-                customArgs = {}
-                if (mtype == MassMatrixType.LUMPED):
-                    customArgs['lumped'] = True
-                if (updatedParametrization):
-                    customArgs['updatedParametrization'] = True
-                M = evalWithCustomArgs(obj.massMatrix, customArgs)
-                Mtrip = M if isinstance(M, sparse_matrices.TripletMatrix) else M.getTripletMatrix()
-                Mtrip.reflectUpperTriangle()
-                Mtrip.rowColRemoval(fixedVars)
-                M_scipy = Mtrip.compressedColumn()
+                M = evalWithCustomArgs(obj.massMatrix, {'updatedParametrization': updatedParametrization}).toScalar()
             else:
                 print("WARNING: object does not implement `massMatrix`; falling back to identity metric")
-        # elif (mtype == MassMatrixType.LUMPED):
-        #     if ("lumpedMassMatrix" in objectMethods):
-        #         M_scipy = scipy.sparse.diags(np.delete(obj.lumpedMassMatrix(), fixedVars))
-        #     else:
-        #         print("WARNING: object does not implement `lumpedMassMatrix`; falling back to identity metric")
+        elif (mtype == MassMatrixType.LUMPED):
+            if ("lumpedMass" in objectMethods):
+                M = evalWithCustomArgs(obj.lumpedMass, {'updatedParametrization': updatedParametrization})
+            else: print("WARNING: object does not implement `lumpedMassMatrix`; falling back to identity metric")
         else: raise Exception('Unknown mass matrix type.')
 
-    return compute_vibrational_modes_from_triplet_matrices(Htrip, fixedVars, n, sigma, M_scipy)
+    return compute_vibrational_modes_from_matrices(H, fixedVars, n, sigma, M)
 
-def compute_vibrational_modes_from_triplet_matrices(Htrip, fixedVars, n, sigma, M_scipy = None):
-    numVars = Htrip.m
-    Htrip.rowColRemoval(fixedVars)
-    Htrip.reflectUpperTriangle()
-    H = Htrip.compressedColumn()
+def compute_vibrational_modes_from_matrices(H, fixedVars, n, sigma, M = None):
+    """
+    Compute the vibrational modes whose corresponding eigenvalues are closest to `sigma`
+    given Hessian `H` and mass matrix `M` represented as `sparse_matrices.SuiteSparseMatrix` objects.
+    When `M` is a lumped mass matrix, it is instead represented as a
+    `numpy.ndarray` holding the diagonal entries.
 
-    # print("m:", Htrip.m, " nnz:", Htrip.nnz)
-    if (M_scipy is None): lambdas, modes = eigsh(H, n,            sigma=sigma, which='LM')
-    else:                 lambdas, modes = eigsh(H, n, M=M_scipy, sigma=sigma, which='LM')
+    These modes are computed after applying Dirichlet constraints on the variables in `fixedVars`
+    (removing these rows/columns of the input matrices).
+    """
+    if (fixedVars):
+        H.rowColRemoval(fixedVars)
+        if (isinstance(M, np.ndarray)): M = np.delete(M, fixedVars) # Lumped case
+        elif (M is not None):           M.rowColRemoval(fixedVars)
 
-    full_modes = np.zeros((numVars, modes.shape[1]))
-    full_modes[np.delete(np.arange(numVars), fixedVars), :] = modes
+    H_scipy = H.toSymmetryMode(sparse_matrices.SymmetryMode.NONE).toSciPy()
+    M_scipy = None
+    if (M is not None):
+        if (isinstance(M, np.ndarray)): M_scipy = scipy.sparse.diags(M) # Lumped case
+        else:                           M_scipy = M.toSymmetryMode(sparse_matrices.SymmetryMode.NONE).toSciPy()
+
+    if (M_scipy is None): lambdas, modes = eigsh(H_scipy, n,            sigma=sigma, which='LM')
+    else:                 lambdas, modes = eigsh(H_scipy, n, M=M_scipy, sigma=sigma, which='LM')
+
+    full_modes = np.zeros((H.m, modes.shape[1]))
+    full_modes[np.delete(np.arange(H.m), fixedVars), :] = modes
 
     return lambdas, full_modes
-
-# save hessian's triplet form to filename (e.g. filename.mat also npz format in filename.npz)
-# if fixedVars is specified, will use it to remove rows&cols of hessian
-def save_triplet(Htrip, filename, fixedVars = None):
-    Htrip.reflectUpperTriangle()
-    if fixedVars is not None:
-        Htrip.rowColRemoval(fixedVars)
-    Htrip.dumpBinary(filename+".mat")
-    H = Htrip.compressedColumn()
-    save_npz(filename, H)
-
-def load_triplet(filename):
-    from sparse_matrices import TripletMatrix
-    a = TripletMatrix()
-    if filename[-4:] != '.mat':
-        filename = filename + ".mat"
-    a.readBinary(filename)
-    return a
 
 # save computed eigenvalues and eigenvectors to file
 # eigenvalue store in 'lambdas_filename.npy'
@@ -91,7 +75,3 @@ def load_vibrational_modes(filename):
     lambdas = np.load("lambdas_" + filename)
     full_modes = np.load("full_modes_" + filename)
     return lambdas, full_modes
-
-# from compute_vibrational_modes import compute_vibrational_modes
-# fix = [mstructure.getAverageDeformationGradientVarIdx(0, 0), mstructure.getNodeFluctuationDisplacementVarIndices(0)[0]]
-# lambdas, full_modes = compute_vibrational_modes(mstructure, fix, 6, sigma=-0.001)

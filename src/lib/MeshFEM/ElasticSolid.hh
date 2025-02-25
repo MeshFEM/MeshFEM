@@ -149,7 +149,6 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return g;
     }
 
-    using PerElementBlockHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     using PerElementHessian = Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>;
     PerElementHessian elementHessian(size_t ei, bool disableProjection = false, Real weight = 1.0) const {
         PerElementHessian result = SE::hessian(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei),
@@ -197,10 +196,17 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     using Base::massMatrix;
-    virtual void massMatrix(CSCMat &M, bool /* updatedParametrization */, bool lumped) const override {
-        M.setZero();
-        MassMatrix::accumulate_vector_valued<>(mesh(), M, lumped);
-        if (this->getMassDensity() != 1.0) M *= this->getMassDensity();
+    virtual void massMatrix(NewtonHessian &M, bool /* updatedParametrization */) const override {
+        PerElementHessian M_e = MassMatrix::Impl<Deg>::template elementMatrixVectorValued<Mesh, N>();
+        assembler().assembleHessian(M, mesh(), [this, &M_e](size_t ei) -> PerElementHessian { return (this->getMassDensity() * mesh().elementVolume(ei)) * M_e; });
+    }
+
+    virtual VXd lumpedMass(bool /* updatedParametrization */) const override {
+        auto M_e = MassMatrix::Impl<Deg>::template lumpedElementMatrixVectorValued<Mesh, N>();
+
+        VXd result = Eigen::VectorXd::Zero(numDefoVars());
+        assembler().assembleGradient(result, mesh(), [this, &M_e](size_t ei) -> ElementGradient { return (this->getMassDensity() * mesh().elementVolume(ei)) * M_e; });
+        return result;
     }
 
     virtual CSCMat sobolevInnerProductMatrix(Real Mscale = 1.0) const override {

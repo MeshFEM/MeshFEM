@@ -112,6 +112,41 @@ void runTest() {
         
         REQUIRE((scalarH_compare.data() - scalarH.data()).norm() == 0);
     }
+
+    // Validate apply
+    {
+        Eigen::VectorXd x = Eigen::VectorXd::Random(scalarH.n);
+        Eigen::VectorXd b_groundTruth = scalarH.apply(x);
+        Eigen::VectorXd b = blockH->apply(x);
+        bool agree = (b - b_groundTruth).norm() / b_groundTruth.norm() < 1e-8;
+        if (!agree) {
+            std::cout << "b_groundTruth: " << b_groundTruth.transpose() << std::endl;
+            std::cout << "b: " << b.transpose() << std::endl;
+        }
+        REQUIRE(agree);
+    }
+
+    // Validate evalQuadraticForm
+    {
+        Eigen::VectorXd x = Eigen::VectorXd::Random(scalarH.n);
+        double gt = scalarH.evalQuadraticForm(x);
+        double val = blockH->evalQuadraticForm(x);
+        REQUIRE(std::abs(val - gt) / std::abs(gt) < 1e-8);
+    }
+
+    // Validate setIdentity
+    {
+        SuiteSparseMatrix scalarH_id = scalarH;
+        scalarH_id.setIdentity(/* preserveSparsity = */ false);
+        auto blockH_id = blockHsp.clone();
+        blockH_id->setIdentity(/* preserveSparsity = */ false);
+        auto scalarH_id_compare = blockH_id->toScalar();
+        // Note: we can't compare the data directly since `scalarH_id_compare`
+        // has additional (numerically zero) entries stored in the upper
+        // triangle of the diagonal blocks.
+        REQUIRE(scalarH_id.trace() == scalarH_id_compare.trace());
+        REQUIRE(scalarH_id.data().sum() == scalarH_id_compare.data().sum());
+    }
 }
 
 template<template<class Derived> class Policy>
@@ -130,6 +165,8 @@ void runTests() {
 }
 
 TEST_CASE("block sparse hessian indexing", "[block_sparse_hessian]" ) {
+    set_max_num_tbb_threads(2);
     runTests<BlockToScalarPolicyTypeOffsetsPerColumn>();
     runTests<BlockToScalarPolicyLocLookup>();
+    unset_max_num_tbb_threads();
 }

@@ -641,21 +641,35 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         return fieldSamplerMatrix(mesh(), N, P, 0, numDefoVars() - 3 * m_numVertices /* nodal value vector is padded by midedge normal variables */);
     }
 
-    using Base::massMatrix;
+    // We only assign mass to the vertices (associating zero inertia with the midedge normals).
+    // To ensure a positive-definite mass matrix, we do, however, put a
+    // small constant on the diagonal for theta/crease angle variables.
     Real angleVarRelativeMomentOfInertia = 1e-6; // Relative to average nodal mass.
-    virtual void massMatrix(CSCMat &M, bool updatedParametrization, bool lumped) const override {
-        // We only assign mass to the vertices (associating zero inertia with the midedge normals).
-        // To ensure a positive-definite mass matrix, we do, however, put a
-        // small constant on the diagonal for theta/crease angle variables.
+    void setAngularVariableMomentOfInertia(VXd &result) const {
+        if (size_t(result.size()) != numDefoVars()) throw std::runtime_error("setAngularVariableMomentOfInertia: Invalid result size");
+        Real avg_nodal_mass = this->getMassDensity() * mesh().volume() / mesh().numNodes();
+        result.tail(numDefoVars() - thetaOffset()).setConstant(avg_nodal_mass * angleVarRelativeMomentOfInertia);
+    }
 
-        // TODO: rho?
-        M.setZero();
-        MassMatrix::accumulate_vector_valued<>(mesh(), M, lumped, /* skipElem = */ std::vector<bool>(), /*accumulateToSubblock = */ true);
+    using Base::massMatrix;
+    virtual void massMatrix(NewtonHessian &M, bool /* updatedParametrization */) const override {
+        auto M_e = MassMatrix::Impl<Deg>::template elementMatrixVectorValued<Mesh, N>();
+        assembler().assembleHessian(M, mesh(), [this, &M_e](size_t ei) { return ((this->getMassDensity() * mesh().elementVolume(ei)) * M_e).eval(); });
 
         size_t numVtxVars = thetaOffset();
-        Real avg_mass = M.trace() / numVtxVars;
-        for (size_t i = numVtxVars; i < numVars(); ++i)
-            M.addDiagEntry(i, avg_mass * angleVarRelativeMomentOfInertia);
+        VXd momentOfInertia(numDefoVars());
+        momentOfInertia.head(numVtxVars).setZero();
+        setAngularVariableMomentOfInertia(momentOfInertia);
+        M.H_ss->addDiag(momentOfInertia);
+    }
+
+    virtual VXd lumpedMass(bool /* updatedParametrization */) const override {
+        VXd result(numDefoVars());
+        result.head(thetaOffset()).setZero();
+        const auto M_e = MassMatrix::Impl<Deg>::template lumpedElementMatrixVectorValued<Mesh, N>();
+        assembler().assembleGradient(result, mesh(), [this, &M_e](size_t ei) { return ((this->getMassDensity() * mesh().elementVolume(ei)) * M_e).eval(); });
+        setAngularVariableMomentOfInertia(result);
+        return result;
     }
 
     virtual ~ElasticSheet() { }
