@@ -343,7 +343,7 @@ protected:
         return padded_num;
     }
 
-    size_t m_generateMatrixId() const { return const_cast<size_t &>(m_matrixId)++; }
+    size_t m_generateMatrixId() const { if (m_recordOnlyMostRecentMatrix) return m_matrixId; else return const_cast<size_t &>(m_matrixId)++; }
 
     void m_recordSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
         if (recordingMatrices()) {
@@ -370,6 +370,9 @@ protected:
 
     std::string m_matrix_dump_path;
     size_t m_matrixId = 0;
+    // If true, when recording the matrices, we overwrite the existing recorded matrices rather than writing fresh ones.
+    // This is implemented by leaving `m_matrixId` at `0`.
+    bool m_recordOnlyMostRecentMatrix = false;
 
     // This is meant to be called only once upon symbolic factorization, and
     // the resulting reduced matrix is re-used for factorization
