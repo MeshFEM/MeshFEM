@@ -14,7 +14,9 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
     m_problem->updateSparsityPattern();
     const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !m_solver->fixesSameVarsAsSortedUnique(m_problem->fixedVars());
     if (fixedVarsChanged || (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID)) {
-        m_solver->factorizeSymbolic(*(m_problem->hessianSparsityPattern().H_ss), m_problem->fixedVars());
+        NewtonHessian Hsp = m_problem->hessianSparsityPattern();
+        // std::cout << "Symbolic factorization of sparsity pattern with " << Hsp.H_ss->scalarNNZ() << " nonzeros" << std::endl;
+        m_solver->factorizeSymbolic(*(Hsp.H_ss), m_problem->fixedVars());
         m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
     }
     m_fixedVarsCouldHaveChanged = false; // Suppress further checks until the next optimization run.
