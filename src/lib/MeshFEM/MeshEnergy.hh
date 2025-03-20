@@ -222,6 +222,9 @@ struct MeshEnergy : public MeshEnergyBase {
         materials.setSpatiallyVarying(mats, materialForElement);
     }
 
+    // Non-indexed material assignment
+    void setSpatiallyVaryingMaterial(const std::vector<Material> &mats) { materials.setSpatiallyVarying(mats); }
+
     StencilCollection<Stencil> stencils;
     std::vector<Element> elements;
     MA materials; // must come after stencils so stencil count is initialized first.

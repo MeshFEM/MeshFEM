@@ -317,9 +317,11 @@ struct MultiObjective {
 
     const std::vector<Real> &getWeights() const { return m_weights; }
 
-    Real weight(size_t i) const { return m_weights[i]; }
-    const NewtonObjectiveTermBase &term(size_t i) const { return *m_terms[i]; }
-          NewtonObjectiveTermBase &term(size_t i)       { return *m_terms[i]; }
+    void validateTermIndex(size_t i) const { if (i >= numTerms()) throw std::runtime_error("Term index " + std::to_string(i) + " out of bounds"); }
+
+    Real weight(size_t i) const { validateTermIndex(i); return m_weights[i]; }
+    const NewtonObjectiveTermBase &term(size_t i) const { validateTermIndex(i); return *m_terms[i]; }
+          NewtonObjectiveTermBase &term(size_t i)       { validateTermIndex(i); return *m_terms[i]; }
 
     // Accessing terms by name
     size_t termIndex(const std::string &name) const {

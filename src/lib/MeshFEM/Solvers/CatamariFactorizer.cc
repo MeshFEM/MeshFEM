@@ -311,7 +311,9 @@ void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const
     // `MAX_INSTANTIATED_BLOCK_SIZE`; all others get converted to an ordinary scalar matrix.
     // TODO: convert to GCD block size instead? Do we have a use case for this?
     // TODO: try block reordering of nonuniform block sizes (then expand to scalar)?
-    if (mat.uniformBlockSize() && (mat.maxBlockSize() <= MAX_INSTANTIATED_BLOCK_SIZE)) {
+
+    const bool blockFactorizationSupported = mat.uniformBlockSize() && (mat.maxBlockSize() <= MAX_INSTANTIATED_BLOCK_SIZE);
+    if (blockFactorizationSupported) {
         m_blockSize = mat.maxBlockSize();
         m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
     }
@@ -350,8 +352,12 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         // structure (i.e., that pin only part of a block); these will need to
         // be handled specially.
         for (size_t bi : pinnedBlockVars) {
-            if (numComponentsPinned[bi] != m_blockSize)
-                throw std::runtime_error("Partially-pinned block variables not yet implemented");
+            if (numComponentsPinned[bi] != m_blockSize) {
+                std::cout << "WARNING: Partially-pinned block variables not yet implemented; falling back to scalar factorization" << std::endl;
+                m_scalarHessian = ((const BlockCSCHessianBase &)(mat)).toScalar();
+                m_blockSize = 1;
+                return m_factorizeSymbolic(m_scalarHessian, pinnedVars);
+            }
             // TODO: keep the partially pinned block in the sparsity pattern and
             // apply the scalar pin constraint during numeric factorization.
         }

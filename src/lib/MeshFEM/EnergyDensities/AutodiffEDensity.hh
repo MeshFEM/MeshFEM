@@ -19,13 +19,15 @@ template<class Derived, typename Real_, size_t Dim_, EDensityType EDType_ = EDen
 struct AutodiffEDensity {
     using Real = Real_;
     static constexpr EDensityType EDType = EDType_;
+    static_assert(!((EDType == EDensityType::Membrane) && (Dim_ != 3)), "Membrane energy density must be a function of a 3x2 matrix");
     static constexpr size_t Dimension = Dim_;
-    static constexpr size_t N = Dim_;
-    using Matrix = Eigen::Matrix<Real, N, N>;
-    using Hessian = Eigen::Matrix<Real, N * N, N * N>;
+    static constexpr size_t M = Dim_;
+    static constexpr size_t N = (EDType == EDensityType::Membrane) ? 2 : Dim_;
+    using Matrix = Eigen::Matrix<Real, M, N>;
+    using Hessian = Eigen::Matrix<Real, M * N, M * N>;
 
-    using ADScalar  = Eigen::AutoDiffScalar<Eigen::Matrix<Real,     N * N, 1>>;
-    using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, N * N, 1>>;
+    using ADScalar  = Eigen::AutoDiffScalar<Eigen::Matrix<Real,     M * N, 1>>;
+    using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, M * N, 1>>;
 
     AutodiffEDensity() { setDeformationGradient(Matrix::Identity()); }
     AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&) : useAbsProjection(other.useAbsProjection) { }
@@ -34,44 +36,44 @@ struct AutodiffEDensity {
         m_F = F;
         if (elevel == EvalLevel::EnergyOnly) { m_energy = derived().psi(F); }
         if (elevel == EvalLevel::Gradient) {
-            Eigen::Matrix<ADScalar, N, N> F_AD;
+            Eigen::Matrix<ADScalar, M, N> F_AD;
             for (size_t j = 0; j < N; ++j) {
-                for (size_t i = 0; i < N; ++i) {
+                for (size_t i = 0; i < M; ++i) {
                     F_AD(i, j).value() = F(i, j);
                     F_AD(i, j).derivatives().setZero();
-                    F_AD(i, j).derivatives()[i + j * N] = 1;
+                    F_AD(i, j).derivatives()[i + j * M] = 1;
                 }
             }
             ADScalar psi_AD = derived().psi(F_AD);
             m_energy = psi_AD.value();
-            for (size_t i = 0; i < N; ++i)
-                for (size_t j = 0; j < N; ++j)
-                    m_denergy(i, j) = psi_AD.derivatives()[i + j * N];
+            for (size_t j = 0; j < N; ++j)
+                for (size_t i = 0; i < M; ++i)
+                    m_denergy(i, j) = psi_AD.derivatives()[i + j * M];
         }
         if (elevel >= EvalLevel::Hessian) {
-            Eigen::Matrix<AD2Scalar, N, N> F_AD2;
+            Eigen::Matrix<AD2Scalar, M, N> F_AD2;
             for (size_t j = 0; j < N; ++j) {
-                for (size_t i = 0; i < N; ++i) {
+                for (size_t i = 0; i < M; ++i) {
                     F_AD2(i, j).value() = F(i, j);
-                    F_AD2(i, j).value().derivatives().setUnit(i + j * N); // Initial derivative of the value
-                    F_AD2(i, j).derivatives()        .setUnit(i + j * N); // Initial value of the derivative
+                    F_AD2(i, j).value().derivatives().setUnit(i + j * M); // Initial derivative of the value
+                    F_AD2(i, j).derivatives()        .setUnit(i + j * M); // Initial value of the derivative
                     // Initial Hessian is zero
                     for (size_t l = 0; l < N; ++l)
-                        for (size_t k = 0; k < N; ++k)
-                            F_AD2(i, j).derivatives()[k + l * N].derivatives().setZero();
+                        for (size_t k = 0; k < M; ++k)
+                            F_AD2(i, j).derivatives()[k + l * M].derivatives().setZero();
                 }
             }
 
             AD2Scalar psi_AD2 = derived().psi(F_AD2);
             m_energy = psi_AD2.value().value();
             for (size_t j = 0; j < N; ++j) {
-                for (size_t i = 0; i < N; ++i) {
-                    m_denergy(i, j) = psi_AD2.derivatives()[i + j * N].value();
+                for (size_t i = 0; i < M; ++i) {
+                    m_denergy(i, j) = psi_AD2.derivatives()[i + j * M].value();
 
                     // Extract the Hessian into our column-major-flattened storage matrix.
                     for (size_t l = 0; l < N; ++l)
-                        for (size_t k = 0; k < N; ++k)
-                            m_d2energy(i + j * N, k + l * N) = psi_AD2.derivatives()[i + j * N].derivatives()[k + l * N];
+                        for (size_t k = 0; k < M; ++k)
+                            m_d2energy(i + j * M, k + l * M) = psi_AD2.derivatives()[i + j * M].derivatives()[k + l * M];
                 }
             }
             if (projectionEnabled && (elevel != EvalLevel::HessianWithDisabledProjection)) {
