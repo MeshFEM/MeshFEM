@@ -654,7 +654,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     using Base::massMatrix;
     virtual void massMatrix(NewtonHessian &M, bool /* updatedParametrization */) const override {
         auto M_e = MassMatrix::Impl<Deg>::template elementMatrixVectorValued<Mesh, N>();
-        assembler().assembleHessian(M, mesh(), [this, &M_e](size_t ei) { return ((this->getMassDensity() * mesh().elementVolume(ei)) * M_e).eval(); });
+        assembler().assembleHessian(M, mesh(), [this, &M_e](size_t ei) { return ((this->getMassDensity() * m_materials[ei].getThickness() * mesh().elementVolume(ei)) * M_e).eval(); });
 
         size_t numVtxVars = thetaOffset();
         VXd momentOfInertia(numDefoVars());
@@ -667,7 +667,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
         VXd result(numDefoVars());
         result.head(thetaOffset()).setZero();
         const auto M_e = MassMatrix::Impl<Deg>::template lumpedElementMatrixVectorValued<Mesh, N>();
-        assembler().assembleGradient(result, mesh(), [this, &M_e](size_t ei) { return ((this->getMassDensity() * mesh().elementVolume(ei)) * M_e).eval(); });
+        assembler().assembleGradient(result, mesh(), [this, &M_e](size_t ei) { return ((this->getMassDensity() * m_materials[ei].getThickness() * mesh().elementVolume(ei)) * M_e).eval(); });
         setAngularVariableMomentOfInertia(result);
         return result;
     }
