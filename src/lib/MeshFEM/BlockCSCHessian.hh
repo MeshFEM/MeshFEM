@@ -378,8 +378,11 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
 
     ColumnScanner &operator++() {
         m_scalarLoc += blockStride();
-        size_t bi = m_H.Ai[++m_bloc];
-        while (bi >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
+        ++m_bloc;
+        if (!atEnd()) {
+            size_t bi = m_H.Ai[m_bloc];
+            while (bi >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
+        }
         return *this;
     }
 
