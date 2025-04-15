@@ -143,7 +143,7 @@ if(NOT TARGET pybind11::module)
     include(MeshFEMDownloadExternal)
     meshfem_download_project(pybind11
         GIT_REPOSITORY https://github.com/pybind/pybind11.git
-        GIT_TAG 5b0a6fc2017fcc176545afe3e09c9f9885283242
+        GIT_TAG a2e59f0e7065404b44dfe92a28aca47ba1378dc4
     )
     add_subdirectory(${MESHFEM_EXTERNAL}/pybind11)
 endif()

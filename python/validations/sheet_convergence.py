@@ -38,10 +38,13 @@ def runSimulation(obj):
     with so(): obj.computeEquilibrium([], leftEdgeVars + rightEdgeVars, opts=opts)
     return time.time() - start, obj
 
+def getMesh(maxArea = 0.0001, L = 4, degree=1, embeddingDimension = 0):
+    return mesh.Mesh(*triangulation.triangulate(*stripBoundary(L), triArea=maxArea)[0:2], degree=degree, embeddingDimension=embeddingDimension)
+
 def getSheet(thickness, maxArea = 0.0001, L = 4, useNeoHookean = True):
     if useNeoHookean: psi = energy.NeoHookeanYoungPoisson (2, 200, 0.3)
     else:             psi = energy.StVenantKirchhoffCBased(tensors.ElasticityTensor2D(200, 0.3))
-    m = mesh.Mesh(*triangulation.triangulate(*stripBoundary(L), triArea=maxArea)[0:2], embeddingDimension=3)
+    m = getMesh(maxArea, L, embeddingDimension=3)
     plate = elastic_sheet.ElasticSheet(m, psi)
     plate.thickness = thickness
     return plate
