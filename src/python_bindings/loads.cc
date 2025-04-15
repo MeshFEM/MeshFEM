@@ -8,6 +8,7 @@
 #include <MeshFEM/Loads/SphereFitter.hh>
 #include <MeshFEM/Loads/CircumcenterBarrier.hh>
 #include <MeshFEM/Loads/Traction.hh>
+#include <MeshFEM/Loads/BodyForce.hh>
 #include <MeshFEM/Loads/Inflation.hh>
 
 #include <pybind11/pybind11.h>
@@ -213,6 +214,17 @@ PYBIND11_MODULE(loads, m)
         .def("grad_x",               &Load::grad_x)
         .def("grad_X",               &Load::grad_X)
         ;
+
+    using BFLoad = Loads::BodyForce<double>;
+    py::class_<BFLoad, Load, std::shared_ptr<BFLoad>>(m, "BodyForce")
+       .def(py::init<std::shared_ptr<BFLoad::EO>>(), py::arg("obj"))
+       .def(py::init([](const std::shared_ptr<BFLoad::EO> &obj, const Eigen::Ref<const BFLoad::MXd> &f) {
+                auto bf = std::make_shared<BFLoad>(obj);
+                bf->setNodalForceDensity(f);
+                return bf;
+            }), py::arg("obj"), py::arg("f"))
+       .def_property("nodalForceDensity", &BFLoad::getNodalForceDensity, &BFLoad::setNodalForceDensity)
+       ;
 
     py::module detail_module = m.def_submodule("detail");
     generateElasticObjectBindings(m, detail_module, LoadBinder());
