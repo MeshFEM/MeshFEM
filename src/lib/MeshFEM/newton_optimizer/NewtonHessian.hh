@@ -116,6 +116,7 @@ struct MESHFEM_EXPORT NewtonHessian {
         return H_ss->vars();
     }
 
+    size_t numVars()       const { return varStructure().numVars(); }
     size_t numSparseVars() const { return varStructure().numSparseVars(); }
     size_t numDenseVars()  const { return varStructure().numDenseVars(); }
 

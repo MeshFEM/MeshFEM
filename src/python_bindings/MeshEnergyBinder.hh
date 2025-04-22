@@ -96,7 +96,12 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) 
         auto me = std::make_shared<ME>(mesh, vars);
         me->setHomogeneousMaterial(convertMaterial<Material>(material));
         return me;
-    }, py::arg("mesh"), py::arg("vars"), py::arg("material") = RawMaterial());
+    }, py::arg("mesh"), py::arg("vars"), py::arg("material"));
+
+    m.def(name.c_str(), [](std::shared_ptr<Mesh> mesh, std::shared_ptr<Vars> vars) {
+        auto me = std::make_shared<ME>(mesh, vars);
+        return me;
+    }, py::arg("mesh"), py::arg("vars"));
 
     ElementSpecificMEBindings<ME>::bind(pyME);
 

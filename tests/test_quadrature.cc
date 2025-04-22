@@ -26,11 +26,13 @@ typedef double Real;
 template<size_t K, size_t Deg, typename F>
 void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
     using QR = Quadrature<K, Deg>;
+    Real vol = 0.125; // Make sure the element volume factor is accounted for...
     for (size_t d = 0; d <= Deg; ++d) {
         for (size_t i = 0; i < funcs[d].size(); ++i) {
-            auto check = [d, i, &ints](Real val) {
-                Real relError = std::abs((val - ints.at(d).at(i)) / ints.at(d).at(i));
+            auto check = [d, i, vol, &ints](Real val) {
+                Real relError = std::abs((val / vol - ints.at(d).at(i)) / ints.at(d).at(i));
                 if (relError > 1e-15) {
+                    cerr.precision(18);
                     cerr << "Error on " << K << "D deg " << d << " function " << i
                          << " (Deg " << Deg << " quadrature): " << relError << endl;
                     cerr << "computed: " << val << ", true: " << ints.at(d).at(i) << endl;
@@ -39,19 +41,46 @@ void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
             };
 
             const auto &f = funcs[d][i];
-            check(QR::integrate(f, 1.0));
+            check(QR::integrate(f, vol));
             {
                 // Check table-based quadrature.
                 Real val = 0;
                 QR::foreach([&](const EvalPt<K> &x, Real w) {
-                    if constexpr (K == 1) val += w * f(x[0], x[1]);
-                    if constexpr (K == 2) val += w * f(x[0], x[1], x[2]);
-                    if constexpr (K == 3) val += w * f(x[0], x[1], x[2], x[3]);
+                    if constexpr (K == 1) val += vol * w * f(x[0], x[1]);
+                    if constexpr (K == 2) val += vol * w * f(x[0], x[1], x[2]);
+                    if constexpr (K == 3) val += vol * w * f(x[0], x[1], x[2], x[3]);
                 });
                 check(val);
             }
         }
+
     }
+
+    // Compare table-based quadrature to the `integrate` routine on a
+    // general nonlinear integrand to verify exact equivalence
+    // (simply checking that both exactly integrate polynomials of degree
+    // `d` is not enough to catch cyclic permutations of the quadrature
+    // point barycentric coordinates, which for asymmetric rules can lead
+    // to significant differences in the approximation on coarse elements).
+    auto f = [](const EvalPt<K> &x) {
+        Real val = 1;
+        for (size_t j = 0; j < K; ++j)
+            val *= sin((x[j] + 0.1 * j) * M_PI);
+        return val;
+    };
+
+    Real integral = QR::integrate(f, 1.0);
+    Real table_int = 0;
+    QR::foreach([&](const EvalPt<K> &x, Real w) { table_int += w * f(x); });
+    Real relError = std::abs((integral - table_int) / integral);
+    if (relError > 1e-15) {
+        cerr.precision(18);
+        cerr << "Table-based quadrature disagreement on " << K << "D"
+             << " function, Deg " << Deg << " quadrature: "
+             << integral << " vs " << table_int << " (relative error: "
+             << relError << ")" << endl;
+    }
+    REQUIRE(relError <= 1e-15);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

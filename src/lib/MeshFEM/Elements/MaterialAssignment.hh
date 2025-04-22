@@ -94,6 +94,8 @@ struct MaterialAssignment {
 
     const std::vector<size_t> &materialForElement() const { return m_materialForElement; }
 
+    Type getType() const { return m_type; }
+
 private:
     Type m_type;
     std::vector<size_t> m_materialForElement;

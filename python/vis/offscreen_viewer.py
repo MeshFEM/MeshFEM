@@ -72,7 +72,7 @@ class OffscreenViewerBase(ViewerBase):
         r = self.renderer
         r.lightEyePos = position
         r.specularIntensity[:] = 0.0
-        r.diffuseIntensity = OffscreenRenderer.hexColorToFloat(color)
+        r.diffuseIntensity = OffscreenRenderer.decodeColor(color)
 
     def showWireframe(self, shouldShow = True):
         self.renderer.setWireframe(1.0 if shouldShow else 0.0)
@@ -120,11 +120,16 @@ class OffscreenViewerBase(ViewerBase):
     def transformModel(self, position, scale, quaternion): self.renderer.modelMatrix(position, scale, quaternion)
 
     def makeTransparent(self, color=None, alpha=0.25):
-        self.solid_color = OffscreenRenderer.hexColorToFloat(color)
-        self.renderer.alpha = alpha
+        if len(self.renderer.meshes) > 0:
+            if color is not None:
+                self.solid_color = self.renderer.meshes[0].color = OffscreenRenderer.decodeColor(color)
+            self.renderer.meshes[0].alpha = alpha
+
     def makeOpaque(self, color=None):
-        self.solid_color = OffscreenRenderer.hexColorToFloat(color)
-        self.renderer.alpha = 1.0
+        if len(self.renderer.meshes) > 0:
+            if color is not None:
+                self.solid_color = self.renderer.meshes[0].color = OffscreenRenderer.decodeColor(color)
+            self.renderer.meshes[0].alpha = 1.0
 
     @property
     def transparentBackground(self): return self.renderer.transparentBackground

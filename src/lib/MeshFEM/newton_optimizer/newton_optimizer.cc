@@ -254,6 +254,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
         }
         catch (std::exception &e) {
             // Tau ran away
+            std::cout << "Caught exception in newton_step: " << e.what() << std::endl;
             break;
         }
         isIndefinite = (tau != 0.0);
