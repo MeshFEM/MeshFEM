@@ -166,7 +166,7 @@ def main():
 
 if __name__ == "__main__":
     print("Usage: python generate_plots_videos.py <result_path> <modelbase_path> <hessian_list_option> <thread_list_option> [<videos_flag>] [<plots_folder_name>] [<videos_folder_name>]")
-    print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM>(Linux Only)")
+    print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM> <CompMajor>(Linux Only)")
     print("--------------------------------------------------------------------------------------------------------------------")
     
     main()

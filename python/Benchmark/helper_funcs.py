@@ -522,7 +522,7 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
 # Input Parameter:
 # numCISBE: numConsecutiveIndefiniteStepsBeforeEnable
 # numPSBD: numProjectionStepsBeforeDisable
-def runSymmds_AdaptiveParameter(m, numCISBE, numPSBD, max_iter=200, hessian_shift=1e-8, grad_tol=None):
+def runSymmds_AdaptiveParameter(m, numCISBE, numPSBD, max_iter=200, hessian_shift=1e-5, grad_tol=None):
 
     obj_history = []
     time_history = []

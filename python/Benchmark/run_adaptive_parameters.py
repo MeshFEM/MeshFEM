@@ -127,7 +127,7 @@ def optuv_models(result_path, modelbase_path, consecutive_step_list, projection_
 
                         obj_arr, time_arr, grad_norm_arr, benchmark_dict, \
                         hessian_projected_arr, hessian_shifted_arr, hessian_indef_arr, \
-                        step_size_arr, dd_arr = helper_funcs.runSymmds_AdaptiveParameter(mesh_data, numCISBE, numPSBD, max_iter=200, hessian_shift=1e-8)
+                        step_size_arr, dd_arr = helper_funcs.runSymmds_AdaptiveParameter(mesh_data, numCISBE, numPSBD, max_iter=200, hessian_shift=1e-5)
                         
                         symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
                         numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)

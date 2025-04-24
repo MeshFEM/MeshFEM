@@ -310,7 +310,7 @@ def readDictData(directory : str, thread_num_list, hessian_option_list):
                 thread_dict['linsolve'] = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
                 thread_dict['hessian_eval'] = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
                 thread_dict['line_search'] = benchmark.totalTime('Line Search$', d=benchmark_dict)
-            elif hessian_option == 'SLIM':
+            elif hessian_option in ['SLIM', 'CompMajor']:
                 thread_dict['hessian_eval'] = benchmark_dict['hessian_eval_time']
                 thread_dict['symbol'] = benchmark_dict['symbolic_fac_time']
                 thread_dict['numeric'] = benchmark_dict['numeric_fac_time']
@@ -365,6 +365,23 @@ def getStepsMaxMin_FromMetricList(metric_list):
         if np.min(metric_list[i] < min_metric): min_metric = np.min(metric_list[i])
     return max_steps, max_metric, min_metric
 
+def saveObjGradTimeFigures_AdaptiveExpWrapper(adap_exp_data_dict, model_name,save_directory,
+                                              thread_ind, thread_num_list, step_tuple_str_list,
+                                              sect=None):
+    # Transformation from adap_exp_data_dict to obj_grad_time_list
+    numOptions = len(step_tuple_str_list)
+    obj_grad_time_list = create_list_of_lists(numOptions)
+    for option_ind, option_name in enumerate(step_tuple_str_list):
+        for thread_num in thread_num_list:
+            obj_arr = adap_exp_data_dict[option_name][thread_num]['obj_arr']
+            time_arr = adap_exp_data_dict[option_name][thread_num]['time_arr']
+            grad_norm_arr = adap_exp_data_dict[option_name][thread_num]['grad_norm_arr']
+            obj_grad_time = np.vstack((obj_arr, grad_norm_arr, time_arr)) # make a (3,n) numpy array
+            obj_grad_time_list[option_ind].append(obj_grad_time)
+
+    # call save_obj_grad_time_figure
+    save_obj_grad_time_figure(obj_grad_time_list, model_name, save_directory, 
+                              thread_ind, thread_num_list, step_tuple_str_list, sect)
 
 # Plot different hessian projection options under one thread configuration
 def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, 

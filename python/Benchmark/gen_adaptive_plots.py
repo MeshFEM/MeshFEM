@@ -73,7 +73,7 @@ def gen_adaptive_exp_plots(result_path, modelbase_path, thread_num_list, step_tu
 
         # create Plots Folder
         save_plot_path = result_path / plots_folder_name / model_name
-        save_plot_path.mkdir(parents=False, exist_ok=True)
+        save_plot_path.mkdir(parents=True, exist_ok=True)
 
         # Generate GradNorm vs Iter plots
         step_tuple_str_list = get_stepTupleStr_list(step_tuple_list)
@@ -81,7 +81,19 @@ def gen_adaptive_exp_plots(result_path, modelbase_path, thread_num_list, step_tu
                                                              'grad_norm_arr', str(save_plot_path), step_tuple_str_list, 
                                                              offset=0, sect=None, scName='ProjIndef', addHessianIndef=True)
         
+        # generate bar plots
+        metric_key_list = ['time', 'hessian_eval', 'linsolve']
+        for metric_keyword in metric_key_list:
+            plot_video_utils.saveMetricBarPlots(model_bk_dict, model_name, metric_keyword, str(save_plot_path), 
+                                                thread_num_list, step_tuple_str_list)
+            plot_video_utils.saveMetricBarPlots(model_bk_dict, model_name, metric_keyword, str(save_plot_path), 
+                                                thread_num_list, step_tuple_str_list, divideIter=True)
         
+        numThreads = len(thread_num_list)
+        for i in range(numThreads):
+            plot_video_utils.saveObjGradTimeFigures_AdaptiveExpWrapper(adaptive_exp_data_dict, model_name, str(save_plot_path),
+                                                                       i, thread_num_list, step_tuple_str_list)
+
 
         print(f"[Adaptive Experiment Plots] {model_ind+1}/{numModels} Model: {model_name} generateion completes!")
         print("-------------------------------------------------------------------------------------------------------")
@@ -152,6 +164,7 @@ def main():
     print(f"Using Thread Numbers: {thread_num_list}")
     print(f"Plot Default Parameter: {include_default_flag}")
     print(f"Plots Folder: {args.plots_folder_name}")
+    print(f"------------------------------------------------------------------------------------------------------------")
 
     step_tuple_list = get_stepTuple_list(consecutive_step_list, projection_step_list, include_default_flag)
     gen_adaptive_exp_plots(result_path, modelbase_path, thread_num_list, step_tuple_list, args.plots_folder_name)
