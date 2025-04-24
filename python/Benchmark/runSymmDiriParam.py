@@ -65,8 +65,11 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
             hessian_eval_time = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
             line_search_time_list.append(line_search_time)
         
-        elif hessian_proj_option == 'SLIM':
-            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSLIM(model_name, model_path, thread_num)
+        elif hessian_proj_option in ['SLIM', 'CompMajor']:
+            if hessian_proj_option == 'SLIM':
+                obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSLIM(model_name, model_path, thread_num)
+            elif hessian_proj_option == 'CompMajor':
+                obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runCompMajor(model_name, model_path)
             symbolic_factorize_time = benchmark_dict['symbolic_fac_time']
             numeric_factorize_time = benchmark_dict['numeric_fac_time']
             linsys_solve_time = benchmark_dict['linear_solve_time'] + symbolic_factorize_time + numeric_factorize_time
@@ -130,10 +133,12 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option):
     save_uv_folder_name = 'UVs' # create a folder name 'UVs'
     folder_dir = os.path.join(base_path, model_name, hessian_proj_option, save_uv_folder_name)
     if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
+    else:                               helper_funcs.delete_all_files_in_folder(folder_dir)  # clear all files in UV, might leave some old txts in last run
 
     m = helper_funcs.read_mesh(model_path)
     if hessian_proj_option == 'TinyAD':  helper_funcs.runSymmds_TinyAD(m, uvsave_path=folder_dir)
     elif hessian_proj_option == 'SLIM':  helper_funcs.runSLIM(model_name, model_path, uvsave_path=folder_dir)
+    elif hessian_proj_option == 'CompMajor':  helper_funcs.runCompMajor(model_name, model_path, uvsave_path=folder_dir)
     else:                                helper_funcs.runSYDParam(m, hessian_proj_option=hessian_proj_option, uvsave_path=folder_dir)
     print(f"[File] Model: {model_name}. Hessian option: {hessian_proj_option} Saved UVs of all iterations in {folder_dir}.")
 
@@ -150,8 +155,8 @@ def main():
     hessian_proj_option = sys.argv[4]
     save_uv_option = sys.argv[5]
 
-    if (hessian_proj_option not in ['Adaptive', 'Always', 'Never', 'xbasedAlways', 'AutoDiff' , 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD', 'SLIM']):
-        print("[Error] Usage of <hessian_proj_option>:  [Adaptive, Always, Never, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD, SLIM]")
+    if (hessian_proj_option not in ['Adaptive', 'Always', 'Never', 'xbasedAlways', 'AutoDiff' , 'AdaptiveAbs', 'AutoDiffAbs', 'TinyAD', 'SLIM', 'CompMajor']):
+        print("[Error] Usage of <hessian_proj_option>:  [Adaptive, Always, Never, xbasedAlways, AutoDiff, AdaptiveAbs, AutoDiffAbs, TinyAD, SLIM, CompMajor]")
         sys.exit(1)
     
     if (save_uv_option.lower() not in ['yes', 'no', 'both']):
@@ -167,7 +172,7 @@ def main():
         warnings.warn(f"Warning: The base_path '{base_path}' does not exist. Please check the path.")
         sys.exit(1)  # Exit if the path does not exist
     
-    if hessian_proj_option in ['TinyAD', 'SLIM']:
+    if hessian_proj_option in ['TinyAD', 'SLIM', 'CompMajor']:
         if thread_num != 0: # not in default case
             os.environ['OMP_NUM_THREADS'] = str(thread_num)
     else:  

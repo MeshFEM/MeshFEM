@@ -21,21 +21,23 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
 def getColorLineList(options):
-    color_list = ['dodgerblue', 'magenta', 'tomato', 'forestgreen', 
-                  'gold', 'darkorange', 'mediumvioletred', 'royalblue']
+    # color_list = ['dodgerblue', 'magenta', 'tomato', 'forestgreen', 
+    #               'gold', 'darkorange', 'mediumvioletred', 'royalblue']
     
     cmap = plt.get_cmap("tab10")  # or "Set1", "viridis", etc.
     color_list = [cmap(i) for i in range(options)]
     
     line_style_list = [
-        '-',       # Solid
-        '--',      # Dashed
-        '-.',      # Dash-dot
-        ':',       # Dotted
-        (0, (3, 5, 1, 5)),  # Custom dash-dot pattern
-        (0, (5, 10)),       # Custom dashed pattern
+        '-',                # Solid
+        '--',               # Dashed
+        '-.',               # Dash-dot
+        ':',                # Dotted
         (0, (1, 1)),        # Densely dotted
-        (0, (3, 2, 1, 2, 1, 2))  # Complex custom dash-dot
+        (0, (5, 5)),        # Evenly dashed
+        (0, (3, 5, 1, 5)),  # Dash-dot-dot
+        (0, (2, 2, 8, 2)),  # Long-short dashes
+        (0, (6, 1, 2, 1)),  # Bold dash-dot
+        (0, (4, 4, 1, 4))   # Alternating wide/narrow dashes
     ]
 
     lw_step = 0.5

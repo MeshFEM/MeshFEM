@@ -15,6 +15,7 @@ import tinyad_parametrization
 import numpy as np
 import copy, time
 import igl
+import csv
 
 import numpy as np
 
@@ -126,6 +127,15 @@ def delete_all_files_in_folder(folder_path):
         if os.path.isfile(file_path) or os.path.islink(file_path):
             os.remove(file_path)
 
+def delete_txt_files(folder_path):
+    txt_files = [f for f in os.listdir(folder_path) if f.endswith('.txt')]
+    for filename in txt_files:
+        file_path = os.path.join(folder_path, filename)
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"Failed to delete {file_path}: {e}")
+
 def processUVTXTs(source_path, to_path, txt_file_prefix_str):
     """
     Processes txt files in a given folder, converting them to raveled NumPy arrays
@@ -183,6 +193,42 @@ def processUVTXTs(source_path, to_path, txt_file_prefix_str):
     else:
         print(f"Mismatch in file counts: {len(txt_files)} txt files vs {len(npz_files)} npz files.")
         return False
+
+def parse_custom_csv(folder_path, csv_filename):
+    csv_path = os.path.join(folder_path, csv_filename)
+
+    # Initialize storage
+    table_data = {}
+    summary_stats = {}
+
+    with open(csv_path, 'r') as f:
+        reader = csv.reader(f)
+        lines = list(reader)
+
+    # Identify the split between table and summary
+    empty_line_index = next(i for i, row in enumerate(lines) if len(row) == 0)
+
+    # Parse table header
+    header = lines[0]
+    for key in header:
+        table_data[key] = []
+
+    # Parse table data
+    for row in lines[1:empty_line_index]:
+        for key, value in zip(header, row):
+            table_data[key].append(float(value))
+
+    # Convert to numpy arrays
+    for key in table_data:
+        table_data[key] = np.array(table_data[key])
+
+    # Parse summary statistics
+    for row in lines[empty_line_index+1:]:
+        if len(row) == 2:
+            key, value = row
+            summary_stats[key.strip()] = float(value.strip())
+
+    return table_data, summary_stats
 
 def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', grad_tol=None, uvsave_path=None):
     
@@ -397,6 +443,80 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         benchmark_dict['linear_solve_time'] = benchmark_data[4]
         
         delete_all_files_in_folder(TEMP_FILE_PATH) # delete all files in TEMP_FILE_PATH
+        return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
+
+def runCompMajor(model_name, model_path, uvsave_path=None):
+    exe_binary_str = "./CompMajor_bin"
+    model_out_name = model_name + "_out.obj"
+    # create TEMP_FILE_PATH if it doesn't exists
+    UV_FILE_PATH = "CompMajor_TEMP_UV"
+    DATA_FILE_PATH = "CompMajor_TEMP_DATA"
+    if not os.path.exists(UV_FILE_PATH):  os.makedirs(UV_FILE_PATH)
+    if not os.path.exists(DATA_FILE_PATH):  os.makedirs(DATA_FILE_PATH)
+
+    if uvsave_path is not None: # SAVE UV AT EVERY ITERATION
+        model_out_save_path = os.path.join(UV_FILE_PATH, model_out_name)
+        cmd = [
+            exe_binary_str,
+            model_path,
+            model_out_save_path,
+            str(200),
+            str(1)
+        ]
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error during CompMajor parametrization (save UV) of {model_name}: {e}")
+            sys.exit(1)
+        
+        # now we want to read data from CompMajor_TEMP_UV
+        # read csv
+        csv_file_name = model_out_name + "_timing.csv"
+        table_data, summary_stats = parse_custom_csv(UV_FILE_PATH, csv_file_name)
+        obj_filename = 'obj_history.npy'
+        grad_norm_filename = 'grad_norm_history.npy'
+        np.save(os.path.join(uvsave_path, obj_filename), table_data["objective_value"])
+        np.save(os.path.join(uvsave_path, grad_norm_filename), table_data["gradient_norm"])
+        # Process UV TXTs
+        txt_prefix = model_out_name + "_Iter_"
+        if not processUVTXTs(UV_FILE_PATH, uvsave_path, txt_prefix):  raise RuntimeError(f"[Error] In Process CompMajor UV txts in {UV_FILE_PATH}.")
+        delete_txt_files(UV_FILE_PATH)
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
+        return 
+    else:
+        model_out_save_path = os.path.join(DATA_FILE_PATH, model_out_name)
+        cmd = [
+            exe_binary_str,
+            model_path,
+            model_out_save_path,
+            str(200),
+            str(0)
+        ]
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error during CompMajor parametrization of {model_name}: {e}")
+            sys.exit(1)
+        
+        # read csv
+        csv_file_name = model_out_name + "_timing.csv"
+        table_data, summary_stats = parse_custom_csv(DATA_FILE_PATH, csv_file_name)
+
+        obj_arr = table_data["objective_value"]
+        grad_norm_arr = table_data["gradient_norm"]
+        iter_time_arr = table_data["step_time"] + table_data["linesearch_time"]
+        # process iter_time_arr based on step_time_arr
+        time_history_arr = np.zeros_like(iter_time_arr)  # accumulative iteration time
+        for i in range(1, len(iter_time_arr)):
+            time_history_arr[i] = np.sum(iter_time_arr[:i])
+        
+        # construct dictionary benchmark_dict
+        benchmark_dict = {}
+        benchmark_dict['totalTime'] = summary_stats["total_time"]
+        benchmark_dict['symbolic_fac_time'] = summary_stats["analyze_pattern_time"]
+        benchmark_dict['numeric_fac_time'] = np.sum(table_data["factorization_time"]) 
+        benchmark_dict['hessian_eval_time'] = np.sum(table_data["eval_hessian_time"]) + np.sum(table_data["eval_gradient_time"])
+        benchmark_dict['linear_solve_time'] = np.sum(table_data["solve_time"]) + np.sum(table_data["matrix_prep_time"])
         return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
         
 # Input Parameter:
