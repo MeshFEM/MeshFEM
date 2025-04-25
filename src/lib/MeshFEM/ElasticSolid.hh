@@ -440,10 +440,10 @@ private:
             else {
                 faces.resize(4 * m.numBoundaryElements(), 3);
                 for (auto be : m.boundaryElements()) {
-                    faces(4 * be.index() + 0) << be.node(0).index(), be.node(5).index(), be.node(4).index();
-                    faces(4 * be.index() + 1) << be.node(5).index(), be.node(1).index(), be.node(3).index();
-                    faces(4 * be.index() + 2) << be.node(5).index(), be.node(3).index(), be.node(4).index();
-                    faces(4 * be.index() + 3) << be.node(4).index(), be.node(3).index(), be.node(2).index();
+                    faces.row(4 * be.index() + 0) << be.node(0).index(), be.node(5).index(), be.node(4).index();
+                    faces.row(4 * be.index() + 1) << be.node(5).index(), be.node(1).index(), be.node(3).index();
+                    faces.row(4 * be.index() + 2) << be.node(5).index(), be.node(3).index(), be.node(4).index();
+                    faces.row(4 * be.index() + 3) << be.node(4).index(), be.node(3).index(), be.node(2).index();
                 }
             }
 
@@ -454,7 +454,7 @@ private:
                     if (emap.count(key) == 0) emap.emplace(key, emap.size());
                 }
             }
-            edges.resize(emap.size());
+            edges.resize(emap.size(), 2);
             for (auto &k : emap)
                 edges.row(k.second) << k.first[0], k.first[1];
         }
@@ -475,7 +475,6 @@ private:
             }
         }
 
-        // Edges |#edge| x 2
         auto &nfcv = result.nodeForCollisionMeshVertex;
         nfcv.resize(use_midedge_nodes ? m.numBoundaryNodes() : m.numBoundaryVertexNodes());
         for (int i = 0; i < nfcv.size(); ++i)
