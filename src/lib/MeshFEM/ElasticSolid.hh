@@ -440,10 +440,15 @@ private:
             else {
                 faces.resize(4 * m.numBoundaryElements(), 3);
                 for (auto be : m.boundaryElements()) {
-                    faces.row(4 * be.index() + 0) << be.node(0).index(), be.node(5).index(), be.node(4).index();
-                    faces.row(4 * be.index() + 1) << be.node(5).index(), be.node(1).index(), be.node(3).index();
-                    faces.row(4 * be.index() + 2) << be.node(5).index(), be.node(3).index(), be.node(4).index();
-                    faces.row(4 * be.index() + 3) << be.node(4).index(), be.node(3).index(), be.node(2).index();
+                    //     0
+                    //    / \ 
+                    //   3---5
+                    //  / \ / \ 
+                    // 1---4---2
+                    faces.row(4 * be.index() + 0) << be.node(0).index(), be.node(3).index(), be.node(5).index();
+                    faces.row(4 * be.index() + 1) << be.node(3).index(), be.node(1).index(), be.node(4).index();
+                    faces.row(4 * be.index() + 2) << be.node(3).index(), be.node(4).index(), be.node(5).index();
+                    faces.row(4 * be.index() + 3) << be.node(4).index(), be.node(2).index(), be.node(5).index();
                 }
             }
 

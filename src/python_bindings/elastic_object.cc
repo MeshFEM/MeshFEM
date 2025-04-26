@@ -48,10 +48,22 @@ void bind(py::module &m) {
 
          .def("setIdentityDeformation",   &EO::setIdentityDeformation)
 
+         .def("getCollisionMesh",         &EO::getCollisionMesh)
+
          .def("contract_d2E_dXdx",        &EO::contract_d2E_dXdx, py::arg("y"))
 
          .def_property("rho", &EO::getMassDensity, &EO::setMassDensity)
         ;
+
+    using CM = typename EO::CollisionMesh;
+    py::class_<CM>(pyEO, "CollisionMesh")
+        .def_readonly("faces", &CM::faces)
+        .def_readonly("edges", &CM::edges)
+        .def_readonly("nodeForCollisionMeshVertex", &CM::nodeForCollisionMeshVertex)
+        .def_readonly("fullModelBlockVars", &CM::fullModelBlockVars)
+        .def_readonly("N", &CM::N)
+        ;
+
     addComputeEquilibriumBinding<EO>(pyEO);
 }
 
