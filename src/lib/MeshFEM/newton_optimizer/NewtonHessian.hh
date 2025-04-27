@@ -100,6 +100,10 @@ struct MESHFEM_EXPORT NewtonHessian {
 
     NewtonHessian(NewtonHessian &&other) noexcept { swap(*this, other); }
 
+    static std::unique_ptr<NewtonHessian> fromSuiteSparse(const SuiteSparseMatrix &H_ss_) {
+        return std::make_unique<NewtonHessian>(BlockCSCHessianBase::fromScalar(H_ss_));
+    }
+
     // Storage of dense blocks induced by "global" variables.
     using MXd = Eigen::MatrixXd;
     MXd H_sd, H_dd;
@@ -116,6 +120,7 @@ struct MESHFEM_EXPORT NewtonHessian {
         return H_ss->vars();
     }
 
+    // TODO FIXME: when H_ss isn't present, we don't have a varStructure to know the dense size!
     size_t numVars()       const { return varStructure().numVars(); }
     size_t numSparseVars() const { return varStructure().numSparseVars(); }
     size_t numDenseVars()  const { return varStructure().numDenseVars(); }
@@ -163,10 +168,8 @@ struct MESHFEM_EXPORT NewtonHessian {
     // matrix in the case of `isSparsityOnly()`).
     void setZero() {
         if (H_ss) H_ss->setZero();
-        // TODO FIXME: when H_ss isn't present, we don't have a varStructure to know the dense size!
-        const auto &vs = varStructure();
-        size_t nsv = vs.numSparseVars(),
-               ndv = vs.numDenseVars();
+        size_t nsv = numSparseVars(),
+               ndv = numDenseVars();
 
         H_sd.setZero(nsv, ndv);
         H_dd.setZero(ndv, ndv);
@@ -195,6 +198,11 @@ struct MESHFEM_EXPORT NewtonHessian {
 
     // Support objective terms that require legacy scalar-var behavior.
     void addNZ(size_t i, size_t j, const Real val);
+
+    void addDiag(double d) {
+        if (H_ss) H_ss->addDiag(d);
+        H_dd.diagonal().array() += d;
+    }
 
     // Matrix-vector multiplication (ignoring the equality constraints)
     //  ([H_ss H_sd] + [V_s][V_s]^T)[x_s]
@@ -324,6 +332,71 @@ private:
     Real hessianTrace, hessianL2Norm;
 };
 
+// A factorization of the block-partitioned matrix:
+//      [H_ss B]
+//      [B^T  D]
+//      where B = [H_sd V_s]
+//      and   D = [H_dd     V_d]
+//                [V_d^T   -I_r]
+// represented by a `NewtonHessian` object.
+// In contrast to `NewtonHessianFactorization` below, this class does not
+// support updates to the symbolic or numeric sparse factorization, so it can be
+// constructed directly from a `NewtonHessian` object without acces to a
+// `NewtonProblem`.
+struct MESHFEM_EXPORT BorderedSparseFactorization {
+    BorderedSparseFactorization(const NewtonHessian &H, const std::vector<size_t> &fixedVars = std::vector<size_t>(),
+                                CholeskyProvider factorizer = get_default_cholesky_provider());
+
+    void solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const;
+
+    const CholeskyFactorizerBase &solver() const {
+        if (!m_solver) throw std::runtime_error("Solver doesn't exist.");
+        return *m_solver;
+    }
+
+    bool isSparseVar(size_t var) const { return m_sparseDenseStructure.isSparseVar(var); }
+    bool  isDenseVar(size_t var) const { return m_sparseDenseStructure. isDenseVar(var); }
+
+    const std::vector<size_t> &sparseFixedVars() const { return m_sparseFixedVars; }
+    const std::vector<size_t>  &denseFixedVars() const { return m_denseFixedVars; }
+
+    bool exists() const { return m_solver && m_solver->hasFactorization(); }
+
+    virtual ~BorderedSparseFactorization() { }
+
+    Eigen::MatrixXd B, H_ss_inv_B;
+    // The Schur complement of the sparse part `H_ss` (as of the last call to `update`)
+    // but with a guaranteed positive-definite upper-left block corresponding to `H_dd`.
+    // When this block of the true Schur complement is indefinite,
+    // the `indefinite` flag is set to true, and the block is projected
+    // positive-definite using a dense eigenvalue decomposition.
+    Eigen::MatrixXd S;
+    bool indefinite = false;
+
+protected:
+    BorderedSparseFactorization() = default;
+
+    bool m_updateDenseFactorization(const NewtonHessian &H);
+
+    OptimizationVarStructureBase::SparseDenseStructure m_sparseDenseStructure;
+    std::shared_ptr<CholeskyFactorizerBase> m_solver;
+
+    size_t m_lowRankRank = 0; // Number of columns in V.
+
+protected:
+    void m_setFixedVars(std::vector<size_t> fixedVars) {
+        m_denseFixedVars.clear();
+        m_sparseFixedVars.clear();
+        for (size_t i : fixedVars) {
+            if      (m_sparseDenseStructure.isSparseVar(i)) m_sparseFixedVars.push_back(i);
+            else if (m_sparseDenseStructure. isDenseVar(i)) m_denseFixedVars.push_back(i);
+            else throw std::runtime_error("Variable " + std::to_string(i) + " is not a sparse or dense variable.");
+        }
+    }
+
+    std::vector<size_t> m_sparseFixedVars, m_denseFixedVars;
+};
+
 // A factorization type for solving systems involving a `NewtonHessian`.
 // Factorizes the block matrix:
 //      [H_ss B]
@@ -332,7 +405,7 @@ private:
 //      and   D = [H_dd     V_d]
 //                [V_d^T   -I_r]
 // using block Gaussian elimination
-struct MESHFEM_EXPORT NewtonHessianFactorization {
+struct MESHFEM_EXPORT NewtonHessianFactorization final : public BorderedSparseFactorization {
     NewtonHessianFactorization(std::shared_ptr<NewtonProblem> p, const NewtonOptimizerOptions &options);
 
     // Compute/recompute the Hessian factorization.
@@ -340,37 +413,20 @@ struct MESHFEM_EXPORT NewtonHessianFactorization {
 
     Real tauScale() const;
 
-    Eigen::MatrixXd schurComplement() const;
-    void solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const;
-
     // The symbolic factorization must be updated if either the sparsity pattern
     // changes or the fixed variables set changes.
     // Since the fixed variables set cannot change during the optimization, we avoid the
     // overhead of comparing the sets unless `m_fixedVarsCouldHaveChanged` is true.
     void updateSymbolicFactorization();
 
+    using BorderedSparseFactorization::solver;
     CholeskyFactorizerBase &solver();
 
-    const CholeskyFactorizerBase &solver() const {
-        if (!m_solver) throw std::runtime_error("Solver doesn't exist.");
-        return *m_solver;
-    }
-
-    ~NewtonHessianFactorization();
-
-    bool exists() const { return m_solver && m_solver->hasFactorization(); }
-
-    Eigen::MatrixXd B, H_ss_inv_B;
-    // The Schur complement of the sparse part `H_ss` (as of the last call to `update`)
-    Eigen::MatrixXd S;
-    Eigen::MatrixXd S_Q;      // Eigenvectors of the Schur complement
-    Eigen::VectorXd S_lambda; // Eigenvalues  of the Schur complement (projected to be positive)
-
+    virtual ~NewtonHessianFactorization();
 private:
     friend struct NewtonOptimizer;
 
     Real m_updateSparseFactorization(const NewtonHessian &H, const WorkingSet &ws, Real &beta, const Real betaMin);
-    bool m_updateDenseFactorization(const NewtonHessian &H);
 
     void m_beginningOptimization() {
         m_cachedHessianL2Norm.reset();
@@ -379,7 +435,6 @@ private:
 
     const NewtonOptimizerOptions &m_options; // Owned by our owner (`NewtonOptimizer`).
     std::shared_ptr<NewtonProblem> m_problem;
-    std::shared_ptr<CholeskyFactorizerBase> m_solver;
 
     mutable CachedHessianL2Norm m_cachedHessianL2Norm;
     bool m_fixedVarsCouldHaveChanged = true; // Fixed vars can change only between separate runs of the optimizer.

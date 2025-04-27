@@ -95,3 +95,8 @@ std::unique_ptr<BlockCSCHessianBase> BlockCSCHessianBase::constructFromBinaryStr
     return result;
 }
 
+std::unique_ptr<BlockCSCHessianBase> BlockCSCHessianBase::fromScalar(const SuiteSparseMatrix &A) {
+    auto result = BlockCSCHessian<OptimizationVarStructure<1>, false>::construct(OptimizationVarStructure<1>(size_t(A.m)));
+    result->SuiteSparseMatrix::operator=(A);
+    return result;
+}

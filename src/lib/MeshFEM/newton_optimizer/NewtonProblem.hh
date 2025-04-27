@@ -84,7 +84,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     void setUseIdentityMetric(bool useIdentityMetric) { m_useIdentityMetric = useIdentityMetric; }
 
     // A compressed column sparse matrix with nonzero placeholders wherever the Hessian can ever have nonzero entries.
-    NewtonHessian hessianSparsityPattern() const { updateSparsityPattern(); return m_getHessianSparsityPattern(); }
+    NewtonHessian hessianSparsityPattern(bool needsUpdate = true) const { if (needsUpdate) updateSparsityPattern(); return m_getHessianSparsityPattern(); }
 
     void updateSparsityPattern() const {
         if (!m_updateSparsityPattern()) return; // No change

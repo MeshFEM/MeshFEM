@@ -83,6 +83,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
     using NH = NewtonHessian;
     py::class_<NH>(m, "NewtonHessian")
         .def(py::init([](const std::string &path) { return NH::load(path); }), py::arg("path"))
+        .def(py::init([](const SuiteSparseMatrix &A) { return NH::fromSuiteSparse(A); }), py::arg("A"))
         .def_property_readonly("H_ss", [](const NH &H) -> const BlockCSCHessianBase * { return H.H_ss.get(); }, py::return_value_policy::reference_internal)
 
         .def_readwrite("H_sd", &NH::H_sd)
@@ -112,12 +113,30 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
             })
         .def("apply", &NH::apply)
 
+        .def("addDiag", &NH::addDiag, py::arg("d"))
+
         .def_property_readonly("lowRankRank", &NH::low_rank_rank)
         .def("dump", &NH::dump, py::arg("path"))
+
+        .def("factorize", [](const NH &H, const std::vector<size_t> &fixedVars, CholeskyProvider factorizer) {
+                return std::make_unique<BorderedSparseFactorization>(H, fixedVars, factorizer);
+            }, py::arg("fixedVars") = std::vector<size_t>(), py::arg("factorizer") = get_default_cholesky_provider())
+        ;
+
+    using BSF = BorderedSparseFactorization;
+    py::class_<BSF>(m, "BorderedSparseFactorization")
+        .def("solve", [](const BSF &s, const Eigen::VectorXd &b) {
+                Eigen::VectorXd x(b.size());
+                s.solve(b, x);
+                return x;
+            }, py::arg("b"))
+
+        .def_readwrite("B", &BSF::B)
+        .def_readwrite("H_ss_inv_B", &BSF::H_ss_inv_B)
+        .def_readwrite("S", &BSF::S)
         ;
 
     using NHF = NewtonHessianFactorization;
-    py::class_<NHF>(m, "NewtonHessianFactorization")
-        .def("solve", &NHF::solve)
+    py::class_<NHF, BSF>(m, "NewtonHessianFactorization")
         ;
 }

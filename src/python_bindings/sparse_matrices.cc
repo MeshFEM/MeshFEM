@@ -139,6 +139,28 @@ PYBIND11_MODULE(sparse_matrices, m) {
                     std::make_tuple(data, innerIndices, outerIndices),
                     std::make_pair(A.m, A.n));
             })
+        .def_static("fromSciPy", [](const py::object &A_scipy) {
+                py::array data = A_scipy.attr("data");
+                py::array_t<SuiteSparse_long> outerIndices = A_scipy.attr("indptr").cast<py::array_t<SuiteSparse_long>>();
+                py::array_t<SuiteSparse_long> innerIndices = A_scipy.attr("indices").cast<py::array_t<SuiteSparse_long>>();
+
+                if (!data.dtype().is(py::dtype::of<double>())) throw std::runtime_error("Data type must be double");
+
+                size_t m, n;
+                std::tie(m, n) = A_scipy.attr("shape").cast<std::pair<size_t, size_t>>();
+                assert(n + 1 == outerIndices.size());
+
+                auto result = std::make_shared<SuiteSparseMatrix>(m, n);
+                result->Ap.resize(outerIndices.size());
+                result->Ai.resize(innerIndices.size());
+                result->Ax.resize(data.size());
+
+                auto dt = data.unchecked<double>();
+                std::copy(outerIndices.data(), outerIndices.data() + outerIndices.size(), result->Ap.begin());
+                std::copy(innerIndices.data(), innerIndices.data() + innerIndices.size(), result->Ai.begin());
+                std::copy(dt.data(), dt.data() + data.size(), result->Ax.begin());
+                return result;
+            })
         .def("solve", [&](SuiteSparseMatrix &smat, const Eigen::VectorXd &b) {
                 if (smat.symmetry_mode != SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE)
                     throw std::runtime_error("Only symmetric matrices are currently supported");
