@@ -30,7 +30,9 @@ struct AutodiffEDensity {
     using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, M * N, 1>>;
 
     AutodiffEDensity() { setDeformationGradient(Matrix::Identity()); }
-    AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&) : useAbsProjection(other.useAbsProjection) { }
+    AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&)
+        : useAbsProjection(other.useAbsProjection),
+          projectionDirection(other.projectionDirection) { }
 
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
@@ -80,11 +82,23 @@ struct AutodiffEDensity {
                 using ESolver = Eigen::SelfAdjointEigenSolver<Hessian>;
                 // TODO: short-circuit in diagonally dominant case.
                 ESolver Hes(m_d2energy);
-                if (Hes.eigenvalues()[0] < 0.0) {
-                    if (useAbsProjection)
-                        m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseAbs().asDiagonal() * Hes.eigenvectors().transpose();
-                    else
-                        m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                if (projectionDirection == ProjectionDirection::Positive) {
+                    // Projecting to positive semidefinite
+                    if (Hes.eigenvalues()[0] < 0.0) {
+                        if (useAbsProjection)
+                            m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseAbs().asDiagonal() * Hes.eigenvectors().transpose();
+                        else
+                            m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                    }
+                }
+                else if (projectionDirection == ProjectionDirection::Negative) {
+                    // Projecting to negative semidefinite
+                    if (Hes.eigenvalues()[Hes.eigenvalues().size() - 1] > 0.0) {
+                        if (useAbsProjection)
+                            m_d2energy = Hes.eigenvectors() * (-(Hes.eigenvalues().cwiseAbs())).asDiagonal() * Hes.eigenvectors().transpose();
+                        else
+                            m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMin(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                    }
                 }
             }
         }
@@ -100,7 +114,7 @@ struct AutodiffEDensity {
 
     const Matrix &getDeformationGradient() const { return m_F; }
 
-    Real energy()    const { return m_energy; }
+    Real           energy() const { return m_energy; }
     const Matrix &denergy() const { return m_denergy; }
     Real denergy(const Matrix& dF) const { return doubleContract(dF, denergy()); }
 
@@ -118,6 +132,15 @@ struct AutodiffEDensity {
     // `setDeformationGradient`.
     bool projectionEnabled = true;
     bool useAbsProjection = false;
+
+    // Whether to project the per-element Hessian to the positive or negative
+    // semidefinite cone. This is helpful in the context of composite
+    // objectives, J(e(x)), where when J'(x) is negative we want to project
+    // d^2 e / dx^2 to be negative semidefinite.
+    // This member is mutable so that the const `accumulateHessian` method of a
+    // derived class of `MeshEnergy` can modify it if needed.
+    enum class ProjectionDirection { Positive, Negative };
+    mutable ProjectionDirection projectionDirection = ProjectionDirection::Positive;
 
 private:
     Real m_energy;

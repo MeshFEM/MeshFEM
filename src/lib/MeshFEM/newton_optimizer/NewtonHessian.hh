@@ -204,6 +204,26 @@ struct MESHFEM_EXPORT NewtonHessian {
         H_dd.diagonal().array() += d;
     }
 
+    // Add the low-rank term `w * V V^T` to the Hessian.
+    template<class Derived>
+    void addLowRank(const Eigen::MatrixBase<Derived> &V, double w = 1.0) {
+        if (size_t(V.rows()) != numVars()) throw std::runtime_error("Low-rank term must have same number of rows as the Hessian");
+
+        const size_t r_new = low_rank_rank() + V.cols();
+
+        V_s.conservativeResize(numSparseVars(), r_new);
+        V_d.conservativeResize( numDenseVars(), r_new);
+
+        if (w != 1.0) {
+            const double w_sqrt = std::sqrt(w);
+            V_s.rightCols(V.cols()) = w_sqrt * V.topRows(numSparseVars());
+            V_d.rightCols(V.cols()) = w_sqrt * V.bottomRows(numDenseVars());
+        } else {
+            V_s.rightCols(V.cols()) = V.topRows(numSparseVars());
+            V_d.rightCols(V.cols()) = V.bottomRows(numDenseVars());
+        }
+    }
+
     // Matrix-vector multiplication (ignoring the equality constraints)
     //  ([H_ss H_sd] + [V_s][V_s]^T)[x_s]
     //  ([H_ds H_dd]   [V_d][V_d]  )[x_d]

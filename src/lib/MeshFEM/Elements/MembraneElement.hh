@@ -93,13 +93,19 @@ using EmbeddedMembraneEData = EmbeddedMembraneElementData<LinearlyEmbeddedElemen
 
 }
 
-template<class Psi_2x2>
-struct MembraneMaterial : public MaterialBase {
-    using Real = typename Psi_2x2::Real;
-    using Psi = AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>;
+// Membrane material defined by an energy density function psi(F_32) where
+// Jacobian F_32 is 3x2.
+template<class Psi_3x2>
+struct MembraneMaterial_3x2 : public MaterialBase {
+    using Psi = Psi_3x2;
+    using Real = typename Psi::Real;
     Psi psi;
     Real thickness = 1;
 };
+
+// Create a membrane material from an energy density function psi(F) for 2x2 F.
+template<class Psi_2x2>
+using MembraneMaterial = MembraneMaterial_3x2<AutoHessianProjection<MembraneEnergyDensityFrom2x2Density<Psi_2x2>>>;
 
 template<size_t Deg, class Psi_2x2, class CustomMat_>
 struct MembraneElement;
@@ -122,7 +128,7 @@ struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi_2x2, Custom
     using Gradient  = typename HLE::Gradient;
     using Hessian   = typename HLE::Hessian;
 
-    static std::string name() { return "Membrane"; }
+    static std::string name() { return "MembraneElement"; }
 
     static constexpr bool CachesDeformedQuantities = false;
 
@@ -133,9 +139,6 @@ struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi_2x2, Custom
     auto FBGetter(const LocalVars &x) const { return typename HLE::ElasticFGetter(x); }
     auto getFB(const LocalVars &x) const { return FBGetter(x)(elementData.gradPhis()); }
 
-    // void setRestConfiguration(const LocalVars &X) {
-    // }
-
     Real       energy(                                const LocalVars &x) const { const auto &m = Base::material(); return HLE::  energy(m.psi, FBGetter(x), elementData) * m.thickness; }
     Gradient gradient(Real weight,                    const LocalVars &x) const { const auto &m = Base::material(); return HLE::gradient(m.psi, FBGetter(x), elementData, (weight * m.thickness)); }
     template<bool SetLowerTri = false>
@@ -143,6 +146,9 @@ struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi_2x2, Custom
 
     elements::EmbeddedMembraneEData<K, Deg, VecN_T<Real, N>> elementData;
 };
+
+template<size_t Deg, class Psi_3x2>
+using MembraneElement_3x2 = MembraneElement<Deg, Psi_3x2, MembraneMaterial_3x2<Psi_3x2>>;
 
 #include "../MeshEnergy.hh"
 
