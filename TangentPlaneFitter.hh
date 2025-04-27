@@ -62,52 +62,8 @@ struct TangentPlaneFittingEnergyDensity : public AutodiffEDensity<TangentPlaneFi
     enum class Variant { FitMetricAndRotation, FitArea, FitNormalOnly } variant = Variant::FitMetricAndRotation;
 };
 
-template<typename Real>
-struct TangentPlaneFittingMaterial : public MaterialBase {
-    using Psi = TangentPlaneFittingEnergyDensity<Real>;
-    Psi psi;
-};
-
-template<typename Real>
-struct TangentPlaneFittingElement;
-
-template<typename Real>
-struct ElementTraits<TangentPlaneFittingElement<Real>> {
-    using Material = TangentPlaneFittingMaterial<Real>;
-};
-
 template<typename Real_>
-struct TangentPlaneFittingElement : public ElementBase<TangentPlaneFittingElement<Real_>> {
-    static constexpr size_t   K = 2;
-    static constexpr size_t   N = 3;
-    static constexpr size_t Deg = 1;
-    using Real     = Real_;
-    using Base     = ElementBase<TangentPlaneFittingElement>;
-    using Material = typename Base::Material;
-
-    using HLE = elements::HyperelasticLagrange<typename Material::Psi, K, N, Deg>;
-    using LocalVars = typename HLE::NodePositions;
-    using Gradient  = typename HLE::Gradient;
-    using Hessian   = typename HLE::Hessian;
-
-    static std::string name() { return "TangentPlaneFittingElement"; }
-
-    static constexpr bool CachesDeformedQuantities = false;
-
-    template<class Mesh>
-    TangentPlaneFittingElement(size_t ei, const Mesh &m, MaterialAssignment<Material> &materials)
-        : Base(ei, materials), elementData(*(m.element(ei))) { }
-
-    auto FBGetter(const LocalVars &x) const { return typename HLE::ElasticFGetter(x); }
-    auto getFB(const LocalVars &x) const { return FBGetter(x)(elementData.gradPhis()); }
-
-    Real       energy(                                const LocalVars &x) const { const auto &m = Base::material(); return HLE::  energy(m.psi, FBGetter(x), elementData); }
-    Gradient gradient(Real weight,                    const LocalVars &x) const { const auto &m = Base::material(); return HLE::gradient(m.psi, FBGetter(x), elementData, weight); }
-    template<bool SetLowerTri = false>
-    Hessian hessian(Real weight, bool projectionMask, const LocalVars &x) const { const auto &m = Base::material(); return HLE::template hessian<SetLowerTri>(m.psi, FBGetter(x), elementData, /* projectionDisabled  = */ !projectionMask, weight); }
-
-    elements::EmbeddedMembraneEData<K, Deg, VecN_T<Real, N>> elementData;
-};
+using TangentPlaneFittingElement = MembraneElement_3x2<1, TangentPlaneFittingEnergyDensity<Real_>>;
 
 struct TangentPlaneFitter : public MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars<3>, ElementStencil<2, 1, 3>, TangentPlaneFittingElement<double>> {
     using Base = MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars<3>, ElementStencil<2, 1, 3>, TangentPlaneFittingElement<double>>;
@@ -115,6 +71,7 @@ struct TangentPlaneFitter : public MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars
     using Vars = typename Base::Vars;
     using TPFED = TangentPlaneFittingEnergyDensity<double>;
     using Base::materials;
+    using Base::Material;
     using Base::elements;
     TangentPlaneFitter(std::shared_ptr<Mesh> m, std::shared_ptr<Vars> vars, double stiffness = 1.0, TPFED::Variant variant = TPFED::Variant::FitMetricAndRotation)
         : Base(m, vars) {
@@ -132,13 +89,8 @@ struct TangentPlaneFitter : public MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars
         }
     }
 
-    void setStiffness(double stiffness) {
-        materials.foreach([&](TangentPlaneFittingMaterial<double> &mat) { mat.psi.stiffness = stiffness; });
-    }
-
-    void setVariant(TPFED::Variant variant) {
-        materials.foreach([&](TangentPlaneFittingMaterial<double> &mat) { mat.psi.variant = variant; });
-    }
+    void setStiffness(double stiffness)     { materials.foreach([&](Material &mat) { mat.psi.stiffness = stiffness; }); }
+    void setVariant(TPFED::Variant variant) { materials.foreach([&](Material &mat) { mat.psi.variant = variant; }); }
 };
 
 #endif /* end of include guard: TANGENTPLANEFITTER_HH */
