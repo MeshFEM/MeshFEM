@@ -6,6 +6,7 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/../../python_bindings/BindMembraneMaterial.hh>
 #include "../PanelizationHingeEnergy.hh"
 #include "../TangentPlaneFitter.hh"
+#include "../SurfaceAreaFitter.hh"
 
 PYBIND11_MODULE(panelization, m)
 {
@@ -45,4 +46,17 @@ PYBIND11_MODULE(panelization, m)
         auto me = std::make_shared<TangentPlaneFitter>(mesh, vars, stiffness, variant);
         return me;
     }, py::arg("mesh"), py::arg("vars"), py::arg("stiffness"), py::arg("variant") = TPFED::Variant::FitMetricAndRotation);
+
+    bindMeshEnergy<SurfaceAreaFitter>("SurfaceAreaFitter", m, detail, /* bindConstructors= */ false)
+        .def_readwrite("A_tgt",     &SurfaceAreaFitter::A_tgt)
+        .def("surfaceArea",         &SurfaceAreaFitter::surfaceArea)
+        .def("surfaceAreaGradient", &SurfaceAreaFitter::surfaceAreaGradient)
+        ;
+
+    m.def("SurfaceAreaFitter", [](std::shared_ptr<typename SurfaceAreaFitter::Mesh> mesh, std::shared_ptr<typename SurfaceAreaFitter::Vars> vars, double A_tgt) {
+        auto saf = std::make_shared<SurfaceAreaFitter>(mesh, vars);
+        if (A_tgt == -1) saf->A_tgt = saf->surfaceArea();
+        else             saf->A_tgt = A_tgt;
+        return saf;
+    }, py::arg("mesh"), py::arg("vars"), py::arg("A_tgt") = -1);
 }
