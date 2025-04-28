@@ -13,6 +13,9 @@ PYBIND11_MODULE(panelization, m)
     py::module::import("mesh_energy");
     py::module detail = m.def_submodule("detail");
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Panelization
+    ////////////////////////////////////////////////////////////////////////////
     using PHEMat = PanelizationHingeEnergy<double>::MaterialProperties;
     py::class_<PHEMat, MaterialBase>(detail, "PanelizationMaterial")
         .def_readwrite("stiffness", &PHEMat::stiffness)
@@ -21,6 +24,9 @@ PYBIND11_MODULE(panelization, m)
 
     bindMeshEnergy<HingeMeshEnergy<PanelizationHingeEnergy<double>>>("Panelization", m, detail);
 
+    ////////////////////////////////////////////////////////////////////////////
+    // TangentPlaneFitter
+    ////////////////////////////////////////////////////////////////////////////
     using TPFED = TangentPlaneFittingEnergyDensity<double>;
     py::enum_<TPFED::Variant>(m, "TangentPlaneFittingVariant")
         .value("FitMetricAndRotation", TPFED::Variant::FitMetricAndRotation)
@@ -47,6 +53,9 @@ PYBIND11_MODULE(panelization, m)
         return me;
     }, py::arg("mesh"), py::arg("vars"), py::arg("stiffness"), py::arg("variant") = TPFED::Variant::FitMetricAndRotation);
 
+    ////////////////////////////////////////////////////////////////////////////
+    // SurfaceAreaFitter
+    ////////////////////////////////////////////////////////////////////////////
     bindMeshEnergy<SurfaceAreaFitter>("SurfaceAreaFitter", m, detail, /* bindConstructors= */ false)
         .def_readwrite("A_tgt",     &SurfaceAreaFitter::A_tgt)
         .def("surfaceArea",         &SurfaceAreaFitter::surfaceArea)
