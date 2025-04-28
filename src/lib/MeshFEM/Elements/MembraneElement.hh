@@ -128,7 +128,7 @@ struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi_2x2, Custom
     using Gradient  = typename HLE::Gradient;
     using Hessian   = typename HLE::Hessian;
 
-    static std::string name() { return "MembraneElement"; }
+    static std::string name() { return Material::Psi::name() + "MembraneElement"; }
 
     static constexpr bool CachesDeformedQuantities = false;
 

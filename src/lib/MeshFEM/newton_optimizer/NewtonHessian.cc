@@ -96,6 +96,7 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     hUpdtCtr.newHessian(isIndefinite);
 
     if ((H_nh.varStructure().numDenseVars() > 0) || (H_nh.low_rank_rank() > 0)) {
+        m_lowRankRank = H_nh.low_rank_rank();
         m_updateDenseFactorization(H_nh);
     }
 
