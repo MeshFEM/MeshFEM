@@ -222,6 +222,8 @@ struct MeshEnergy : public MeshEnergyBase {
         materials.setSpatiallyVarying(mats, materialForElement);
     }
 
+    void allocatePerElementMaterials() { materials.allocatePerElement(); }
+
     // Non-indexed material assignment
     void setSpatiallyVaryingMaterial(const std::vector<Material> &mats) { materials.setSpatiallyVarying(mats); }
 
