@@ -163,5 +163,4 @@ struct SymmetricDirichletDerivativeFree : public AutodiffEDensity<SymmetricDiric
     }
 };
 
-
 #endif /* end of include guard: AUTODIFFEDENSITY_HH */

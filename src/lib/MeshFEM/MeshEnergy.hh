@@ -17,6 +17,7 @@
 #include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
 #include <MeshFEM/SystemAssembler.hh>
 #include <MeshFEM/ParallelAssembly.hh>
+#include "MeshFEM/Parallelism.hh"
 #include "Stencils.hh"
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include "Elements/MaterialAssignment.hh"
@@ -210,8 +211,10 @@ struct MeshEnergy : public MeshEnergyBase {
     void varsUpdated() override {
         // Update cached state for each element.
         if constexpr (Element::CachesDeformedQuantities) {
-            for (size_t i = 0; i < elements.size(); ++i)
-                elements[i].setDeformedConfiguration(extractLocalVars(i));
+            BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.varsUpdated");
+            parallel_for_range(elements.size(),
+                [&](size_t i) { elements[i].setDeformedConfiguration(extractLocalVars(i)); },
+                /* grain_size = */ 100, /* parallelism_threshold = */ 1000);
         }
     }
 
