@@ -43,8 +43,7 @@ struct AutodiffEDensity {
             for (size_t j = 0; j < N; ++j) {
                 for (size_t i = 0; i < M; ++i) {
                     F_AD(i, j).value() = F(i, j);
-                    F_AD(i, j).derivatives().setZero();
-                    F_AD(i, j).derivatives()[i + j * M] = 1;
+                    F_AD(i, j).derivatives().setUnit(i + j * M);
                 }
             }
             ADScalar psi_AD = derived().psi(F_AD);
