@@ -18,6 +18,7 @@
 template<class Derived, typename Real_, size_t Dim_, EDensityType EDType_ = EDensityType::FBased>
 struct AutodiffEDensity {
     using Real = Real_;
+    static_assert((EDType_ == EDensityType::FBased) || (EDType_ == EDensityType::Membrane), "AutodiffEDensity must be either an F-based or membrane energy");
     static constexpr EDensityType EDType = EDType_;
     static_assert(!((EDType == EDensityType::Membrane) && (Dim_ != 3)), "Membrane energy density must be a function of a 3x2 matrix");
     static constexpr size_t Dimension = Dim_;
@@ -116,7 +117,7 @@ struct AutodiffEDensity {
 
     Real           energy() const { return m_energy; }
     const Matrix &denergy() const { return m_denergy; }
-    Real denergy(const Matrix& dF) const { return doubleContract(dF, denergy()); }
+    Real denergy(const Matrix &dF) const { return doubleContract(dF, denergy()); }
 
     template<typename Mat_>
     Matrix delta_denergy(const Mat_ &dF) const { return applyFlattened4thOrderTensor(m_d2energy, dF); }
