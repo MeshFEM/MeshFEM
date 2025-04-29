@@ -13,6 +13,7 @@
 #define DIRICHLETENERGY_HH
 #include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 #include <MeshFEM/EnergyDensities/FBasedEDensitySimple.hh>
+#include <MeshFEM/EmbeddedElement.hh>
 
 ////////////////////////////////////////////////////////////////////////////////
 // F-based energy density using automatic differentiation.
@@ -48,11 +49,148 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// Dirichlet parametrization element (x-based) using automatic differentiation
+// Dirichlet parametrization element (x-based) using analytical derivatives and
+// embedding information from the LinearlyEmbeddedElement class.
 ////////////////////////////////////////////////////////////////////////////////
+template<typename Real_>
+using TriCornerUVs = Eigen::Matrix<Real_, 3, 2, Eigen::RowMajor>;
+
+#include <MeshFEM/Elements/ElementBase.hh>
+template<typename Real_>
+struct DirichletParamElement : public ElementBase<DirichletParamElement<Real_>> {
+    static constexpr bool CachesDeformedQuantities = false;
+    static std::string name() { return "DirichletParamElement"; }
+
+    using Real = Real_;
+    using Base = ElementBase<DirichletParamElement<Real>>;
+    using LocalVars = TriCornerUVs<Real_>;
+
+    using Gradient = VecN_T<Real, 6>;
+    using Hessian  = Eigen::Matrix<Real, 6, 6>;
+
+    template<class Mesh>
+    DirichletParamElement(size_t ei, const Mesh &m, MaterialAssignment<MaterialBase> &materials)
+        : Base(ei, materials), m_edata(*(m.element(ei))) {
+    }
+
+    // Pseudoinverse of the Jacobian of the mapping from the canonical triangle
+    // to the triangle's 3D embedding.
+    auto embeddingJacobianPInv() const {
+        return m_edata.gradBarycentric().template rightCols<2>().transpose();
+    }
+
+    using M2d = Eigen::Matrix<Real, 2, 2>;
+    auto computeJacobian(const LocalVars &x) const {
+        M2d uvEdges;
+        uvEdges << (x.row(1) - x.row(0)).transpose(),
+                   (x.row(2) - x.row(0)).transpose();
+        return (uvEdges * embeddingJacobianPInv()).eval();
+    }
+
+    Real       energy(        const LocalVars &x) const { return 0.5 * computeJacobian(x).squaredNorm() * m_edata.volume(); }
+    Gradient gradient(Real w, const LocalVars &x) const {
+        auto grad_uvEdges = (computeJacobian(x) * m_edata.gradBarycentric()).eval();
+        Gradient result;
+        Eigen::Map<LocalVars>(result.data()) = (w * m_edata.volume()) * grad_uvEdges.transpose();
+        return result;
+    }
+
+    Hessian hessian(Real w, bool /* project */, const LocalVars &/* x */) const {
+        Hessian result = Hessian::Zero();
+        auto L = (m_edata.gradBarycentric().transpose() * m_edata.gradBarycentric()).eval();
+        for (size_t i = 0; i < 3; ++i) {
+            for (size_t j = 0; j < 3; ++j)
+                result.template block<2, 2>(i * 2, j * 2).diagonal().array() = w * L(i, j) * m_edata.volume();
+        }
+        return result;
+    }
+
+private:
+    const LinearlyEmbeddedElement<2, 1, Vec3_T<Real>> &m_edata;
+};
 
 ////////////////////////////////////////////////////////////////////////////////
-// Dirichlet parametrization element (x-based) using analytical derivatives.
+// Dirichlet parametrization element (x-based) using automatic differentiation
+// and operating only on node positions (ignoring LinearlyEmbeddedElement).
 ////////////////////////////////////////////////////////////////////////////////
+#include <MeshFEM/Elements/AutodiffElement.hh>
+template<typename Real_>
+struct DirichletParamElementAD : public AutodiffElement<DirichletParamElementAD<Real_>, TriCornerUVs<Real_>> {
+    using Base = AutodiffElement<DirichletParamElementAD<Real_>, TriCornerUVs<Real_>>;
+    using Base::Base;
+
+    static std::string name() { return "DirichletParamElementAD"; }
+
+    // Warning: this method is called by the `Base` constructor before this
+    // derived class is fully constructed. This is fine here since our single
+    // member variable has a trivial constructor and is initialized by the
+    // following code. Classes whose members need to be constructed before
+    // `init` can be called must override the `Base` constructor.
+    template<class Mesh>
+    auto init(size_t ei, const Mesh &m) {
+        auto e = m.element(ei);
+        Eigen::Matrix<Real_, 3, 2> E;
+        E << e.node(1)->p - e.node(0)->p,
+             e.node(2)->p - e.node(0)->p;
+        m_EtE_inv_A = (E.transpose() * E).inverse() * (0.5 * (E.col(0).cross(E.col(1))).norm());
+    }
+
+    template<class LVars>
+    typename LVars::Scalar eval(const LVars &x) const {
+        using ADScalar = typename LVars::Scalar;
+        Mat2_T<ADScalar> e;
+        e.col(0) = x.row(1) - x.row(0);
+        e.col(1) = x.row(2) - x.row(0);
+
+        // The explicit cast in the following is needed to work around a
+        // compilation error with second-order AD types :(
+        return 0.5 * ((e.transpose() * e) * m_EtE_inv_A.template cast<ADScalar>()).trace();
+    }
+
+private:
+    Mat2_T<Real> m_EtE_inv_A;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Symmetric Dirichlet parametrization element (x-based) using automatic
+// differentiation. This is for benchmark comparison against the
+// `SymmetricDirichletDerivativeFree` energy density.
+////////////////////////////////////////////////////////////////////////////////
+template<typename Real_>
+struct SymDirichletParamElementAD : public AutodiffElement<SymDirichletParamElementAD<Real_>, TriCornerUVs<Real_>> {
+    using Base = AutodiffElement<SymDirichletParamElementAD<Real_>, TriCornerUVs<Real_>>;
+    using Base::Base;
+
+    static std::string name() { return "SymDirichletParamElementAD"; }
+
+    template<class Mesh>
+    auto init(size_t ei, const Mesh &m) {
+        auto e = m.element(ei);
+        Eigen::Matrix<Real_, 3, 2> E;
+        E << e.node(1)->p - e.node(0)->p,
+             e.node(2)->p - e.node(0)->p;
+        Real_ A = (0.5 * (E.col(0).cross(E.col(1))).norm());
+        m_EtE_A = (E.transpose() * E) * A;
+        m_EtE_inv_A = (E.transpose() * E).inverse() * A;
+    }
+
+    template<class LVars>
+    typename LVars::Scalar eval(const LVars &x) const {
+        using ADScalar = typename LVars::Scalar;
+        Mat2_T<ADScalar> e;
+        e.col(0) = x.row(1) - x.row(0);
+        e.col(1) = x.row(2) - x.row(0);
+
+        if (e.determinant() < 0) return ADScalar(std::numeric_limits<double>::infinity());
+
+        Mat2_T<ADScalar> ete = e.transpose() * e;
+
+        return 0.5 * ((ete           * m_EtE_inv_A.template cast<ADScalar>()).trace()
+                    + (ete.inverse() * m_EtE_A    .template cast<ADScalar>()).trace());
+    }
+
+private:
+    Mat2_T<Real> m_EtE_inv_A, m_EtE_A;
+};
 
 #endif /* end of include guard: DIRICHLETENERGY_HH */
