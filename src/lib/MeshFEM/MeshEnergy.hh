@@ -161,6 +161,7 @@ struct MeshEnergy : public MeshEnergyBase {
     const auto &assembler() const { return m_vars.assembler(); }
 
     void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.accumulateGradient");
         if constexpr (Element::CachesDeformedQuantities) {
             assembler().assembleGradient(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight);
