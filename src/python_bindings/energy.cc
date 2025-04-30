@@ -2,8 +2,6 @@
 #include <pybind11/eigen.h>
 namespace py = pybind11;
 
-#include <iostream>
-
 #include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
@@ -34,8 +32,8 @@ bindEnergyFBased(py::module &detail_module)
         .def("setDeformationGradient", [](Energy &e, const Mat &F) { e.setDeformationGradient(F); }, py::arg("deformation_gradient"))
         .def("getDeformationGradient", &Energy::getDeformationGradient)
         .def("energy", &Energy::energy)
-        .def("denergy", py::overload_cast<          >(&Energy::denergy, py::const_))
-        .def("denergy", py::overload_cast<const Mat&>(&Energy::denergy, py::const_), py::arg("dF"))
+        .def("denergy", [](const Energy &e) { return e.denergy(); })
+        .def("denergy", [](const Energy &e, const Mat &dF) { return e.denergy(dF); }, py::arg("dF"))
         .def("d2energy",       [](const Energy &e, const Mat &dF_a, const Mat &dF_b) { return e.d2energy      (dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
         .def("delta_denergy",  [](const Energy &e, const Mat &dF_a                 ) { return e. delta_denergy(dF_a      ); }, py::arg("dF_a"))
         .def("delta2_denergy", [](const Energy &e, const Mat &dF_a, const Mat &dF_b) { return e.delta2_denergy(dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
