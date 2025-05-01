@@ -18,17 +18,17 @@
 ////////////////////////////////////////////////////////////////////////////////
 // F-based energy density using automatic differentiation.
 ////////////////////////////////////////////////////////////////////////////////
-template<typename Real_, size_t Dim_>
-struct DirichletEDensityAD : public AutodiffEDensity<DirichletEDensityAD<Real_, Dim_>, Real_, Dim_> {
+struct DirichletEDensityADPsi {
     static std::string name() { return "DirichletAD"; }
-    using Base = AutodiffEDensity<DirichletEDensityAD<Real_, Dim_>, Real_, Dim_>;
-    using Base::Base;
 
     template<class Derived>
     typename Derived::Scalar psi(const Eigen::MatrixBase<Derived> &A) {
         return 0.5 * A.squaredNorm();
     }
 };
+
+template<typename Real_, size_t Dim_>
+using DirichletEDensityAD = AutodiffEDensity<DirichletEDensityADPsi, Real_, Dim_>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // F-based energy density using analytical derivatives.

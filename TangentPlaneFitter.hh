@@ -28,13 +28,8 @@
 #include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 
 template<typename Real>
-struct TangentPlaneFittingEnergyDensity : public AutodiffEDensity<TangentPlaneFittingEnergyDensity<Real>, Real, 3, EDensityType::Membrane> {
+struct TangentPlaneFittingPsi {
     static std::string name() { return "TangentPlaneFittingEnergyDensity"; }
-    using Base = AutodiffEDensity<TangentPlaneFittingEnergyDensity<Real>, Real, 3, EDensityType::Membrane>;
-    using Base::Base;
-
-    TangentPlaneFittingEnergyDensity(const TangentPlaneFittingEnergyDensity &other, UninitializedDeformationTag &&)
-        : Base(other), stiffness(other.stiffness), FB_tgt(other.FB_tgt), variant(other.variant) { }
 
     template<class Derived>
     typename Derived::Scalar psi(const Eigen::MatrixBase<Derived> &FB) const {
@@ -61,6 +56,9 @@ struct TangentPlaneFittingEnergyDensity : public AutodiffEDensity<TangentPlaneFi
     Eigen::Matrix<Real, 3, 2> FB_tgt = Eigen::Matrix<Real, 3, 2>::Identity();
     enum class Variant { FitMetricAndRotation, FitArea, FitNormalOnly } variant = Variant::FitMetricAndRotation;
 };
+
+template<typename Real_>
+using TangentPlaneFittingEnergyDensity = AutodiffEDensity<TangentPlaneFittingPsi<Real_>, Real_, 3, EDensityType::Membrane>;
 
 template<typename Real_>
 using TangentPlaneFittingElement = MembraneElement_3x2<1, TangentPlaneFittingEnergyDensity<Real_>>;

@@ -17,19 +17,14 @@
 #include <MeshFEM/Elements/MembraneElement.hh>
 #include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 
-template<typename Real>
-struct SurfaceAreaEnergyDensity : public AutodiffEDensity<SurfaceAreaEnergyDensity<Real>, Real, 3, EDensityType::Membrane> {
-    using Base = AutodiffEDensity<SurfaceAreaEnergyDensity<Real>, Real, 3, EDensityType::Membrane>;
-    using Base::Base;
-
+struct SurfaceAreaEnergyDensityPsi {
     static std::string name() { return "SurfaceAreaEnergyDensity"; }
-
     template<class Derived>
     typename Derived::Scalar psi(const Eigen::MatrixBase<Derived> &FB) const { return FB.col(0).cross(FB.col(1)).norm(); }
 };
 
 template<typename Real_>
-using SurfaceAreaElement = MembraneElement_3x2<1, SurfaceAreaEnergyDensity<Real_>>;
+using SurfaceAreaElement = MembraneElement_3x2<1, AutodiffEDensity<SurfaceAreaEnergyDensityPsi, Real_, 3, EDensityType::Membrane>>;
 
 // Implement the surface area fitter as a composition of a "MeshEnergy"
 // evaluating the surface area and the univariate function
