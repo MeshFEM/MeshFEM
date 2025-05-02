@@ -115,19 +115,12 @@ private:
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Elements/AutodiffElement.hh>
 template<typename Real_>
-struct DirichletParamElementAD : public AutodiffElement<DirichletParamElementAD<Real_>, TriCornerUVs<Real_>> {
-    using Base = AutodiffElement<DirichletParamElementAD<Real_>, TriCornerUVs<Real_>>;
-    using Base::Base;
-
+struct DirichletElementEnergy {
     static std::string name() { return "DirichletParamElementAD"; }
+    using LocalVars = TriCornerUVs<Real_>;
 
-    // Warning: this method is called by the `Base` constructor before this
-    // derived class is fully constructed. This is fine here since our single
-    // member variable has a trivial constructor and is initialized by the
-    // following code. Classes whose members need to be constructed before
-    // `init` can be called must override the `Base` constructor.
     template<class Mesh>
-    auto init(size_t ei, const Mesh &m) {
+    DirichletElementEnergy(size_t ei, const Mesh &m) {
         auto e = m.element(ei);
         Eigen::Matrix<Real_, 3, 2> E;
         E << e.node(1)->p - e.node(0)->p,
@@ -151,27 +144,26 @@ private:
     Mat2_T<Real> m_EtE_inv_A;
 };
 
+template<typename Real_>
+using DirichletParamElementAD = AutodiffElement<DirichletElementEnergy<Real_>>;
+
 ////////////////////////////////////////////////////////////////////////////////
 // Symmetric Dirichlet parametrization element (x-based) using automatic
 // differentiation. This is for benchmark comparison against the
 // `SymmetricDirichletDerivativeFree` energy density.
 ////////////////////////////////////////////////////////////////////////////////
 template<typename Real_>
-struct SymDirichletParamElementAD : public AutodiffElement<SymDirichletParamElementAD<Real_>, TriCornerUVs<Real_>> {
-    using Base = AutodiffElement<SymDirichletParamElementAD<Real_>, TriCornerUVs<Real_>>;
-    using Base::Base;
-
-    static std::string name() { return "SymDirichletParamElementAD"; }
+struct SymDirichletElementEnergy {
+    static std::string name() { return "DirichletParamElementAD"; }
+    using LocalVars = TriCornerUVs<Real_>;
 
     template<class Mesh>
-    auto init(size_t ei, const Mesh &m) {
+    SymDirichletElementEnergy(size_t ei, const Mesh &m) {
         auto e = m.element(ei);
         Eigen::Matrix<Real_, 3, 2> E;
         E << e.node(1)->p - e.node(0)->p,
              e.node(2)->p - e.node(0)->p;
-        Real_ A = (0.5 * (E.col(0).cross(E.col(1))).norm());
-        m_EtE_A = (E.transpose() * E) * A;
-        m_EtE_inv_A = (E.transpose() * E).inverse() * A;
+        m_EtE_inv_A = (E.transpose() * E).inverse() * (0.5 * (E.col(0).cross(E.col(1))).norm());
     }
 
     template<class LVars>
@@ -184,7 +176,6 @@ struct SymDirichletParamElementAD : public AutodiffElement<SymDirichletParamElem
         if (e.determinant() < 0) return ADScalar(std::numeric_limits<double>::infinity());
 
         Mat2_T<ADScalar> ete = e.transpose() * e;
-
         return 0.5 * ((ete           * m_EtE_inv_A.template cast<ADScalar>()).trace()
                     + (ete.inverse() * m_EtE_A    .template cast<ADScalar>()).trace());
     }
@@ -192,5 +183,8 @@ struct SymDirichletParamElementAD : public AutodiffElement<SymDirichletParamElem
 private:
     Mat2_T<Real> m_EtE_inv_A, m_EtE_A;
 };
+
+template<typename Real_>
+using SymDirichletParamElementAD = AutodiffElement<SymDirichletElementEnergy<Real_>>;
 
 #endif /* end of include guard: DIRICHLETENERGY_HH */
