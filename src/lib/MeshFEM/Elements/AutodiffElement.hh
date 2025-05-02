@@ -17,17 +17,33 @@
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/AutomaticDifferentiation.hh>
 
-template<class Derived, class LocalVars_>
-struct AutodiffElement : public ElementBase<AutodiffElement<Derived, LocalVars_>> {
-    using Base = ElementBase<AutodiffElement<Derived, LocalVars_>>;
-    using Base::Base;
+template<class ElementEnergy>
+struct AutodiffElement;
 
-    using LocalVars = LocalVars_;
+// Default to `MaterialBase` if no material is specified in `ElementEnergy`...
+template<class ElementEnergy, typename = void>
+struct ElementTraitsImpl { using Material = MaterialBase; };
+
+// ... but use the specified material if it exists.
+template<class ElementEnergy>
+struct ElementTraitsImpl<ElementEnergy, std::void_t<typename ElementEnergy::Material>> {
+    using Material = typename ElementEnergy::Material;
+};
+
+template<class ElementEnergy>
+struct ElementTraits<AutodiffElement<ElementEnergy>> : ElementTraitsImpl<ElementEnergy> { };
+
+template<class ElementEnergy>
+struct AutodiffElement : public ElementBase<AutodiffElement<ElementEnergy>>, private ElementEnergy {
+    using Base      = ElementBase<AutodiffElement<ElementEnergy>>;
+    using Material  = typename Base::Material;
+    using LocalVars = typename ElementEnergy::LocalVars;
+
+    using ElementEnergy::name;
 
     template<class Mesh>
     AutodiffElement(size_t ei, const Mesh &m, const LocalVars &x, MaterialAssignment<MaterialBase> &materials)
-        : Base(ei, materials) {
-        derived().init(ei, m);
+        : Base(ei, materials), ElementEnergy(ei, m) {
         setDeformedConfiguration(x);
     }
 
@@ -49,11 +65,8 @@ struct AutodiffElement : public ElementBase<AutodiffElement<Derived, LocalVars_>
             return j * LocalVars::RowsAtCompileTime + i;
     }
 
-    const Derived &derived() const { return static_cast<const Derived &>(*this); }
-          Derived &derived()       { return static_cast<      Derived &>(*this); }
-
     void setDeformedConfiguration(const LocalVars &x, EvalLevel elevel = EvalLevel::Full) {
-        if (elevel == EvalLevel::EnergyOnly) { m_energy = derived().eval(x); }
+        if (elevel == EvalLevel::EnergyOnly) { m_energy = m_evalWrapper(x); }
         if (elevel >= EvalLevel::Gradient)   {
             Eigen::Matrix<ADScalar, LocalVars::RowsAtCompileTime, LocalVars::ColsAtCompileTime> x_AD;
             for (size_t j = 0; j < LocalVars::ColsAtCompileTime; ++j) {
@@ -63,7 +76,7 @@ struct AutodiffElement : public ElementBase<AutodiffElement<Derived, LocalVars_>
                 }
             }
 
-            ADScalar e_AD = derived().eval(x_AD);
+            ADScalar e_AD = m_evalWrapper(x_AD);
             m_energy = e_AD.value();
             m_gradient = e_AD.derivatives();
         }
@@ -81,7 +94,7 @@ struct AutodiffElement : public ElementBase<AutodiffElement<Derived, LocalVars_>
                 }
             }
 
-            AD2Scalar e_AD2 = derived().eval(x_AD2);
+            AD2Scalar e_AD2 = m_evalWrapper(x_AD2);
             m_energy = e_AD2.value().value();
 
             for (size_t i = 0; i < NumLocalVars; ++i) {
@@ -101,6 +114,21 @@ private:
     Real m_energy = 0.0;
     Gradient m_gradient = Gradient::Zero();
     Hessian  m_hessian  = Hessian::Zero();
+
+    // Wrapper that conditionally passes a material object if
+    // `ElementEnergy::eval` expects one.
+    template<class LVars>
+    auto m_evalWrapper(const LVars &x) {
+        if constexpr (!std::is_same_v<Material, MaterialBase>) {
+            // If `ElementEnergy` specifies a nontrivial material, it must be
+            // passed to `eval`.
+            return ElementEnergy::eval(x, this->material());
+        } else {
+            // Otherwise, it must not be passed.
+            return ElementEnergy::eval(x);
+        }
+    }
+
 };
 
 #endif /* end of include guard: AUTODIFFELEMENT_HH */
