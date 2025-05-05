@@ -33,7 +33,7 @@ struct ParametrizationElement : public ElementBase<ParametrizationElement<Deg, P
     using Gradient  = typename HLE::Gradient;
     using Hessian   = typename HLE::Hessian;
 
-    static std::string name() { return "Parametrization"; }
+    static std::string name() { return Psi_2x2::name() + std::string("Parametrization"); }
     static constexpr bool CachesDeformedQuantities = false;
 
     template<class Mesh>

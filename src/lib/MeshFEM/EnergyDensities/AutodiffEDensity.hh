@@ -15,9 +15,10 @@
 #include <MeshFEM/AutomaticDifferentiation.hh>
 #include "EnergyTraits.hh"
 
-template<class Derived, typename Real_, size_t Dim_, EDensityType EDType_ = EDensityType::FBased>
-struct AutodiffEDensity {
+template<class Psi, typename Real_, size_t Dim_, EDensityType EDType_ = EDensityType::FBased>
+struct AutodiffEDensity : public Psi {
     using Real = Real_;
+    static_assert((EDType_ == EDensityType::FBased) || (EDType_ == EDensityType::Membrane), "AutodiffEDensity must be either an F-based or membrane energy");
     static constexpr EDensityType EDType = EDType_;
     static_assert(!((EDType == EDensityType::Membrane) && (Dim_ != 3)), "Membrane energy density must be a function of a 3x2 matrix");
     static constexpr size_t Dimension = Dim_;
@@ -30,21 +31,23 @@ struct AutodiffEDensity {
     using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, M * N, 1>>;
 
     AutodiffEDensity() { setDeformationGradient(Matrix::Identity()); }
-    AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&) : useAbsProjection(other.useAbsProjection) { }
+    AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&)
+        : Psi(other),
+          useAbsProjection(other.useAbsProjection),
+          projectionDirection(other.projectionDirection) { }
 
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
-        if (elevel == EvalLevel::EnergyOnly) { m_energy = derived().psi(F); }
+        if (elevel == EvalLevel::EnergyOnly) { m_energy = Psi::psi(F); }
         if (elevel == EvalLevel::Gradient) {
             Eigen::Matrix<ADScalar, M, N> F_AD;
             for (size_t j = 0; j < N; ++j) {
                 for (size_t i = 0; i < M; ++i) {
                     F_AD(i, j).value() = F(i, j);
-                    F_AD(i, j).derivatives().setZero();
-                    F_AD(i, j).derivatives()[i + j * M] = 1;
+                    F_AD(i, j).derivatives().setUnit(i + j * M);
                 }
             }
-            ADScalar psi_AD = derived().psi(F_AD);
+            ADScalar psi_AD = Psi::psi(F_AD);
             m_energy = psi_AD.value();
             for (size_t j = 0; j < N; ++j)
                 for (size_t i = 0; i < M; ++i)
@@ -64,7 +67,7 @@ struct AutodiffEDensity {
                 }
             }
 
-            AD2Scalar psi_AD2 = derived().psi(F_AD2);
+            AD2Scalar psi_AD2 = Psi::psi(F_AD2);
             m_energy = psi_AD2.value().value();
             for (size_t j = 0; j < N; ++j) {
                 for (size_t i = 0; i < M; ++i) {
@@ -80,11 +83,23 @@ struct AutodiffEDensity {
                 using ESolver = Eigen::SelfAdjointEigenSolver<Hessian>;
                 // TODO: short-circuit in diagonally dominant case.
                 ESolver Hes(m_d2energy);
-                if (Hes.eigenvalues()[0] < 0.0) {
-                    if (useAbsProjection)
-                        m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseAbs().asDiagonal() * Hes.eigenvectors().transpose();
-                    else
-                        m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                if (projectionDirection == ProjectionDirection::Positive) {
+                    // Projecting to positive semidefinite
+                    if (Hes.eigenvalues()[0] < 0.0) {
+                        if (useAbsProjection)
+                            m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseAbs().asDiagonal() * Hes.eigenvectors().transpose();
+                        else
+                            m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                    }
+                }
+                else if (projectionDirection == ProjectionDirection::Negative) {
+                    // Projecting to negative semidefinite
+                    if (Hes.eigenvalues()[Hes.eigenvalues().size() - 1] > 0.0) {
+                        if (useAbsProjection)
+                            m_d2energy = Hes.eigenvectors() * (-(Hes.eigenvalues().cwiseAbs())).asDiagonal() * Hes.eigenvectors().transpose();
+                        else
+                            m_d2energy = Hes.eigenvectors() * Hes.eigenvalues().cwiseMin(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                    }
                 }
             }
         }
@@ -95,14 +110,11 @@ struct AutodiffEDensity {
         throw std::runtime_error("Unimplemented.");
     }
 
-    const Derived &derived() const { return static_cast<const Derived &>(*this); }
-          Derived &derived()       { return static_cast<      Derived &>(*this); }
-
     const Matrix &getDeformationGradient() const { return m_F; }
 
-    Real energy()    const { return m_energy; }
+    Real           energy() const { return m_energy; }
     const Matrix &denergy() const { return m_denergy; }
-    Real denergy(const Matrix& dF) const { return doubleContract(dF, denergy()); }
+    Real denergy(const Matrix &dF) const { return doubleContract(dF, denergy()); }
 
     template<typename Mat_>
     Matrix delta_denergy(const Mat_ &dF) const { return applyFlattened4thOrderTensor(m_d2energy, dF); }
@@ -119,6 +131,15 @@ struct AutodiffEDensity {
     bool projectionEnabled = true;
     bool useAbsProjection = false;
 
+    // Whether to project the per-element Hessian to the positive or negative
+    // semidefinite cone. This is helpful in the context of composite
+    // objectives, J(e(x)), where when J'(x) is negative we want to project
+    // d^2 e / dx^2 to be negative semidefinite.
+    // This member is mutable so that the const `accumulateHessian` method of a
+    // derived class of `MeshEnergy` can modify it if needed.
+    enum class ProjectionDirection { Positive, Negative };
+    mutable ProjectionDirection projectionDirection = ProjectionDirection::Positive;
+
 private:
     Real m_energy;
     Matrix m_F, m_denergy;
@@ -126,11 +147,8 @@ private:
 };
 
 // Example:
-template<typename Real_, size_t Dim_>
-struct SymmetricDirichletDerivativeFree : public AutodiffEDensity<SymmetricDirichletDerivativeFree<Real_, Dim_>, Real_, Dim_> {
+struct SymmetricDirichletPsi {
     static std::string name() { return "SymmetricDirichletDerivativeFree"; }
-    using Base = AutodiffEDensity<SymmetricDirichletDerivativeFree<Real_, Dim_>, Real_, Dim_>;
-    using Base::Base;
 
     template<class Derived>
     typename Derived::Scalar psi(const Eigen::MatrixBase<Derived> &A) { // Don't use the `auto` return type here! We must evaluate the expression template before returning...
@@ -140,5 +158,7 @@ struct SymmetricDirichletDerivativeFree : public AutodiffEDensity<SymmetricDiric
     }
 };
 
+template<typename Real_, size_t Dim_>
+using SymmetricDirichletDerivativeFree = AutodiffEDensity<SymmetricDirichletPsi, Real_, Dim_>;
 
 #endif /* end of include guard: AUTODIFFEDENSITY_HH */

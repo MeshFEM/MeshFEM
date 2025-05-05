@@ -397,10 +397,11 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         return order;
     }
 
-    static auto argsort(const std::vector<size_t> &blockVars) { // For fully dynamic element sizes
-        std::vector<size_t> order(blockVars.size());
+    template<typename T>
+    static auto argsort(const std::vector<T> &blockVars) { // For fully dynamic element sizes
+        std::vector<T> order(blockVars.size());
         for (size_t i = 0; i < blockVars.size(); ++i) { order[i] = i; }
-        std::sort(order.begin(), order.end(), [&blockVars](size_t a, size_t b) { return blockVars[a] < blockVars[b]; });
+        std::sort(order.begin(), order.end(), [&blockVars](T a, T b) { return blockVars[a] < blockVars[b]; });
         return order;
     }
 

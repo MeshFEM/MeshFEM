@@ -23,7 +23,7 @@ struct SymmetricDirichlet
     static constexpr size_t N         = _Dim;
     static constexpr EDensityType EDType = EDensityType::FBased;
 
-    static constexpr const char *name() {return "SymmetricDirichlet";}
+    static constexpr const char *name() { return "SymmetricDirichlet"; }
 
     using Real      = _Real;
     using Matrix    = Eigen::Matrix<_Real, N, N>;

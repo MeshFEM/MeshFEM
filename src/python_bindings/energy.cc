@@ -2,8 +2,6 @@
 #include <pybind11/eigen.h>
 namespace py = pybind11;
 
-#include <iostream>
-
 #include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
@@ -34,8 +32,8 @@ bindEnergyFBased(py::module &detail_module)
         .def("setDeformationGradient", [](Energy &e, const Mat &F) { e.setDeformationGradient(F); }, py::arg("deformation_gradient"))
         .def("getDeformationGradient", &Energy::getDeformationGradient)
         .def("energy", &Energy::energy)
-        .def("denergy", py::overload_cast<          >(&Energy::denergy, py::const_))
-        .def("denergy", py::overload_cast<const Mat&>(&Energy::denergy, py::const_), py::arg("dF"))
+        .def("denergy", [](const Energy &e) { return e.denergy(); })
+        .def("denergy", [](const Energy &e, const Mat &dF) { return e.denergy(dF); }, py::arg("dF"))
         .def("d2energy",       [](const Energy &e, const Mat &dF_a, const Mat &dF_b) { return e.d2energy      (dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
         .def("delta_denergy",  [](const Energy &e, const Mat &dF_a                 ) { return e. delta_denergy(dF_a      ); }, py::arg("dF_a"))
         .def("delta2_denergy", [](const Energy &e, const Mat &dF_a, const Mat &dF_b) { return e.delta2_denergy(dF_a, dF_b); }, py::arg("dF_a"), py::arg("dF_b"))
@@ -391,8 +389,8 @@ PYBIND11_MODULE(energy, m)
     bindWrinkleStrainProblem<  IsotropicWrinkleStrainProblem<INeo_C>>(m,   "IsotropicWrinkleStrainProblemINeo");
     bindWrinkleStrainProblem<AnisotropicWrinkleStrainProblem<INeo_C>>(m, "AnisotropicWrinkleStrainProblemINeo");
 
-    m.def("NeoHookean",    [](size_t dimension, double lambda, double mu) {                                                                     return constructDimensionSpecificConditionalAP<NeoHookeanEnergy>(dimension, /* AP = */ false, lambda, mu); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"));
-    m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecificConditionalAP<NeoHookeanEnergy>(dimension, /* AP = */ false, lambda, mu); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"));
+    m.def("NeoHookean",    [](size_t dimension, double lambda, double mu, bool autoproject) {                                                                     return constructDimensionSpecificConditionalAP<NeoHookeanEnergy>(dimension, autoproject, lambda, mu); }, py::arg("dimension"), py::arg("lambda"), py::arg("mu"), py::arg("autoproject") = false);
+    m.def("NeoHookean",    [](py::object mesh,  double lambda, double mu, bool autoproject) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecificConditionalAP<NeoHookeanEnergy>(dimension, autoproject, lambda, mu); }, py::arg("mesh"),      py::arg("lambda"), py::arg("mu"), py::arg("autoproject") = false);
     m.def("NeoHookeanMembrane", [](double lambda, double mu) { return std::make_unique<NeoHookeanMembrane>(lambda, mu); }, py::arg("lambda"), py::arg("mu"));
     m.def("LinearElastic",             [](const ETensor3D &etensor) { return std::make_unique<LinearElasticEnergy          <double, 3>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("LinearElastic",             [](const ETensor2D &etensor) { return std::make_unique<LinearElasticEnergy          <double, 2>>(etensor); }, py::arg("elasticity_tensor"));
@@ -403,8 +401,8 @@ PYBIND11_MODULE(energy, m)
     m.def("StVenantKirchhoffMembrane", [](const ETensor2D &etensor) { return std::make_unique<StVenantKirchhoffMembraneEnergy <double>>(etensor); }, py::arg("elasticity_tensor"));
     m.def("StVenantKirchhoffCBased",   [](const ETensor2D &etensor) { return std::make_unique<StVenantKirchhoffEnergyCBased<double, 2>>(etensor); }, py::arg("elasticity_tensor"));
 
-    m.def("IsotropicLinearElastic", [](size_t dimension, double young, double poisson) {                                                                     return constructDimensionSpecificConditionalAP<LinearElasticEnergy>(dimension, /* AP = */ false, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
-    m.def("IsotropicLinearElastic", [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecificConditionalAP<LinearElasticEnergy>(dimension, /* AP = */ false, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
+    m.def("IsotropicLinearElastic", [](size_t dimension, double young, double poisson) {                                                                     return constructDimensionSpecific<LinearElasticEnergy>(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
+    m.def("IsotropicLinearElastic", [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecific<LinearElasticEnergy>(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
 
     m.def("CorotatedIsotropicLinearElastic", [](size_t dimension, double young, double poisson) {                                                                     return constructIsotropicCorotated(dimension, young, poisson); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("CorotatedIsotropicLinearElastic", [](py::object mesh,  double young, double poisson) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsotropicCorotated(dimension, young, poisson); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));

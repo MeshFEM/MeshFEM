@@ -541,22 +541,21 @@ void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool 
 
 void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const {
     BENCHMARK_SCOPED_TIMER_SECTION otimer("solveMultiRHS");
-    // Brute-force reference implementation for solvers that don't support solving for multiple RHS at once.
     if (size_t(B.rows()) != m()) throw std::runtime_error("Incorrect RHS size");
     const size_t nrhs = B.cols();
     if (nrhs < 1) throw std::runtime_error("Must specify at least one rhs.");
 
-    Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> X_scratch;
+    catamari::BlasMatrixView<double> v;
+    const size_t s = m_reduced();
+    v.height = s;
+    v.width = nrhs;
+    v.leading_dim = s;
 
     if (hasFixedVars()) {
+        Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> X_scratch;
         removeFixedEntries(B, X_scratch, /* permute = */ true);
 
 #if 1
-        catamari::BlasMatrixView<double> v;
-        const size_t s = n_reduced();
-        v.height = s;
-        v.width = nrhs;
-        v.leading_dim = s;
         v.data = X_scratch.data();
 
         {
@@ -564,12 +563,8 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
             m_ldl->Solve(&v, /* alreadyPermuted = */ true);
         }
 #else
+        v.width = 1;
         for (size_t i = 0; i < nrhs; ++i) {
-            catamari::BlasMatrixView<double> v;
-            const size_t s = n_reduced();
-            v.height = s;
-            v.width = 1;
-            v.leading_dim = s;
             v.data = X_scratch.col(i).data();
             {
                 BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
@@ -581,7 +576,10 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
         extractFullSolution(X_scratch, X, /* permute = */ true);
     }
     else {
-        throw std::runtime_error("Unimplemented");
+        X = B;
+        v.data = X.data();
+        BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
+        m_ldl->Solve(&v, /* alreadyPermuted = */ false);
     }
 }
 

@@ -16,9 +16,13 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 template<class Psi>
 auto bindMembraneMaterial(py::module &m, py::module &detail) {
-    using MMat = MembraneMaterial<Psi>;
+    using MMat = std::conditional_t<
+        Psi::EDType == EDensityType::Membrane,
+        MembraneMaterial_3x2<Psi>,
+        MembraneMaterial<Psi>>;
+
     py::class_<MMat, MaterialBase> pyMM(detail, (std::string(Psi::name()) + "MembraneMaterial").c_str());
-    pyMM.def("setPsi",  [](MMat &m, const Psi &psi) { m.psi = psi; })
+    pyMM.def_readwrite("psi", &MMat::psi)
         .def_readwrite("thickness", &MMat::thickness)
         .def(py::init<>())
         ;

@@ -14,7 +14,7 @@
 
 // Traits class must define `Material` type
 template<class Derived>
-struct ElementTraits;
+struct ElementTraits { using Material = MaterialBase; };
 
 template<class Derived>
 struct ElementBase {

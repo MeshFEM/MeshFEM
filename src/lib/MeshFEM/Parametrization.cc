@@ -225,6 +225,75 @@ UVMap scp(const Mesh &mesh, SCPInnerProduct iprod, Real eps) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Mapping analysis
+////////////////////////////////////////////////////////////////////////////////
+std::vector<M23d> jacobians(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
+    std::vector<M23d> result;
+
+    result.assign(mesh.numElements(), M23d::Zero());
+    for (const auto e : mesh.elements()) {
+        for (const auto v : e.vertices()) {
+            result[e.index()] += (e->gradBarycentric().col(v.localIndex())
+                                    * uv.row(v.index())).transpose();
+        }
+    }
+
+    return result;
+}
+
+// Amount by which lengths are scaled when mapping from 2D to 3D.
+VXd scaleFactor(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
+    auto F = jacobians(mesh, uv);
+    VXd result(F.size());
+    for (size_t i = 0; i < F.size(); ++i)
+        result[i] = 1.0 / std::pow((F[i] * F[i].transpose()).determinant(), 0.25);
+    return result;
+}
+
+// Quasiconformal distortion "strain measure" (sigma_0 - sigma_1) / sigma_1 >= 0
+VXd conformalDistortion(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
+    auto F = jacobians(mesh, uv);
+    VXd result(F.size());
+    for (size_t i = 0; i < F.size(); ++i) {
+        Eigen::JacobiSVD<M23d> svd(F[i]);
+        auto sigma = svd.singularValues(); // decreasing order
+        result[i] = (sigma[0] - sigma[1]) / sigma[1];
+    }
+    return result;
+}
+
+// Number of triangle flips given a mesh and a uv mapping
+std::vector<size_t> getFlips(const Mesh &mesh, Eigen::Ref<const UVMap> uv) {
+    std::vector<size_t> flip_idx;
+    flip_idx.resize(0);
+    const size_t nt = mesh.numElements();
+
+    // construct m_B vector for the mesh
+    std::vector<M32d> B;
+    B.resize(nt);
+    for (const auto e : mesh.elements()) {
+        V3d b0 = (e.node(1)->p - e.node(0)->p).normalized();
+        V3d b1 = e->normal().cross(b0);
+        B[e.index()].col(0) = b0;
+        B[e.index()].col(1) = b1;
+    }
+
+    std::vector<M23d> F = jacobians(mesh, uv);
+    M23d f_restrict_T;
+    for (const auto e : mesh.elements()){
+        size_t e_ind = e.index();
+        f_restrict_T.col(0) = uv.row(e.vertex(0).index());
+        f_restrict_T.col(1) = uv.row(e.vertex(1).index());
+        f_restrict_T.col(2) = uv.row(e.vertex(2).index());
+        auto &J = F[e_ind];
+        J = f_restrict_T * e->gradBarycentric().transpose();
+        if ((J * B[e_ind]).determinant() < 0)  flip_idx.push_back(e_ind);
+    }
+
+    return flip_idx;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Matrix assembly
 ////////////////////////////////////////////////////////////////////////////////
 // Assemble (upper triangle of) LSCM matrix K =

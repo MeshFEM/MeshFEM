@@ -93,6 +93,10 @@ struct CholeskyFactorizerBase {
 
     // (Re)compute both symbolic and numeric factorizations
     virtual void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool /* isInTryCatch */ = false) = 0;
+    virtual void factorize(const BlockCSCHessianBase &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool /* isInTryCatch */ = false) {
+        factorizeSymbolic(mat, fixedVars);
+        factorizeNumeric(mat);
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Factorization routines taking a `BlockCSCHessian` instead of

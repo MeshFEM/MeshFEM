@@ -301,6 +301,7 @@ struct CompositeEnergyDensity<Psi1_C, Psi2_C, std::enable_if_t<(Psi1_C::EDType =
     static constexpr EDensityType EDType = EDensityType::CBased;
     using Real = typename Psi1_C::Real;
     static constexpr size_t N = Psi1_C::N;
+    static constexpr size_t Dimension = N;
     using MNd = Eigen::Matrix<Real, N, N>;
 
     static_assert(N == Psi2_C::N, "Psi1_C and Psi2_C must have the same dimension N");

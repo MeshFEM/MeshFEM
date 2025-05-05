@@ -13,8 +13,10 @@
 #include <MeshFEM/Types.hh>
 
 // Mapping from each element to a material property.
-template<class Material>
+template<class Material_>
 struct MaterialAssignment {
+    using Material = Material_;
+
     // We support three types of assignment:
     //      HOMOGENEOUS: all elements share a single material property instance.
     //      PER_ELEMENT: each element has its own material property instance.

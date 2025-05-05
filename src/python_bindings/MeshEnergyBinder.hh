@@ -81,7 +81,7 @@ std::string getMaterialName() {
 
 // Bind a single MeshEnergy instantiation.
 template<class ME, class RawMaterial = typename ME::Material>
-auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) {
+auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail, bool bindConstructors = true) {
     using Mesh = typename ME::Mesh;
     using Vars = typename ME::Vars;
     using Material = typename ME::Material;
@@ -89,8 +89,14 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) 
     py::class_<ME, MeshEnergyBase, std::shared_ptr<ME>> pyME(detail, (name + getMeshName<Mesh>() + getMaterialName<Material>()).c_str());
     pyME.def("setHomogeneousMaterial",      [](ME &me, RawMaterial material) { me.setHomogeneousMaterial(convertMaterial<Material>(material)); }, py::arg("material"))
         .def("setSpatiallyVaryingMaterial", [](ME &me, const std::vector<RawMaterial> &mats, const std::vector<size_t> &materialForElement) { me.setSpatiallyVaryingMaterial(convertMaterialList<Material>(mats), materialForElement); }, py::arg("materials"), py::arg("materialForElement"))
+        .def("allocatePerElementMaterials", &ME::allocatePerElementMaterials)
         .def("elementEnergy",               [](const ME &me, size_t ei) { return me.elementEnergy(ei); }, py::arg("ei"))
         ;
+
+    ElementSpecificMEBindings<ME>::bind(pyME);
+
+    if (!bindConstructors)
+        return pyME;
 
     m.def(name.c_str(), [](std::shared_ptr<Mesh> mesh, std::shared_ptr<Vars> vars, RawMaterial material) {
         auto me = std::make_shared<ME>(mesh, vars);
@@ -102,8 +108,6 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail) 
         auto me = std::make_shared<ME>(mesh, vars);
         return me;
     }, py::arg("mesh"), py::arg("vars"));
-
-    ElementSpecificMEBindings<ME>::bind(pyME);
 
     return pyME;
 }

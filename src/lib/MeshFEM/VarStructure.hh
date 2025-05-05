@@ -64,6 +64,32 @@ struct MESHFEM_EXPORT OptimizationVarStructureBase {
     bool isSparseVar(size_t var) const { return (var >= sparseVarOffset()) && (var < sparseVarOffset() + numSparseVars()); }
     bool isDenseVar (size_t var) const { return (var >=  denseVarOffset()) && (var <  denseVarOffset() +  numDenseVars()); }
 
+    // Summary of how variables are decomposed into sparse/dense segments
+    struct SparseDenseStructure {
+        SparseDenseStructure(size_t svo, size_t dvo, size_t nsv, size_t ndv)
+            : sparseVarOffset(svo), denseVarOffset(dvo), numSparseVars(nsv), numDenseVars(ndv), m_initialized(true) { }
+
+        SparseDenseStructure() = default;
+
+        void assertInitialized() const { if (!m_initialized) throw std::runtime_error("SparseDenseStructure not initialized"); }
+        bool isSparseVar(size_t var) const { assertInitialized(); return (var >= sparseVarOffset) && (var < sparseVarOffset + numSparseVars); }
+        bool isDenseVar (size_t var) const { assertInitialized(); return (var >= denseVarOffset) && (var < denseVarOffset + numDenseVars); }
+
+        size_t sparseVarOffset = 0, denseVarOffset = 0;
+        size_t numSparseVars = 0, numDenseVars = 0;
+
+        template<class Derived> auto  denseVars(      Eigen::MatrixBase<Derived> &x) const { return x.segment( denseVarOffset, numDenseVars); }
+        template<class Derived> auto  denseVars(const Eigen::MatrixBase<Derived> &x) const { return x.segment( denseVarOffset, numDenseVars); }
+        template<class Derived> auto sparseVars(      Eigen::MatrixBase<Derived> &x) const { return x.segment(sparseVarOffset, numSparseVars); }
+        template<class Derived> auto sparseVars(const Eigen::MatrixBase<Derived> &x) const { return x.segment(sparseVarOffset, numSparseVars); }
+    private:
+        bool m_initialized = false;
+    };
+
+    SparseDenseStructure sparseDenseStructure() const {
+        return SparseDenseStructure(sparseVarOffset(), denseVarOffset(), numSparseVars(), numDenseVars());
+    }
+
     // Variable slicing operations
     template<class Derived> auto variablesOfType(      Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(sparseVarOffset() + offsetForType(type_id), numVarsOfType(type_id)); }
     template<class Derived> auto variablesOfType(const Eigen::MatrixBase<Derived> &x, size_t type_id) const { return x.segment(sparseVarOffset() + offsetForType(type_id), numVarsOfType(type_id)); }

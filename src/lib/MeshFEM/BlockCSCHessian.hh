@@ -504,6 +504,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
     virtual bool missingRequiredDiagonalBlocks() const = 0;
 
     virtual SuiteSparseMatrix toScalar(bool sparsityOnly = false) const = 0;
+    static std::unique_ptr<BlockCSCHessianBase> fromScalar(const SuiteSparseMatrix &m);
 
     Eigen::VectorXd apply(const Eigen::VectorXd &x) const {
         if (size_t(x.size()) != numScalarCols())
@@ -528,6 +529,8 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
         assert(size_t(d.size()) == numScalarCols());
         m_addDiag(d.data());
     }
+
+    void addDiag(double d) { m_addDiag(d); }
 
     void setIdentity(bool preserveSparsity = false) {
         if (!preserveSparsity) {
@@ -569,6 +572,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, d
 private:
     using CSCMat::apply; // hide
     virtual void m_addDiag(const double *d) = 0;
+    virtual void m_addDiag(      double  d) = 0;
     virtual void m_setDiag(double d) = 0;
 };
 
@@ -962,6 +966,10 @@ private:
 
     virtual void m_addDiag(const _Real *d) override {
         visitDiagonalScalarEntries([d, this](size_t j, _Index loc) { Ax[loc] += d[j]; });
+    }
+
+    virtual void m_addDiag(_Real d) override {
+        visitDiagonalScalarEntries([d, this](size_t /* j */, _Index loc) { Ax[loc] += d; });
     }
 
     virtual void m_setDiag(_Real d) override {
