@@ -121,7 +121,10 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     prob->setUseIdentityMetric(options.useIdentityMetric);
     prob->writeIterates = options.writeIterateFiles;
 
-    prob->setVars(prob->applyBoundConstraints(prob->getVars()));
+    // Respect any bound constraints before we start
+    if (prob->numBoundConstraints() && !(prob->feasible(prob->getVars())))
+        prob->setVars(prob->applyBoundConstraints(prob->getVars()));
+
     Eigen::VectorXd vars, step;
 
     Real beta = options.beta;
