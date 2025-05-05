@@ -481,6 +481,7 @@ private:
 
     using SUF = NewtonObjectiveTermBase::SparsityUpdateFrequency;
     bool m_updateSparsityPattern() const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.m_updateSparsityPattern");
         NewtonHessian dynamicSparsity;
         const bool force = m_fullSparsityRebuildNeeded;
         if (force) {
