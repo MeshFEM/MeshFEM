@@ -247,7 +247,7 @@ struct MeshBindings<FEMMesh<2, _Deg, _EmbeddingSpace>> : public MeshBindingsBase
                             pyvisitor(std::make_pair(he.tail().index(), he.tip().index()), edgeIdx);
                     });
                 }, py::arg("visitor"))
-            .def("visiInteriorEdges", [](const Mesh &m, const std::function<void(std::pair<int, int>, size_t)> &pyvisitor) {
+            .def("visitInteriorEdges", [](const Mesh &m, const std::function<void(std::pair<int, int>, size_t)> &pyvisitor) {
                     m.visitInteriorEdges([&pyvisitor](const CHEHandle &he, size_t edgeIdx) {
                             pyvisitor(std::make_pair(he.tail().index(), he.tip().index()), edgeIdx);
                     });
