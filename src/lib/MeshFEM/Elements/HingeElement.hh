@@ -25,6 +25,12 @@ struct ElementTraits<HingeElement<HingeEnergy>> {
     using Material = typename HingeEnergy::MaterialProperties;
 };
 
+template<class RestState, class = void>
+struct RestStateHasDihedralAngle : std::false_type { };
+
+template<class RestState>
+struct RestStateHasDihedralAngle<RestState, decltype((void)std::declval<RestState>().theta)> : std::true_type { };
+
 template<class HingeEnergy>
 struct HingeElement : public ElementBase<HingeElement<HingeEnergy>> {
     using Base      = ElementBase<HingeElement<HingeEnergy>>;
@@ -39,6 +45,7 @@ struct HingeElement : public ElementBase<HingeElement<HingeEnergy>> {
     static std::string name() { return std::string("HingeElement<") + HingeEnergy::name() + ">"; }
 
     static constexpr bool CachesDeformedQuantities = true;
+    static constexpr bool HasRestTheta = RestStateHasDihedralAngle<RestState>::value;
 
     template<class Mesh>
     HingeElement(size_t ei, const Mesh &/* m */, const LocalVars &x, MaterialAssignment<Material> &materials)
@@ -57,6 +64,20 @@ struct HingeElement : public ElementBase<HingeElement<HingeEnergy>> {
     }
 
     Real theta() const { return m_theta.value(); }
+    void setRestTheta(Real theta) { // Warning: won't afffect energy until next call to `setDeformedConfiguration`!
+        if constexpr (HasRestTheta) {
+            m_restState.theta = theta;
+        } else {
+            throw std::runtime_error("HingeElement: RestState does not have a dihedral angle.");
+        }
+    }
+    Real getRestTheta() const {
+        if constexpr (HasRestTheta) {
+            return m_restState.theta;
+        } else {
+            throw std::runtime_error("HingeElement: RestState does not have a dihedral angle.");
+        }
+    }
 
     Real       energy(      ) const { return m_he.energy(Base::material()); }
     Gradient gradient(Real w) const { return (m_he.gradient(Base::material()) * w) * m_theta.gradient(); }

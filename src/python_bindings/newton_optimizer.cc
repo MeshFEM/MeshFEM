@@ -242,6 +242,9 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
             }, py::arg("feasibility") = false)
         .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference_internal)
 
+        .def("update_factorizations", [](NewtonOptimizer &opt) { opt.update_factorizations(); })
+        .def_property_readonly("hessian_factorization", [](NewtonOptimizer &opt) { return opt.hessianFactorization(); }, py::return_value_policy::reference_internal)
+
         .def_readwrite("options", &NewtonOptimizer::options)
         ;
 }
