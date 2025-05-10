@@ -477,7 +477,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
     else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
-    {
+    if constexpr (false) {
         static bool first = true;
         if (first) {
             using catamari::Int;
