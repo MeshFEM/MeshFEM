@@ -3,7 +3,7 @@ import triangulation
 import numpy as np
 import energy
 
-def ces_for_bloop(m, boundaryLoopIndex, psi=energy.NeoHookeanYoungPoisson(2, 1, 0.3)):
+def ces_for_bloop(m, boundaryLoopIndex, psi=energy.NeoHookeanYoungPoisson(2, 1, 0.3), noSteinerPoints=False):
     """
     Construct a condensed elastic solid filling a specified boundary loop of the mesh `m`.
 
@@ -22,7 +22,7 @@ def ces_for_bloop(m, boundaryLoopIndex, psi=energy.NeoHookeanYoungPoisson(2, 1, 
         # (meshing these is a little trickier.)
         raise ValueError(f'Boundary loop {boundaryLoopIndex} is not in the z=0 plane (currently unsupported).')
 
-    V, F, M = triangulation.triangulate(P[:, 0:2], E, triArea=2)
+    V, F, M = triangulation.triangulate(P[:, 0:2], E, triArea=2, flags=('YS0' if noSteinerPoints else ''))
 
     m_cap = mesh.Mesh(V[:, 0:2], F)
     es = elastic_solid.ElasticSolid(m_cap, psi)
@@ -49,7 +49,7 @@ class BoundaryShapePreserver:
     interior and simulating them as an elastic shell.
     """
 
-    def __init__(self, m, loops = None, psi=energy.NeoHookeanYoungPoisson(2, 1, 0.3)):
+    def __init__(self, m, loops = None, psi=energy.NeoHookeanYoungPoisson(2, 1, 0.3), noSteinerPoints=False):
         """
         :param mesh:  The mesh whose boundary shape is to be preserved.
         :param loops: Index list indicating which boundary loops to preserve. If None, all loops are preserved.
@@ -61,7 +61,7 @@ class BoundaryShapePreserver:
 
         # Construct a list of (ces, vidxForFreeVtx) pairs
         # for each boundary loop of the mesh.
-        self.preservation_shells = [ces_for_bloop(m, bli, psi) for bli in loops]
+        self.preservation_shells = [ces_for_bloop(m, bli, psi, noSteinerPoints) for bli in loops]
         self.__numVars = m.numVertices() * m.embeddingDimension
 
     def numVars(self):
