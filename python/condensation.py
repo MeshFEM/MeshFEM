@@ -27,6 +27,7 @@ class CondensedElasticObject:
 
         if self.numCondensedVars() == 0:
             self.eq = None
+            self.object_leq = None
             return
 
         if opts is None:
@@ -35,6 +36,17 @@ class CondensedElasticObject:
             opts.verbose = False
 
         self.eq = self.object.equilibriumOptimizer(fixedVars=list(self.free_variable_indices) + self.pinned_variable_indices, opts=opts)
+
+        # If the elastic energy is nonlinear, we construct an auxiliary
+        # linear elastic object to compute a reasonable initial guess for the
+        # nonlinear optimization.
+        eo_name = self.object.__class__.__name__
+        if 'LinearElasticity' not in eo_name and 'ElasticSolid' in eo_name:
+            import elastic_solid, energy
+            self.object_leq = elastic_solid.ElasticSolid(self.object.mesh(), energy.IsotropicLinearElastic(2, 1, 0.3))
+            self.le_eq = self.object_leq.equilibriumOptimizer(fixedVars=list(self.free_variable_indices) + self.pinned_variable_indices, opts=opts)
+        else: self.object_leq = None
+
         self.setVars(elastic_object.getVars()[free_variable_indices])
 
     def numVars(self): return len(self.free_variable_indices)
@@ -42,15 +54,22 @@ class CondensedElasticObject:
     def numCondensedVars(self): return len(self.object.getVars()) - len(self.free_variable_indices)
 
     def setVars(self, v):
-        # TODO: first-order approximation for update.
+        # TODO: better initialization strategy
         x_guess = self.object.getVars()
         x_guess[self.free_variable_indices] = v
+
+        # Initialize the condensed variables' positions using
+        # linear elasticity.
+        if self.object_leq is not None:
+            self.object_leq.setVars(x_guess)
+            self.le_eq.optimize()
+            x_guess = self.object_leq.getVars()
+
         self.object.setVars(x_guess)
 
         self.factorizations_up_to_date = False
 
         if self.eq is not None:
-            # pass
             self.eq.optimize()
 
     def energy(self): return self.object.energy()
