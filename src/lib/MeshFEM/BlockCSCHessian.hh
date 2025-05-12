@@ -448,8 +448,8 @@ struct detail::BlockCSCHTraits<BlockCSCHessian<_VarStructure, _ContiguousBlocks,
     static constexpr bool ContiguousBlocks = _ContiguousBlocks;
 };
 
-struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>> {
-    using CSCMat = CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>>;
+struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
+    using CSCMat = SuiteSparseMatrix;
 
     using CSCMat::CSCMat;
 
