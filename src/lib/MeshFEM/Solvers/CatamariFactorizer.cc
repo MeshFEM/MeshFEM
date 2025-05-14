@@ -11,6 +11,10 @@
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
 
+#if MESHFEM_WITH_SCOTCH
+#include "ScotchOrdering.hh"
+#endif
+
 #if CATAMARI_FINEGRAINED_TIMERS
 #include <filesystem>
 #endif
@@ -446,6 +450,35 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             }
         }
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+    }
+    else if (orderingMethod == OrderingMethod::Scotch) {
+#if MESHFEM_WITH_SCOTCH
+        catamari::SymmetricOrdering ordering;
+        ordering.permutation        .Resize(A_reduced->m);
+        ordering.inverse_permutation.Resize(A_reduced->m);
+
+        Eigen::Map<VecX_T<SuiteSparse_long>> perm(ordering.permutation.Data(), A_reduced->m);
+        Eigen::Map<VecX_T<SuiteSparse_long>> iperm(ordering.inverse_permutation.Data(), A_reduced->m);
+
+        scotch_ordering(*A_reduced, perm, iperm, A_reduced->m);
+
+        if (m_blockSize > 1) {
+            // "Upgrade" the block permutation to a scalar permutation.
+            auto upgrade_permutation = [&](auto &perm) {
+                std::decay_t<decltype(perm)> scalarPermutation(m_blockSize * A_reduced->n);
+                for (size_t i = 0; i < size_t(A_reduced->m); ++i) {
+                    for (size_t j = 0; j < m_blockSize; ++j)
+                        scalarPermutation[m_blockSize * i + j] = perm[i] * m_blockSize + j;
+                }
+                perm = std::move(scalarPermutation);
+            };
+            upgrade_permutation(ordering.permutation);
+            upgrade_permutation(ordering.inverse_permutation);
+        }
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+#else
+        throw std::runtime_error("Scotch support not compiled in");
+#endif
     }
     else throw std::runtime_error("Unknown orderingMethod");
 

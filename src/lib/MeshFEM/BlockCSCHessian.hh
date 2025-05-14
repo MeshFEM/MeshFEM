@@ -28,6 +28,7 @@
 #include "SparseMatrices.hh"
 #include "VarStructure.hh"
 #include "ParallelAssembly.hh"
+#include <istream>
 #include <type_traits>
 
 namespace detail {

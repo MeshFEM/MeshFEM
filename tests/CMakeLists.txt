@@ -35,6 +35,9 @@ target_link_libraries(solve_system MeshFEM)
 add_executable(benchmark_linear_systems benchmark_linear_systems.cc)
 target_link_libraries(benchmark_linear_systems MeshFEM)
 
+add_executable(benchmark_sparsity_lru benchmark_sparsity_lru.cc)
+target_link_libraries(benchmark_sparsity_lru MeshFEM)
+
 add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
 target_link_libraries(benchmark_dense_linalg MeshFEM)
 
@@ -45,6 +48,11 @@ endif()
 
 add_executable(benchmark_sorts benchmark_sorts.cc)
 target_link_libraries(benchmark_sorts MeshFEM)
+
+if (MESHFEM_WITH_SCOTCH)
+    add_executable(benchmark_scotch benchmark_scotch.cc)
+    target_link_libraries(benchmark_scotch MeshFEM)
+endif()
 
 if (MSVC)
 else ()

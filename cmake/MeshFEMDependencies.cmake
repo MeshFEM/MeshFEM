@@ -177,3 +177,12 @@ if (MESHFEM_WITH_IPC_TOOLKIT AND NOT TARGET ipc::toolkit)
     meshfem_download_ipc_toolkit()
     add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit)
 endif()
+
+# Scotch
+if (MESHFEM_WITH_SCOTCH)
+    find_package(SCOTCH QUIET)
+    if (NOT TARGET SCOTCH::scotch)
+        message(STATUS "Scotch not found; support will be disabled")
+        set(MESHFEM_WITH_SCOTCH OFF)
+    endif()
+endif()
