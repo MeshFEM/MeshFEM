@@ -354,6 +354,9 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
 void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
     const SuiteSparseMatrix *A_reduced;
     if (m_blockSize > 1 && pinnedVars.size() > 0) {
+        // Check for partially pinned blocks, which currently require a scalar
+        // factorization fallback.
+
         // Convert the scalar variable indices in `pinnedVars` to their
         // corresponding block variable indices.
         size_t numBlockVars = mat.n;
@@ -378,31 +381,15 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 return m_factorizeSymbolic(m_scalarHessian, pinnedVars);
             }
             // TODO: keep the partially pinned block in the sparsity pattern and
-            // apply the scalar pin constraint during numeric factorization.
+            // apply the scalar pin constraint during numeric factorization?
         }
         A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
-        // `m_initRowColRemoval` has now stored the pinned block variable
-        // indices, whereas `m_fixedVars` should store scalar variable indices.
+        // `m_initRowColRemoval` has now stored the pinned **block** variable
+        // indices, whereas `m_fixedVars` should store **scalar** variable indices.
         m_fixedVars.swap(scalarFixedVars);
 
-        // Convert `m_reducedRowForRow` and `m_entryForReducedEntry` from block to scalar.
-        // TODO: keep block versions around to accelerate fixed var removal
-        // during solve? Also, once we implement the version where the entire
-        // symbolic factorization is constructed from scalar sparsity
-        // pattern, the block version of `m_entryForReducedEntry` will need to
-        // be passed to `constructConversionPlan` below!!!
-        // auto upgrade_block_indices = [&](std::vector<SuiteSparse_long> &indices) {
-        //     std::vector<SuiteSparse_long> scalarIndices;
-        //     scalarIndices.reserve(indices.size() * m_blockSize);
-        //     for (size_t bi : indices) {
-        //         for (size_t j = 0; j < m_blockSize; ++j)
-        //             scalarIndices.push_back(bi * m_blockSize + j);
-        //     }
-        //     indices.swap(scalarIndices);
-        // };
-        // upgrade_block_indices(m_reducedRowForRow);
-
-        // TODO: remove
+        // TODO: avoid converting to a scalar pattern for row/col removal if possible.
+        // (currently we do it so that `m_entryForReducedEntry` is correct)
         SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
         m_reducedRowForRow.clear();
         A_scalar.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
@@ -411,11 +398,23 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         A_reduced = m_initRowColRemoval(mat, pinnedVars);
     }
 
+    m_permutedReducedRowForRow.clear(); // The upcoming symbolic factorization will change any existing permutation...
+
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
     m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, m_blockSize, m_legacy, m_entryForReducedEntry);
 
+    const CatamariConverter *converter = m_catamariConverter.get();
+    std::vector<SuiteSparse_long> blockEntryForReducedBlockEntry;
+    std::unique_ptr<CatamariConverter> cc_block;
+    if (m_blockSize > 1) {
+        cc_block = std::make_unique<CatamariConverter>(*A_reduced, 1, m_legacy, blockEntryForReducedBlockEntry);
+        converter = cc_block.get();
+    }
+
+    m_ldlControl->supernodal_control.relaxation_control.block_size = m_blockSize;
+
     if (orderingMethod == OrderingMethod::Catamari)
-        m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(converter->get(), *m_ldlControl, /* symbolic_only = */ true);
     else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis) || (orderingMethod == OrderingMethod::AMD)) {
         if (!m_c) {
             m_c = std::make_unique<cholmod_common>();
@@ -492,49 +491,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             }
             else throw std::runtime_error("Unknown orderingMethod");
             quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
-
-            if (m_blockSize > 1) {
-                // "Upgrade" the block permutation to a scalar permutation.
-                auto upgrade_permutation = [&](auto &perm) {
-                    std::decay_t<decltype(perm)> scalarPermutation(m_blockSize * A_reduced->n);
-                    for (size_t i = 0; i < size_t(A_reduced->m); ++i) {
-                        for (size_t j = 0; j < m_blockSize; ++j)
-                            scalarPermutation[m_blockSize * i + j] = perm[i] * m_blockSize + j;
-                    }
-                    perm = std::move(scalarPermutation);
-                };
-                upgrade_permutation(ordering.permutation);
-                upgrade_permutation(ordering.inverse_permutation);
-            }
         }
-        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
-
-        if (m_blockSize > 1) {
-            BENCHMARK_SCOPED_TIMER_SECTION timer_2("Block factorization compare");
-
-            catamari::Buffer<SuiteSparse_long> CParent(A_reduced->m), CMember(A_reduced->m);
-            auto cholmat = cholmod_sparse_view(*A_reduced);
-            cholmat.x = const_cast<double *>((const double *) A_reduced->Ai.data());
-
-            catamari::SymmetricOrdering ordering_2;
-            std::vector<SuiteSparse_long> entryForReducedEntry_2;
-            auto cc_2 = std::make_unique<CatamariConverter>(*A_reduced, 1, m_legacy, entryForReducedEntry_2);
-            ordering_2.inverse_permutation.Resize(A_reduced->m);
-            cholmod_l_amd(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
-                          (SuiteSparse_long *) ordering_2.inverse_permutation.Data(), m_c.get());
-            quotient::InvertPermutation(ordering_2.inverse_permutation, &ordering_2.permutation);
-
-            auto ldl_2 = std::make_unique<catamari::SparseLDL<double>>();
-            auto ldlControl_2 = *m_ldlControl;
-
-            ldlControl_2.supernodal_control.relaxation_control.block_size = m_blockSize;
-            ldl_2->Factor(cc_2->get(), ordering_2, ldlControl_2, /* symbolic_only = */ true);
-            cc_2->constructConversionPlan(*ldl_2, m_entryForReducedEntry);
-            cc_2->freeCatamariMatrix();
-
-            auto ldl_scalar = ldl_2->ExpandSymbolicFactorizationToScalar(m_blockSize);
-            m_ldl = std::move(ldl_scalar);
-        }
+        m_ldl->Factor(converter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
     else if (orderingMethod == OrderingMethod::Scotch) {
 #if MESHFEM_WITH_SCOTCH
@@ -547,25 +505,19 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
         scotch_ordering(*A_reduced, perm, iperm, scotchSettings.stratFlag, scotchSettings.imbalanceRatio);
 
-        if (m_blockSize > 1) {
-            // "Upgrade" the block permutation to a scalar permutation.
-            auto upgrade_permutation = [&](auto &perm) {
-                std::decay_t<decltype(perm)> scalarPermutation(m_blockSize * A_reduced->n);
-                for (size_t i = 0; i < size_t(A_reduced->m); ++i) {
-                    for (size_t j = 0; j < m_blockSize; ++j)
-                        scalarPermutation[m_blockSize * i + j] = perm[i] * m_blockSize + j;
-                }
-                perm = std::move(scalarPermutation);
-            };
-            upgrade_permutation(ordering.permutation);
-            upgrade_permutation(ordering.inverse_permutation);
-        }
-        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(converter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
 #else
         throw std::runtime_error("Scotch support not compiled in");
 #endif
     }
     else throw std::runtime_error("Unknown orderingMethod");
+
+    if (m_blockSize > 1) {
+        // Currently we must expand the symbolic factorization to a scalar one.
+        // TODO: once a full "block factorization type" is supported,
+        // we can omit this conversion.
+        m_ldl = m_ldl->ExpandSymbolicFactorizationToScalar(m_blockSize);
+    }
 
     if (!m_legacy) {
         // Build a conversion plan to support direct injection of entries.
