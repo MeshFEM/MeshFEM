@@ -8,6 +8,7 @@ extern "C" {
 }
 
 #include "CholeskyFactorizerBase.hh"
+#include <MeshFEM/TemplateHacks.hh>
 
 inline cholmod_dense cholmod_dense_wrap_vector_ptr(const size_t n, double *data) {
     cholmod_dense result;
@@ -73,26 +74,36 @@ private:
 };
 
 // Construct a `cholmod_sparse` object pointing at the data stored in `SuiteSparseMatrix`.
-inline cholmod_sparse cholmod_sparse_view(const SuiteSparseMatrix &A) {
+template<typename Real, typename IndexI, typename IndexP>
+cholmod_sparse cholmod_sparse_view(size_t m, size_t n, size_t nnz, Real *x, IndexI *i, IndexP *p) {
     cholmod_sparse result;
-    result.p = const_cast<SuiteSparse_long *>(A.Ap.data());
-    result.i = const_cast<SuiteSparse_long *>(A.Ai.data());
-    result.x = const_cast<double           *>(A.Ax.data());
+    result.x = x;
+    result.i = i;
+    result.p = p;
 
-    result.nrow   = A.m;
-    result.ncol   = A.n;
-    result.nzmax  = A.nnz();
+    result.nrow   = m;
+    result.ncol   = n;
+    result.nzmax  = nnz;
 
     result.nz     = nullptr; /* not needed because `result` is packed. */
     result.z      = nullptr; /* not needed because `result` is real. */
     result.stype  = 1; // upper triangle stored.
-    result.itype  = CHOLMOD_LONG;
     result.xtype  = CHOLMOD_REAL;
-    result.dtype  = CHOLMOD_DOUBLE;
+
+    result.itype  = std::is_same_v<IndexI, SuiteSparse_long> ? CHOLMOD_LONG : CHOLMOD_INT;
+    static_assert(std::is_same_v<IndexP, IndexI>, "Mixed p and i types are not yet supported by Cholmod...");
+                 // Apparently CHOLMOD_INTLONG is not yet supported :(
+                 // : (std::is_same_v<IndexP, SuiteSparse_long> ? CHOLMOD_INTLONG : CHOLMOD_INT);
+    result.dtype  = std::is_same_v<Real, double> ? CHOLMOD_DOUBLE : CHOLMOD_SINGLE;
     result.sorted = true;
     result.packed = true;
 
     return result;
+}
+
+// Construct a `cholmod_sparse` object pointing at the data stored in `SuiteSparseMatrix`.
+inline cholmod_sparse cholmod_sparse_view(const SuiteSparseMatrix &A) {
+    return cholmod_sparse_view(A.m, A.n, A.nnz(), const_cast_ptr(A.Ax.data()), const_cast_ptr(A.Ai.data()), const_cast_ptr(A.Ap.data()));
 }
 
 struct CholmodFactorizer final : public CholeskyFactorizerBase {
@@ -151,6 +162,15 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
     using CholeskyFactorizerBase::factorizeNumeric;
     using CholeskyFactorizerBase::factorizeNumericWithShift;
+
+    enum class OrderingMethod { Nesdis, Metis, AMD };
+
+    void setOrderingMethod(OrderingMethod method) {
+        if (method == OrderingMethod::Nesdis)     m_c->method[0].ordering = CHOLMOD_NESDIS;
+        else if (method == OrderingMethod::Metis) m_c->method[0].ordering = CHOLMOD_METIS;
+        else if (method == OrderingMethod::AMD)   m_c->method[0].ordering = CHOLMOD_AMD;
+        else throw std::runtime_error("Unknown ordering method");
+    }
 
     // Perform only the symbolic factorization for the given matrix `mat`.
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override {

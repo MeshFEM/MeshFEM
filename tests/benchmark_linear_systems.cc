@@ -35,6 +35,11 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
         if (method == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
+#if MESHFEM_WITH_SCOTCH
+        if (method == "catamari_scotch")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::Scotch;
+            if (method.size() > 15) cf->scotchSettings.parse(method.substr(15));
+#endif
 
         factorizer = std::move(cf);
 #else

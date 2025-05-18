@@ -27,20 +27,43 @@ void benchmark_method(double retain_pct, const std::string &method, const std::s
     size_t numSymbolicMatrices = 0;
     size_t numNumericMatrices = 0;
 
-    if (method == "cholmod") {
-        factorizer = make_cholesky_factorizer(CholeskyProvider::CHOLMOD);
+    if (method.substr(0, 7) == "cholmod") {
+        std::unique_ptr<CholmodFactorizer> cf = std::make_unique<CholmodFactorizer>();
+        if      (method ==    "cholmod_amd") cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::AMD);
+        else if (method ==  "cholmod_metis") cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::Metis);
+        else if (method == "cholmod_nesdis") cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::Nesdis);
+        else throw std::runtime_error("Unknown method");
+
+        factorizer = std::move(cf);
     }
     else if (method.substr(0, 8)  == "catamari") {
 #if MESHFEM_WITH_CATAMARI
         std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>(method == "catamari_legacy");
-        cf->setUseBlockAccel(method.substr(method.size() - 8) != "_noblock");
+        bool blockAccel = true;
+        std::string method_prefix = method;
+        if (method.substr(method.size() - 8) == "_noblock") {
+            blockAccel = false;
+            method_prefix = method.substr(0, method.size() - 8);
+        }
+
+        cf->setUseBlockAccel(blockAccel);
         cf->setUseLeftLooking(method.substr(0, 13) == "catamari_left");
         // Note that `CatamariFactorizer::OrderingMethod::CholmodNesdis` is the default;
         // it will be applied to "catamari_nesdis", "catamari_legacy", and "catamari_left".
-        if (method == "catamari")
+        if (method_prefix == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
-        if (method == "catamari_metis")
+        if (method_prefix == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
+        if (method_prefix  == "catamari_amd")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
+        if (method_prefix.substr(0, 15) == "catamari_scotch") {
+#if MESHFEM_WITH_SCOTCH
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::Scotch;
+            if (method_prefix.size() > 15) cf->scotchSettings.parse(method_prefix.substr(15));
+#else
+            throw std::runtime_error("Scotch support not compiled in");
+#endif
+        }
 
         factorizer = std::move(cf);
 #else

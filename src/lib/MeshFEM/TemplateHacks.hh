@@ -35,6 +35,12 @@ struct CopyCV : public
 template<class _CVType, class _NonCVType>
 using CopyCV_t = typename CopyCV<_CVType, _NonCVType>::type;
 
+// Remove the `const` qualifier from a pointer type
+template <typename T>
+inline typename std::remove_const<T>::type* const_cast_ptr(T* ptr) {
+    return const_cast<typename std::remove_const<T>::type*>(ptr);
+}
+
 #include <tuple>
 
 // Get first type of a template parameter pack.

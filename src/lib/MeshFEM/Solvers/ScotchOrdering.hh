@@ -55,8 +55,37 @@ void scotch_ordering(const SuiteSparseMatrix &H_sp, Eigen::MatrixBase<Derived> &
     // Initialize strategy
     {
         SCOTCH_stratInit(&strat); // Fully default strategy
-        SCOTCH_stratGraphOrderBuild(&strat, strategyFlag, 0, imbalance_ratio);
+#if 0
+        const char* strategy_str =
+        "n{"
+        "  sep=m{"
+        "    asc=b{"
+        "      bnd=f{move=200,pass=1000,bal=0.2},"
+        "      org=h{pass=10},"
+        "      width=3"
+        "    },"
+        "    low=h{pass=10},"
+        "    type=h,"
+        "    vert=100,"
+        "    rat=0.7"
+        "  },"
+        "  ole=f{cmin=15,cmax=100000,frat=0},"
+        "  ose=g{pass=3}"
+        "}";
+#else
+        const char *strategy_str = "c{rat=0.7,"
+                    "cpr=n{sep=(/((vert)>(240))?((m{asc=b{bnd=f{move=200,pass=1000,bal=0.2},org=(|h{pass=10})f{move=200,pass=1000,bal=0.2},width=3},low=h{pass=10},type=h,vert=100,rat=0.7}|m{asc=b{bnd=f{move=200,pass=1000,bal=0.2},org=(|h{pass=10})f{move=200,pass=1000,bal=0.2},width=3},low=h{pass=10},type=h,vert=100,rat=0.7}));),ole=f{cmin=15,cmax=100000,frat=0},ose=g{pass=3}},"
+                    "unc=n{sep=(/((vert)>(240))?((m{asc=b{bnd=f{move=200,pass=1000,bal=0.2},org=(|h{pass=10})f{move=200,pass=1000,bal=0.2},width=3},low=h{pass=10},type=h,vert=100,rat=0.7}|m{asc=b{bnd=f{move=200,pass=1000,bal=0.2},org=(|h{pass=10})f{move=200,pass=1000,bal=0.2},width=3},low=h{pass=10},type=h,vert=100,rat=0.7}));),ole=f{cmin=15,cmax=100000,frat=0},ose=g{pass=3}}}";
+        // const char *strategy_str = "n{sep=(/((vert)>(240))?((m{asc=b{bnd=f{move=200,pass=1000,bal=0.2},org=(|h{pass=10})f{move=200,pass=1000,bal=0.2},width=3},low=h{pass=10},type=h,vert=100,rat=0.7}|m{asc=b{bnd=f{move=200,pass=1000,bal=0.2},org=(|h{pass=10})f{move=200,pass=1000,bal=0.2},width=3},low=h{pass=10},type=h,vert=100,rat=0.7}));),ole=f{cmin=15,cmax=100000,frat=0},ose=g{pass=3}}";
+        // SCOTCH_stratGraphOrder(&strat, strategy_str);
+#endif
+        // SCOTCH_stratGraphOrder(&strat, "n{sep=(m{asc=b{width=3},low=h})," "vert=t{strat=m{asc=b{width=3}}}}");
+        //SCOTCH_stratGraphOrder(&strat, "n{sep=m{asc=b{width=3}},olevel=0,levlim=8,seq=1}");
+        // SCOTCH_stratGraphOrder(&strat, "n{sep=m{asc=b{width=3}},strat=m{asc=b{width=3}}}");
         // SCOTCH_stratGraphOrderBuild(&strat, SCOTCH_STRATSPEED, 0, imbalance_ratio);
+        // SCOTCH_stratGraphOrderBuild(&strat, SCOTCH_STRATBALANCE, 0, imbalance_ratio);
+        // SCOTCH_stratGraphOrderBuild(&strat, SCOTCH_STRATQUALITY, 0, imbalance_ratio);
+        SCOTCH_stratGraphOrderBuild(&strat, strategyFlag, 0, imbalance_ratio);
     }
 
     // Compute ordering
@@ -92,6 +121,10 @@ void scotch_ordering(const SuiteSparseMatrix &H_sp, Eigen::MatrixBase<Derived> &
     }
 
     {
+        // FILE *file = fopen("scotch_strategy.txt", "w");
+        // SCOTCH_stratSave(&strat, file);
+        // fclose(file);
+
         // Cleanup
         SCOTCH_stratExit(&strat);
         SCOTCH_graphExit(&graph);
