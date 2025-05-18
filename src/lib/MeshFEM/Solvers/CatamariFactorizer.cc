@@ -19,6 +19,8 @@
 #include <filesystem>
 #endif
 
+#include "CatamariConversionPlan.hh"
+
 // The largest block size for which we'll instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
 
@@ -177,129 +179,10 @@ struct CatamariConverter {
 
     void freeCatamariMatrix() { m_result.Empty(); m_sourceReducedEntryForFullMatrixEntry.clear(); m_sourceReducedEntryForFullMatrixEntry.shrink_to_fit(); }
 
-    const ConversionPlan &conversionPlan() const { return m_conversionPlan; }
-    void constructConversionPlan(catamari::SparseLDL<double> &ldl, std::vector<SuiteSparse_long> &entryForReducedEntry) {
-        BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
-        auto f = ldl.supernodal_factorization.get();
-        if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
-
-        const auto &df = f->diagonal_factor_;
-        const auto &lf = f->lower_factor_;
-
-        using Int = catamari::Int;
-        auto &o  = f->ordering_;
-        auto &sno = o.supernode_offsets;
-        const double *f_vals = f->factor_values_.Data();
-        const Int num_supernodes = o.supernode_sizes.Size();
-        if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
-
-        const Int nc = m_result.NumColumns();
-        m_conversionPlan.columnOffsets.resize(nc + 1);
-
-        // Count the lower-triangular entries *in the permuted matrix*.
-        // We work with the *full* (non-triangular) matrix so that we can efficiently loop over all nonzeros in a given
-        // column of the *permuted* lower factor.
-        Int *columnSizes = m_conversionPlan.columnOffsets.data() + 1;
-        static tbb::affinity_partitioner ap;
-        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
-            for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
-                const Int supernode_end = sno[supernode + 1];
-                for (Int j_perm = sno[supernode]; j_perm < supernode_end; ++j_perm) {
-                    Int j_orig = o.inverse_permutation[j_perm];
-                    const Int col_entries_end = m_result.RowEntryOffset(j_orig + 1);
-                    Int colSize = 0;
-                    for (Int ii = m_result.RowEntryOffset(j_orig); ii < col_entries_end; ++ii)
-                        if (o.permutation[m_result.Entry(ii).column] >= j_perm) ++colSize; // entry in lower triangle?
-                    columnSizes[j_perm] = colSize;
-                }
-            }
-        }, ap);
-
-        // Convert sizes to offsets and allocate conversion plan entries.
-        m_conversionPlan.columnOffsets[0] = 0;
-        Int *columnBacks = m_conversionPlan.columnOffsets.data() + 1; // Back indices of the (initially empty) column buckets
-                                                                      // These will be incremented and eventually become the column end indices.
-        {
-            Int back = 0;
-            for (Int i = 0; i < nc; ++i) {
-                // Note: we are updating in-place (columnSizes == columnBacks)!
-                Int s = columnSizes[i];
-                columnBacks[i] = back;
-                back += s;
-            }
-
-            m_conversionPlan.resize(back);
-        }
-
-        BENCHMARK_START_TIMER_SECTION("Build");
-
-        // For each entry in the full (non-triangular) row-col-removed input matrix `m_result`,
-        // determine whether/where its permuted instance goes in the *lower triangle* of the factorization
-        // as well as which original matrix entry it originated from.
-        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
-            for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
-                const Int supernode_start = sno[supernode    ];
-                const Int supernode_end   = sno[supernode + 1];
-                catamari::BlasMatrixView<double>& db = df->blocks[supernode];
-                catamari::BlasMatrixView<double>& lb = lf->blocks[supernode];
-                const Int *index_beg = lf->StructureBeg(supernode);
-                const Int *index_end = lf->StructureEnd(supernode);
-
-                for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
-                    Int j_orig = o.inverse_permutation[j_perm];
-                    Int columnBack = columnBacks[j_perm];
-
-                    // Note: catamari::CoordinateMatrix is row major, hence the implicit transpose happening here...
-                    const Int col_entries_begin = m_result.RowEntryOffset(j_orig);
-                    const Int col_entries_end   = m_result.RowEntryOffset(j_orig + 1);
-                    const Int *guess = nullptr;
-                    for (Int ii = col_entries_begin; ii < col_entries_end; ++ii) {
-                        const catamari::MatrixEntry<double> &e = m_result.Entry(ii);
-                        Int i_perm = o.permutation[e.column];
-                        if (i_perm < j_perm) continue; // Skip the strict upper triangle.
-
-                        // Locate (i_perm, j_perm) in the supernode structure.
-                        Int locForEntry; // destination location
-
-                        const Int j_rel = j_perm - supernode_start;
-                        if (i_perm < supernode_end) {
-                            const Int i_rel = i_perm - supernode_start;
-                            locForEntry = std::distance(f_vals, (const double *) db.Pointer(i_rel, j_rel));
-                        }
-                        else {
-                            // Search [lf->structureBeg, lf->structureEnd) for value `i_perm`,
-                            // first checking at `*guess` (which will be correct for consecutive
-                            // strips of entries).
-                            const Int *iter;
-                            if ((guess >= index_beg) && (guess < index_end) && (*guess == i_perm)) iter = guess;
-                            else {
-                                iter = sb_lower_bound(index_beg, index_end, i_perm);
-                                if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index " + std::to_string(i_perm) + " in supernode " + std::to_string(supernode) + " containing rows in [" + std::to_string(*index_beg) + ", " +  std::to_string(*index_end) + ")");
-                            }
-                            guess = iter + 1;
-
-                            const Int i_rel = std::distance(index_beg, iter);
-                            locForEntry = std::distance(f_vals, (const double *) lb.Pointer(i_rel, j_rel));
-                        }
-
-                        // Record which source entry should be read for `locForEntry`
-                        SuiteSparse_long srcEntry = m_sourceReducedEntryForFullMatrixEntry[ii];
-                        if (entryForReducedEntry.size()) srcEntry = entryForReducedEntry[srcEntry];
-                        m_conversionPlan.entries()[columnBack++] = ConversionPlan::Entry{locForEntry, srcEntry};
-                    }
-                    columnBacks[j_perm] = columnBack;
-                    // Sorting doesn't seem to help :(
-                    // std::sort(m_conversionPlan.columnData(j_perm), m_conversionPlan.columnData(j_perm + 1),
-                    //         [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.dst < b.dst; });
-                }
-            }
-        });
-        BENCHMARK_STOP_TIMER_SECTION("Build");
-    }
+    ConversionPlan conversionPlan;
 
 private:
     CMat m_result;
-    ConversionPlan m_conversionPlan;
 
     const bool m_legacy = false;
     SuiteSparseMatrix m_Asp; // For legacy mode only
@@ -353,6 +236,9 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
 // `pinnedVars` always holds scalar variables.
 void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
     const SuiteSparseMatrix *A_reduced;
+    std::vector<SuiteSparse_long> reducedRowForRow_block;
+    std::vector<SuiteSparse_long> blockEntryForReducedBlockEntry; // the original block nz corresponding to each nz in the block row-col-removed matrix
+
     if (m_blockSize > 1 && pinnedVars.size() > 0) {
         // Check for partially pinned blocks, which currently require a scalar
         // factorization fallback.
@@ -384,6 +270,9 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             // apply the scalar pin constraint during numeric factorization?
         }
         A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
+        blockEntryForReducedBlockEntry.swap(m_entryForReducedEntry);
+        reducedRowForRow_block.swap(m_reducedRowForRow);
+
         // `m_initRowColRemoval` has now stored the pinned **block** variable
         // indices, whereas `m_fixedVars` should store **scalar** variable indices.
         m_fixedVars.swap(scalarFixedVars);
@@ -391,30 +280,30 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         // TODO: avoid converting to a scalar pattern for row/col removal if possible.
         // (currently we do it so that `m_entryForReducedEntry` is correct)
         SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
-        m_reducedRowForRow.clear();
+        m_entryForReducedEntry.clear();
         A_scalar.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
+
+        // TODO: once we no longer need A_scalar, just "upgrade"
+        // `m_reducedRowForRow` to a scalar version for the `solve` phase.
     }
     else {
         A_reduced = m_initRowColRemoval(mat, pinnedVars);
+        reducedRowForRow_block = m_reducedRowForRow;
     }
 
     m_permutedReducedRowForRow.clear(); // The upcoming symbolic factorization will change any existing permutation...
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
-    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, m_blockSize, m_legacy, m_entryForReducedEntry);
-
-    const CatamariConverter *converter = m_catamariConverter.get();
-    std::vector<SuiteSparse_long> blockEntryForReducedBlockEntry;
-    std::unique_ptr<CatamariConverter> cc_block;
-    if (m_blockSize > 1) {
-        cc_block = std::make_unique<CatamariConverter>(*A_reduced, 1, m_legacy, blockEntryForReducedBlockEntry);
-        converter = cc_block.get();
-    }
+    // Note: passing `block_size = 1` below prevents the converter from
+    // expanding entries in the (block) sparsity pattern into
+    // `block_size` x `block_size` blocks of scalars in the block case.
+    // (I.e., we leave the pattern in its compressed form.)
+    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, /* block_size = */ 1, m_legacy, m_entryForReducedEntry);
 
     m_ldlControl->supernodal_control.relaxation_control.block_size = m_blockSize;
 
     if (orderingMethod == OrderingMethod::Catamari)
-        m_ldl->Factor(converter->get(), *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
     else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis) || (orderingMethod == OrderingMethod::AMD)) {
         if (!m_c) {
             m_c = std::make_unique<cholmod_common>();
@@ -492,7 +381,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             else throw std::runtime_error("Unknown orderingMethod");
             quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
         }
-        m_ldl->Factor(converter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
     else if (orderingMethod == OrderingMethod::Scotch) {
 #if MESHFEM_WITH_SCOTCH
@@ -505,23 +394,48 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
         scotch_ordering(*A_reduced, perm, iperm, scotchSettings.stratFlag, scotchSettings.imbalanceRatio);
 
-        m_ldl->Factor(converter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
 #else
         throw std::runtime_error("Scotch support not compiled in");
 #endif
     }
     else throw std::runtime_error("Unknown orderingMethod");
 
+    std::unique_ptr<catamari::SparseLDL<double>> ldl_block;
     if (m_blockSize > 1) {
         // Currently we must expand the symbolic factorization to a scalar one.
         // TODO: once a full "block factorization type" is supported,
         // we can omit this conversion.
-        m_ldl = m_ldl->ExpandSymbolicFactorizationToScalar(m_blockSize);
+        ldl_block = std::move(m_ldl);
+        m_ldl = ldl_block->ExpandSymbolicFactorizationToScalar(m_blockSize);
     }
 
     if (!m_legacy) {
-        // Build a conversion plan to support direct injection of entries.
-        m_catamariConverter->constructConversionPlan(*m_ldl, m_entryForReducedEntry);
+        // Build a conversion plan to support direct injection of scalar entries
+        // into the Cholesky factor. This must be done specially for non-unit
+        // block sizes.
+        if (m_blockSize > 1) {
+            assert(ldl_block);
+            m_catamariConverter->conversionPlan = catamari_conversion_plan::constructScalarConversionPlan(m_catamariConverter->get(), mat, reducedRowForRow_block, m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
+        }
+        else m_catamariConverter->conversionPlan = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *m_ldl, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, m_entryForReducedEntry);
+
+#if 0
+        // Validation
+        {
+            BENCHMARK_SCOPED_TIMER_SECTION tv("Conversion plan validate");
+            SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
+            std::vector<SuiteSparse_long> reducedRowForRow_scalar;
+            std::vector<SuiteSparse_long> entryForReducedEntry_scalar;
+
+            SuiteSparseMatrix A_scalar_reduced = A_scalar;
+            std::vector<bool> scalarFixedVarMask(A_scalar.n, false);
+            for (size_t i : pinnedVars) scalarFixedVarMask[i] = true;
+            A_scalar_reduced.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &reducedRowForRow_scalar, &entryForReducedEntry_scalar);
+            catamari_conversion_plan::validate(m_catamariConverter->conversionPlan, *m_ldl, A_scalar, reducedRowForRow_scalar, A_scalar_reduced.m);
+        }
+#endif
+
         m_catamariConverter->freeCatamariMatrix();
     }
     m_factorizationType = FactorizationType::Symbolic;
@@ -545,7 +459,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     assertFactorization(FactorizationType::Symbolic);
     catamari::SparseLDLResult<double> result;
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
-    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
+    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
     if constexpr (true) {
         static bool first = true;
