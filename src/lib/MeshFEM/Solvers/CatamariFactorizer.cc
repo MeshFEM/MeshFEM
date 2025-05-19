@@ -277,14 +277,22 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         // indices, whereas `m_fixedVars` should store **scalar** variable indices.
         m_fixedVars.swap(scalarFixedVars);
 
-        // TODO: avoid converting to a scalar pattern for row/col removal if possible.
-        // (currently we do it so that `m_entryForReducedEntry` is correct)
-        SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
-        m_entryForReducedEntry.clear();
-        A_scalar.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
-
-        // TODO: once we no longer need A_scalar, just "upgrade"
-        // `m_reducedRowForRow` to a scalar version for the `solve` phase.
+        if (!reducedRowForRow_block.empty()) {
+            // Upgrade `reducedRowForRow_block` to a scalar version as needed
+            // for the `solve` phase.
+            m_reducedRowForRow.resize(m_blockSize * mat.n);
+            for (size_t i = 0; i < reducedRowForRow_block.size(); ++i) {
+                SuiteSparse_long brr = reducedRowForRow_block[i];
+                if (brr == SuiteSparseMatrix::INDEX_NONE) {
+                    for (size_t c = 0; c < m_blockSize; ++c)
+                        m_reducedRowForRow[m_blockSize * i + c] = SuiteSparseMatrix::INDEX_NONE;
+                }
+                else {
+                    for (size_t c = 0; c < m_blockSize; ++c)
+                        m_reducedRowForRow[m_blockSize * i + c] = m_blockSize * brr + c;
+                }
+            }
+        }
     }
     else {
         A_reduced = m_initRowColRemoval(mat, pinnedVars);
