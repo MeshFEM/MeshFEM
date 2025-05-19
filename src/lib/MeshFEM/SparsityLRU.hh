@@ -101,7 +101,7 @@ struct SparsityLRU {
         // First, update ages and count how many new entries are needed in each column.
         Index totalCurrentEntries = 0; // Entries actually present in the current "static + dynamic" sparsity pattern
         Index totalNewEntries = 0;     // Current entries that are not already in the cache.
-        m_oldEntryLocations.clear();
+        m_oldEntryLocations.clear();   // Non-static entries that are not present in the new dynamic sparsity pattern
         std::vector<Index> newEntries(m_S.n, 0);
         // TODO: parallelize over the columns! (This requires reducing `maxAge`, `totalNewEntries`, and `oldEntryLocations` using TLS)
         for (Index j = 0; j < m_S.n; ++j) {
@@ -112,13 +112,14 @@ struct SparsityLRU {
             // (increase their age and mark them as old)
             auto entryInSOnly = [&ii_S, &maxAge, j, this]() {
                 incrementAge(ii_S, maxAge);
-                m_oldEntryLocations.emplace_back(j, ii_S);
+                if (m_entryAge[ii_S] != STATIC_ENTRY_AGE)
+                    m_oldEntryLocations.emplace_back(j, ii_S);
                 ++ii_S;
             };
 
             // Handle entries that don't appear in `S` yet
             // (count new entries)
-            auto entryInDOnly = [&ii_D, &totalNewEntries, &totalCurrentEntries, &newEntries, j, this]() {
+            auto entryInDOnly = [&ii_D, &totalNewEntries, &totalCurrentEntries, &newEntries, j]() {
                 ++newEntries[j]; ++totalNewEntries; ++totalCurrentEntries;
                 ++ii_D;
             };
@@ -198,7 +199,7 @@ struct SparsityLRU {
                 ++ii_S;
             };
 
-            auto entryInDOnly = [&builder, &ii_D, &new_ages, j, &S_dynamic, this]() {
+            auto entryInDOnly = [&builder, &ii_D, &new_ages, j, &S_dynamic]() {
                 builder.insert(S_dynamic.Ai[ii_D], j);
                 new_ages.push_back(0);
                 ++ii_D;
@@ -207,7 +208,7 @@ struct SparsityLRU {
             while ((ii_S < ii_S_end) && (ii_D < ii_D_end)) {
                 if (m_S.Ai[ii_S] == S_dynamic.Ai[ii_D]) {
                     builder.insert(m_S.Ai[ii_S], j);
-                    new_ages.push_back(0);
+                    new_ages.push_back(std::min(0, m_entryAge[ii_S])); // Make sure negative ages (e.g., STATIC_ENTRY_AGE) are retained!
                     ++ii_S; ++ii_D;
                 }
                 else if (m_S.Ai[ii_S] < S_dynamic.Ai[ii_D])
@@ -222,6 +223,12 @@ struct SparsityLRU {
 
         if (new_ages.size() != S_new.Ai.size())
             throw std::runtime_error("updated new ages size mismatch: " + std::to_string(new_ages.size()) + " != " + std::to_string(S_new.Ai.size()));
+
+        // Verify that S_new has all of its diagonal entries.
+        for (Index j = 0; j < S_new.n; ++j) {
+            Index ii = S_new.Ap[j + 1] - 1;
+            if (S_new.Ai[ii] != j) throw std::runtime_error("SparsityLRU: missing diagonal entry in new sparsity pattern");
+        }
 
         m_S = std::move(S_new);
         m_entryAge = std::move(new_ages);

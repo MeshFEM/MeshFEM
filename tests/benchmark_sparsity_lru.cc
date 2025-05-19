@@ -115,6 +115,7 @@ void benchmark_method(double retain_pct, const std::string &method, const std::s
                 Hsp->Ai = (*sparsityCache)->Ai;
                 Hsp->Ap = (*sparsityCache)->Ap;
                 Hsp->nz = (*sparsityCache)->nz;
+                Hsp->finalize();
                 factorizer->factorizeSymbolic(*Hsp, pinnedVars);
             }
 
