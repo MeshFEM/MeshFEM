@@ -39,12 +39,14 @@ struct SparsityLRU {
         if (m_S.Ax.size() != 0) throw std::runtime_error("SparsityLRU: pruneEntries called on non-sparsity-only matrix");
         size_t back = 0;
         Index colStart = m_S.Ap[0];
+        m_maxAge = std::numeric_limits<int>::lowest();
         for (Index j = 0; j < m_S.n; ++j) {
             Index colEnd = m_S.Ap[j + 1];
             for (Index ii = colStart; ii < colEnd; ++ii) {
                 if (shouldRemove(ii)) continue;
                 m_S.Ai[back] = m_S.Ai[ii];
                 m_entryAge[back] = m_entryAge[ii];
+                m_maxAge = std::max(m_maxAge, m_entryAge[back]);
                 ++back;
             }
             m_S.Ap[j + 1] = back;
@@ -64,6 +66,32 @@ struct SparsityLRU {
     void incrementAge(Index ii, int &maxAge) {
         if (m_entryAge[ii] != STATIC_ENTRY_AGE)
             maxAge = std::max(maxAge, ++m_entryAge[ii]);
+    }
+
+    // When the Newton optimizer requests a sparsity pattern update
+    // but nothing actually changes (i.e., the dynamic part is the
+    // same as the last time), we still want to increment the ages of
+    // all the old pattern entries in case they should expire.
+    //
+    // Returns `true` if any entries were expired.
+    bool increaseAgeOfOldEntries() {
+        if (m_maxAge > 0) {
+            int maxAge = STATIC_ENTRY_AGE;
+            for (int &age : m_entryAge) {
+                if (age > 0) {
+                    ++age;
+                    maxAge = std::max(maxAge, age);
+                }
+            }
+            assert(maxAge == m_maxAge + 1);
+            m_maxAge = maxAge;
+            if (maxAge >= hardExpirationAge) {
+                std::cout << "SparsityLRU: hard expiration triggered prune from `increaseAgeOfOldEntries`" << std::endl;
+                pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
+                return true;
+            }
+        }
+        return false;
     }
 
     // Returns the number of new entries added to the cache.
@@ -91,6 +119,7 @@ struct SparsityLRU {
             }
 
             if (maxAge >= hardExpirationAge) {
+                std::cout << "SparsityLRU: hard expiration triggered prune from `update`" << std::endl;
                 pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
                 return EXPIRED;
             }
@@ -186,29 +215,34 @@ struct SparsityLRU {
         // another merge of the cached and dynamic sparsity patterns.
         std::vector<int> new_ages;
         new_ages.reserve(S_new.Ai.size());
+        m_maxAge = std::numeric_limits<int>::lowest();
+        auto recordAge = [&new_ages, this](int age) {
+            new_ages.push_back(age);
+            m_maxAge = std::max(m_maxAge, age);
+        };
 
         for (Index j = 0; j < m_S.n; ++j) {
             Index ii_S =       m_S.Ap[j], ii_S_end =       m_S.Ap[j + 1];
             Index ii_D = S_dynamic.Ap[j], ii_D_end = S_dynamic.Ap[j + 1];
 
-            auto entryInSOnly = [&builder, &ii_S, &new_ages, j, this]() {
+            auto entryInSOnly = [&builder, &ii_S, &recordAge, j, this]() {
                 if (m_entryAge[ii_S] < expirationAge) {
                     builder.insert(m_S.Ai[ii_S], j);
-                    new_ages.push_back(m_entryAge[ii_S]);
+                    recordAge(m_entryAge[ii_S]);
                 }
                 ++ii_S;
             };
 
-            auto entryInDOnly = [&builder, &ii_D, &new_ages, j, &S_dynamic]() {
+            auto entryInDOnly = [&builder, &ii_D, &recordAge, j, &S_dynamic]() {
                 builder.insert(S_dynamic.Ai[ii_D], j);
-                new_ages.push_back(0);
+                recordAge(0);
                 ++ii_D;
             };
 
             while ((ii_S < ii_S_end) && (ii_D < ii_D_end)) {
                 if (m_S.Ai[ii_S] == S_dynamic.Ai[ii_D]) {
                     builder.insert(m_S.Ai[ii_S], j);
-                    new_ages.push_back(std::min(0, m_entryAge[ii_S])); // Make sure negative ages (e.g., STATIC_ENTRY_AGE) are retained!
+                    recordAge(std::min(0, m_entryAge[ii_S])); // Make sure negative ages (e.g., STATIC_ENTRY_AGE) are retained!
                     ++ii_S; ++ii_D;
                 }
                 else if (m_S.Ai[ii_S] < S_dynamic.Ai[ii_D])
@@ -256,7 +290,10 @@ private:
         EntryLoc(Index j_, Index ii_) : j(j_), ii(ii_) { }
         Index j, ii; // Column index and location in `Ai`, respectively
     };
-    std::vector<EntryLoc> m_oldEntryLocations;
+
+    int m_maxAge = STATIC_ENTRY_AGE;
+
+    std::vector<EntryLoc> m_oldEntryLocations; // kept as a member variable to reduce memory allocations.
 };
 
 #endif /* end of include guard: SPARSITYLRU_HH */

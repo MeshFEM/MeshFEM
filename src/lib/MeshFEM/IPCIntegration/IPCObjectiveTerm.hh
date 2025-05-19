@@ -151,7 +151,12 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     CCDMethod CCD = CCDMethod::TightInclusion;
     bool useAdaptiveBarrier = true;
 
-    size_t sparsityPatternUpdateThreshold = 100; // Number of blocks that must disappear from the sparsity pattern before we re-factorize.
+    // Sparsity pattern update acceleration:
+    // number of blocks that must disappear from the sparsity pattern before it
+    // is rebuilt. Note that even if a rebuild is triggered,
+    // the symbolic factorization is not necessarily updated
+    // because `SparsityLRU` also caches old entries.
+    size_t sparsityPatternUpdateThreshold = 10;
 
 protected:
     void m_buildCollisionConstraints();

@@ -553,6 +553,18 @@ private:
 
             m_hessianSparsity.finalize();
         }
+        else if (m_sparsityLRU) {
+            // Still notify the cache of the sparsity pattern update in case
+            // it triggers a refactorization due to entry expiration.
+            if (m_sparsityLRU->increaseAgeOfOldEntries()) {
+                if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...
+                m_hessianSparsity.H_ss->Ap = (*m_sparsityLRU)->Ap;
+                m_hessianSparsity.H_ss->Ai = (*m_sparsityLRU)->Ai;
+                m_hessianSparsity.H_ss->nz = (*m_sparsityLRU)->nz;
+
+                changed = true;
+            }
+        }
 
         m_fullSparsityRebuildNeeded = false;
 
