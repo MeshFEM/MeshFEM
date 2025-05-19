@@ -19,13 +19,20 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
         case CholeskyProvider::Catamari:
         case CholeskyProvider::CatamariNesdis:
         case CholeskyProvider::CatamariLegacy:
+        case CholeskyProvider::CatamariAMD:
+        case CholeskyProvider::CatamariAdaptive:
 #if MESHFEM_WITH_CATAMARI
             {
                 bool legacy = provider == CholeskyProvider::CatamariLegacy;
                 auto c = std::make_unique<CatamariFactorizer>(legacy);
-                c->orderingMethod = (provider == CholeskyProvider::Catamari)
-                                            ? CatamariFactorizer::OrderingMethod::Catamari
-                                            : CatamariFactorizer::OrderingMethod::CholmodNesdis;
+                if (provider == CholeskyProvider::Catamari)
+                    c->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
+                else if ((provider == CholeskyProvider::CatamariNesdis) || (provider == CholeskyProvider::CatamariLegacy))
+                    c->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
+                else if (provider == CholeskyProvider::CatamariAMD)
+                    c->orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
+                else if (provider == CholeskyProvider::CatamariAdaptive)
+                    c->orderingMethod = CatamariFactorizer::OrderingMethod::Adaptive;
                 return c;
             }
 #endif

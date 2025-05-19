@@ -312,7 +312,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
     if (orderingMethod == OrderingMethod::Catamari)
         m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
-    else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis) || (orderingMethod == OrderingMethod::AMD)) {
+    else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis)
+          || (orderingMethod == OrderingMethod::AMD) || (orderingMethod == OrderingMethod::Adaptive)) {
         if (!m_c) {
             m_c = std::make_unique<cholmod_common>();
             cholmod_l_start(m_c.get());

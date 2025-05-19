@@ -30,7 +30,7 @@ namespace catamari {
 
 struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     enum class OrderingMethod {
-        Catamari, CholmodNesdis, Metis, AMD, Scotch
+        Catamari, CholmodNesdis, Metis, AMD, Adaptive, Scotch
     };
 
     // legacy: whether to use Jack Poulson's original implementation for comparison
@@ -86,7 +86,13 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
     CholeskyProvider provider() const override {
         if (m_legacy) return CholeskyProvider::CatamariLegacy;
-        return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari;
+
+        if (orderingMethod == OrderingMethod::Catamari)           return CholeskyProvider::Catamari;
+        else if (orderingMethod == OrderingMethod::CholmodNesdis) return CholeskyProvider::CatamariNesdis;
+        else if (orderingMethod == OrderingMethod::AMD)           return CholeskyProvider::CatamariAMD;
+        else if (orderingMethod == OrderingMethod::Adaptive)      return CholeskyProvider::CatamariAdaptive;
+
+        throw std::runtime_error("Unknown orderingMethod in mappign to `CholeskyProvider`");
     }
 
     virtual ~CatamariFactorizer();

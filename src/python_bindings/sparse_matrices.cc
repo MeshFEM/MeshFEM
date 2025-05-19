@@ -181,8 +181,10 @@ PYBIND11_MODULE(sparse_matrices, m) {
     py::enum_<CholeskyProvider>(m, "CholeskyProvider")
         .value("CHOLMOD",  CholeskyProvider::CHOLMOD)
 #if MESHFEM_WITH_CATAMARI
-        .value("Catamari",       CholeskyProvider::Catamari)
-        .value("CatamariNesdis", CholeskyProvider::CatamariNesdis)
+        .value("Catamari",         CholeskyProvider::Catamari)
+        .value("CatamariNesdis",   CholeskyProvider::CatamariNesdis)
+        .value("CatamariAMD",      CholeskyProvider::CatamariAMD)
+        .value("CatamariAdaptive", CholeskyProvider::CatamariAdaptive)
 #if CATAMARI_OPENMP
         .value("CatamariLegacy", CholeskyProvider::CatamariLegacy)
 #endif // CATAMARI_OPENMP
