@@ -562,6 +562,8 @@ private:
                 m_hessianSparsity.H_ss->Ai = (*m_sparsityLRU)->Ai;
                 m_hessianSparsity.H_ss->nz = (*m_sparsityLRU)->nz;
 
+                m_hessianSparsity.finalize();
+
                 changed = true;
             }
         }

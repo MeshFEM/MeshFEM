@@ -63,33 +63,35 @@ struct SparsityLRU {
             m_entryAge[ii] = 0;
     }
 
-    void incrementAge(Index ii, int &maxAge) {
-        if (m_entryAge[ii] != STATIC_ENTRY_AGE)
-            maxAge = std::max(maxAge, ++m_entryAge[ii]);
-    }
-
     // When the Newton optimizer requests a sparsity pattern update
     // but nothing actually changes (i.e., the dynamic part is the
     // same as the last time), we still want to increment the ages of
     // all the old pattern entries in case they should expire.
     //
+    // Specifically, only the entries that are older than `threshold` are aged.
+    //
     // Returns `true` if any entries were expired.
-    bool increaseAgeOfOldEntries() {
-        if (m_maxAge > 0) {
+    bool increaseAgeOfOldEntries(int threshold = 0) {
+        if (m_maxAge > threshold) {
+            // std::cout << "SparsityLRU: increaseAgeOfOldEntries called with over-threshold maxAge = " << m_maxAge << std::endl;
             int maxAge = STATIC_ENTRY_AGE;
+            int maxAgeBelowExpiration = STATIC_ENTRY_AGE;
             for (int &age : m_entryAge) {
-                if (age > 0) {
+                if (age > threshold) {
                     ++age;
                     maxAge = std::max(maxAge, age);
+                    if (age < expirationAge)
+                        maxAgeBelowExpiration = std::max(maxAgeBelowExpiration, age);
                 }
             }
             assert(maxAge == m_maxAge + 1);
-            m_maxAge = maxAge;
             if (maxAge >= hardExpirationAge) {
                 std::cout << "SparsityLRU: hard expiration triggered prune from `increaseAgeOfOldEntries`" << std::endl;
                 pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
+                m_maxAge = maxAgeBelowExpiration;
                 return true;
             }
+            m_maxAge = maxAge;
         }
         return false;
     }
@@ -109,22 +111,12 @@ struct SparsityLRU {
 
         // Fast path: if the dynamic sparsity pattern is empty, we can
         // just increment the ages of all non-static entries in the cache.
-        int maxAge = STATIC_ENTRY_AGE;
         if (S_dynamic.nz == 0) {
-            for (int &age : m_entryAge) {
-                if (age != STATIC_ENTRY_AGE) {
-                    ++age;
-                    maxAge = std::max(maxAge, age);
-                }
-            }
-
-            if (maxAge >= hardExpirationAge) {
-                std::cout << "SparsityLRU: hard expiration triggered prune from `update`" << std::endl;
-                pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
-                return EXPIRED;
-            }
-            return 0;
+            return increaseAgeOfOldEntries(STATIC_ENTRY_AGE);
         }
+
+        int maxAge = STATIC_ENTRY_AGE;
+        int maxAgeBelowExpiration = STATIC_ENTRY_AGE;
 
         // Merge entries from the dynamic sparsity pattern into the cache.
         // First, update ages and count how many new entries are needed in each column.
@@ -139,10 +131,13 @@ struct SparsityLRU {
 
             // Handle entries that don't appear in `S_dynamic`
             // (increase their age and mark them as old)
-            auto entryInSOnly = [&ii_S, &maxAge, j, this]() {
-                incrementAge(ii_S, maxAge);
-                if (m_entryAge[ii_S] != STATIC_ENTRY_AGE)
+            auto entryInSOnly = [&ii_S, &maxAge, &maxAgeBelowExpiration, j, this]() {
+                if (m_entryAge[ii_S] != STATIC_ENTRY_AGE) {
+                    maxAge = std::max(maxAge, ++m_entryAge[ii_S]);
+                    if (m_entryAge[ii_S] < expirationAge)
+                        maxAgeBelowExpiration = std::max(maxAgeBelowExpiration, m_entryAge[ii_S]);
                     m_oldEntryLocations.emplace_back(j, ii_S);
+                }
                 ++ii_S;
             };
 
@@ -170,12 +165,17 @@ struct SparsityLRU {
             while (ii_D < ii_D_end) entryInDOnly();
         }
 
+        // if (maxAge > 0)
+        //     std::cout << "Positive maxAge: " << maxAge << std::endl;
+
         // Semi-fast path: reuse (potentially pruned) cache if no new entries were added
         if (totalNewEntries == 0) {
             if (maxAge >= hardExpirationAge) {
                 pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
+                m_maxAge = maxAgeBelowExpiration;
                 return EXPIRED;
             }
+            m_maxAge = maxAge;
             return 0;
         }
 
@@ -266,6 +266,12 @@ struct SparsityLRU {
 
         m_S = std::move(S_new);
         m_entryAge = std::move(new_ages);
+
+        if (*std::max_element(m_entryAge.begin(), m_entryAge.end()) != m_maxAge)
+            throw std::runtime_error("SparsityLRU: max age mismatch after update");
+
+        // if (m_maxAge > 0)
+        //     std::cout << "Positive m_maxAge: " << m_maxAge << std::endl;
 
         return totalNewEntries;
     }
