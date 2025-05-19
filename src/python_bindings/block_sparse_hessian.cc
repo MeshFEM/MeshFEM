@@ -6,6 +6,7 @@ namespace py = pybind11;
 
 #include <MeshFEM/VarStructure.hh>
 #include <MeshFEM/BlockCSCHessian.hh>
+#include <MeshFEM/SparsityLRU.hh>
 #include <MeshFEM/newton_optimizer/NewtonHessian.hh>
 
 PYBIND11_MODULE(block_sparse_hessian, m) {
@@ -138,5 +139,20 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
     using NHF = NewtonHessianFactorization;
     py::class_<NHF, BSF>(m, "NewtonHessianFactorization")
+        ;
+
+    // Bind a the `SparsityLRU` class in a way that works with
+    // `BlockCSCHessianBase` objects instead of `SuiteSparseMatrix`; `pybind11`
+    // apparently isn't able to handle the upcasting automatically :(
+    using SLRU = SparsityLRU;
+    py::class_<SLRU>(m, "SparsityLRU", "LRU cache for nonzero entries of a dynamic Hessian sparsity pattern")
+        .def(py::init([](const BlockCSCHessianBase &S_static) {
+                return SLRU(S_static); }), py::arg("S_static"))
+        .def("update", [](SLRU &self, const BlockCSCHessianBase &S_dynamic) { return self.update(S_dynamic); }, py::arg("S_dynamic"), "Update the LRU cache based on the entries a dynamic sparsity pattern")
+        .def_readwrite("entryCacheBudgetRatio", &SLRU::entryCacheBudgetRatio, "Number of extra entries allowed in the cache as a fraction of the current full sparsity pattern size")
+        .def_readwrite("expirationAge", &SLRU::expirationAge, "Entries order than this are removed from the cache upon a rebuild even if we stay within budget (e.g., when new entries appear)")
+        .def_readwrite("hardExpirationAge", &SLRU::hardExpirationAge, "If an entry exceeds this age, a rebuild is triggered, causing all old entries to be removed")
+        .def_property_readonly("S", [](SLRU &self) -> const SuiteSparseMatrix & { return *self; }, "The current sparsity pattern", py::return_value_policy::reference_internal)
+        .def_property_readonly("entryAges", &SLRU::entryAges, "Ages of the entries in the cache (0 = new, STATIC_ENTRY_AGE = static entry, EXPIRED = expired entry)", py::return_value_policy::reference_internal)
         ;
 }

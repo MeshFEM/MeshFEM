@@ -30,7 +30,11 @@ struct ElementSpecificMEBindings<HingeMeshEnergy<HingeEnergy>> {
     using ME = HingeMeshEnergy<HingeEnergy>;
     template<class PyME>
     static void bind(PyME &pyME) {
-        pyME.def("theta", [](const ME &me, size_t ei) { return me.elements[ei].theta(); } );
+        pyME.def("theta",        [](const ME &me, size_t ei) { return me.elements[ei].theta(); }, py::arg("ei"), "Get the current dihedral angle of the hinge element.");
+        if (HingeElement<HingeEnergy>::HasRestTheta) {
+            pyME.def("getRestTheta", [](const ME &me, size_t ei) { return me.elements[ei].getRestTheta(); }, py::arg("ei"), "Get the rest dihedral angle of the hinge element.");
+            pyME.def("setRestTheta", [](      ME &me, size_t ei, double theta) { me.elements[ei].setRestTheta(theta); }, py::arg("ei"), py::arg("theta"), "Set the rest dihedral angle of the hinge element. WARNING: does not affect energy/gradient/Hessian until the next deformed configuration update (`setVars`).");
+        }
     }
 };
 

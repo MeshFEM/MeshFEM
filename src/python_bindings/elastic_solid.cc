@@ -72,6 +72,7 @@ struct ElasticSolidBinder {
                   if (degree == 2) return toDegree<2>(es);
                   throw std::runtime_error("Only degree 1 and 2 are supported");
             }, py::arg("degree"), "Upgrade/downgrade the degree of the FEM discretization")
+          .def("copy", [](const ES &es) { return std::make_shared<ES>(es); })
           .def("minDeformedEdgeLen", [](const ES &es) {
                 BENCHMARK_SCOPED_TIMER_SECTION timer("minDeformedEdgeLen");
                 Real result = std::numeric_limits<Real>::max();

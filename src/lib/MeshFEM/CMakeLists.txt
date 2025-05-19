@@ -223,6 +223,11 @@ if (MESHFEM_WITH_CATAMARI)
     target_link_libraries(${PROJECT_NAME} PUBLIC catamari)
 endif()
 
+if (MESHFEM_WITH_SCOTCH)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_SCOTCH)
+    target_link_libraries(${PROJECT_NAME} PUBLIC SCOTCH::scotch SCOTCH::scotcherrexit)
+endif()
+
 if (MESHFEM_WITH_MKL_PARDISO)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_MKL_PARDISO)
 endif()

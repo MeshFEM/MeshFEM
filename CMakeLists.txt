@@ -86,6 +86,7 @@ option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TO
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
 option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   ON)
+option(MESHFEM_WITH_SCOTCH           "Compile MeshFEM with support for Scotch reordering, if possible" OFF)
 option(MESHFEM_WITH_MKL_PARDISO      "Compile MeshFEM with MKL Pardiso"   OFF)
 option(MESHFEM_WITH_PARDISO          "Compile MeshFEM with Pardiso"   OFF)
 option(MESHFEM_WITH_CHOLMOD          "Compile MeshFEM with CHOLMOD for LL^T factorization" ON)

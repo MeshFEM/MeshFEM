@@ -11,9 +11,15 @@
 #include <catamari/sparse_ldl.hpp>
 #include <specify.hpp>
 
+#if MESHFEM_WITH_SCOTCH
+#include "ScotchOrdering.hh"
+#endif
+
 #if CATAMARI_FINEGRAINED_TIMERS
 #include <filesystem>
 #endif
+
+#include "CatamariConversionPlan.hh"
 
 // The largest block size for which we'll instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
@@ -44,6 +50,11 @@ struct CatamariConverter {
     using ConversionPlan = catamari::ConversionPlan;
 
     // Note `Asp_in` is the rowcol-reduced *block* sparsity pattern.
+    // If `blockSize > 1`, then `Asp_in` will be expanded from a "block sparsity
+    // pattern" to a "scalar sparsity pattern" before converting.
+    // We retain this to support legacy-Catamari mode, but for best efficiency,
+    // the caller should pass `blockSize = 1` and interpret the converter's
+    // entries as representing blocks of the appropriate size.
     CatamariConverter(const SuiteSparseMatrix &Asp_in, const size_t blockSize, bool legacy, const std::vector<SuiteSparse_long> &entryForReducedEntry)
         : m_legacy(legacy)
     {
@@ -62,21 +73,31 @@ struct CatamariConverter {
         m_result.Resize(Asp_ptr->n, Asp_ptr->n);
 
         {
+            // TODO: generalized version of `CSCMat::InOrderBuilder` that
+            // enables us to build the catamari::CoordinateMatrix in-place...
+
             // Get an integer-valued sparse matrix where each entry holds the
             // index of the source upper triangle entry that generated it.
+            BENCHMARK_START_TIMER_SECTION("toSymmetryMode");
             CSCMatrix<SuiteSparse_long, SuiteSparse_long> A_full = Asp_ptr->toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::NONE, [](size_t ii) { return ii; });
+            BENCHMARK_STOP_TIMER_SECTION("toSymmetryMode");
 
             catamari::Buffer<catamari::MatrixEntry<typename SuiteSparseMatrix::value_type>> new_entries(A_full.nz);
-            for (SuiteSparse_long j = 0; j < A_full.n; ++j) {
+            parallel_for_range(A_full.n, [&](size_t j) {
                 for (SuiteSparse_long ii = A_full.Ap[j]; ii < A_full.Ap[j + 1]; ++ii) {
                     SuiteSparse_long i = A_full.Ai[ii];
                     new_entries[ii].row = j; // transpose: Catamari uses CSR storage
                     new_entries[ii].column = i;
-                    new_entries[ii].value = 1;
+                    // new_entries[ii].value = 1; // Value won't be referenced...
                 }
-            }
+            }, /* grain_size = */ 64, /* parallelism_threshold = */ 128);
 
-            m_result.SetSortedEntries(std::move(new_entries));
+
+            catamari::Buffer<catamari::Int> row_entry_offsets(A_full.Ap.size());
+            for (size_t i = 0; i < A_full.Ap.size(); ++i)
+                row_entry_offsets[i] = A_full.Ap[i];
+            m_result.SetSortedEntries(std::move(new_entries), std::move(row_entry_offsets));
+
             m_sourceReducedEntryForFullMatrixEntry = std::move(A_full.Ax);
         }
 
@@ -158,129 +179,10 @@ struct CatamariConverter {
 
     void freeCatamariMatrix() { m_result.Empty(); m_sourceReducedEntryForFullMatrixEntry.clear(); m_sourceReducedEntryForFullMatrixEntry.shrink_to_fit(); }
 
-    const ConversionPlan &conversionPlan() const { return m_conversionPlan; }
-    void constructConversionPlan(catamari::SparseLDL<double> &ldl, std::vector<SuiteSparse_long> &entryForReducedEntry) {
-        BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
-        auto f = ldl.supernodal_factorization.get();
-        if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
-
-        const auto &df = f->diagonal_factor_;
-        const auto &lf = f->lower_factor_;
-
-        using Int = catamari::Int;
-        auto &o  = f->ordering_;
-        auto &sno = o.supernode_offsets;
-        const double *f_vals = f->factor_values_.Data();
-        const Int num_supernodes = o.supernode_sizes.Size();
-        if (o.permutation.Empty()) throw std::runtime_error("Expected permutation");
-
-        const Int nc = m_result.NumColumns();
-        m_conversionPlan.columnOffsets.resize(nc + 1);
-
-        // Count the lower-triangular entries *in the permuted matrix*.
-        // We work with the *full* (non-triangular) matrix so that we can efficiently loop over all nonzeros in a given
-        // column of the *permuted* lower factor.
-        Int *columnSizes = m_conversionPlan.columnOffsets.data() + 1;
-        static tbb::affinity_partitioner ap;
-        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
-            for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
-                const Int supernode_end = sno[supernode + 1];
-                for (Int j_perm = sno[supernode]; j_perm < supernode_end; ++j_perm) {
-                    Int j_orig = o.inverse_permutation[j_perm];
-                    const Int col_entries_end = m_result.RowEntryOffset(j_orig + 1);
-                    Int colSize = 0;
-                    for (Int ii = m_result.RowEntryOffset(j_orig); ii < col_entries_end; ++ii)
-                        if (o.permutation[m_result.Entry(ii).column] >= j_perm) ++colSize; // entry in lower triangle?
-                    columnSizes[j_perm] = colSize;
-                }
-            }
-        }, ap);
-
-        // Convert sizes to offsets and allocate conversion plan entries.
-        m_conversionPlan.columnOffsets[0] = 0;
-        Int *columnBacks = m_conversionPlan.columnOffsets.data() + 1; // Back indices of the (initially empty) column buckets
-                                                                      // These will be incremented and eventually become the column end indices.
-        {
-            Int back = 0;
-            for (Int i = 0; i < nc; ++i) {
-                // Note: we are updating in-place (columnSizes == columnBacks)!
-                Int s = columnSizes[i];
-                columnBacks[i] = back;
-                back += s;
-            }
-
-            m_conversionPlan.resize(back);
-        }
-
-        BENCHMARK_START_TIMER_SECTION("Build");
-
-        // For each entry in the full (non-triangular) row-col-removed input matrix `m_result`,
-        // determine whether/where its permuted instance goes in the *lower triangle* of the factorization
-        // as well as which original matrix entry it originated from.
-        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
-            for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
-                const Int supernode_start = sno[supernode    ];
-                const Int supernode_end   = sno[supernode + 1];
-                catamari::BlasMatrixView<double>& db = df->blocks[supernode];
-                catamari::BlasMatrixView<double>& lb = lf->blocks[supernode];
-                const Int *index_beg = lf->StructureBeg(supernode);
-                const Int *index_end = lf->StructureEnd(supernode);
-
-                for (Int j_perm = supernode_start; j_perm < supernode_end; ++j_perm) {
-                    Int j_orig = o.inverse_permutation[j_perm];
-                    Int columnBack = columnBacks[j_perm];
-
-                    // Note: catamari::CoordinateMatrix is row major, hence the implicit transpose happening here...
-                    const Int col_entries_begin = m_result.RowEntryOffset(j_orig);
-                    const Int col_entries_end   = m_result.RowEntryOffset(j_orig + 1);
-                    const Int *guess = nullptr;
-                    for (Int ii = col_entries_begin; ii < col_entries_end; ++ii) {
-                        const catamari::MatrixEntry<double> &e = m_result.Entry(ii);
-                        Int i_perm = o.permutation[e.column];
-                        if (i_perm < j_perm) continue; // Skip the strict upper triangle.
-
-                        // Locate (i_perm, j_perm) in the supernode structure.
-                        Int locForEntry; // destination location
-
-                        const Int j_rel = j_perm - supernode_start;
-                        if (i_perm < supernode_end) {
-                            const Int i_rel = i_perm - supernode_start;
-                            locForEntry = std::distance(f_vals, (const double *) db.Pointer(i_rel, j_rel));
-                        }
-                        else {
-                            // Search [lf->structureBeg, lf->structureEnd) for value `i_perm`,
-                            // first checking at `*guess` (which will be correct for consecutive
-                            // strips of entries).
-                            const Int *iter;
-                            if ((guess >= index_beg) && (guess < index_end) && (*guess == i_perm)) iter = guess;
-                            else {
-                                iter = sb_lower_bound(index_beg, index_end, i_perm);
-                                if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index " + std::to_string(i_perm) + " in supernode " + std::to_string(supernode) + " containing rows in [" + std::to_string(*index_beg) + ", " +  std::to_string(*index_end) + ")");
-                            }
-                            guess = iter + 1;
-
-                            const Int i_rel = std::distance(index_beg, iter);
-                            locForEntry = std::distance(f_vals, (const double *) lb.Pointer(i_rel, j_rel));
-                        }
-
-                        // Record which source entry should be read for `locForEntry`
-                        SuiteSparse_long srcEntry = m_sourceReducedEntryForFullMatrixEntry[ii];
-                        if (entryForReducedEntry.size()) srcEntry = entryForReducedEntry[srcEntry];
-                        m_conversionPlan.entries()[columnBack++] = ConversionPlan::Entry{locForEntry, srcEntry};
-                    }
-                    columnBacks[j_perm] = columnBack;
-                    // Sorting doesn't seem to help :(
-                    // std::sort(m_conversionPlan.columnData(j_perm), m_conversionPlan.columnData(j_perm + 1),
-                    //         [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.dst < b.dst; });
-                }
-            }
-        });
-        BENCHMARK_STOP_TIMER_SECTION("Build");
-    }
+    ConversionPlan conversionPlan;
 
 private:
     CMat m_result;
-    ConversionPlan m_conversionPlan;
 
     const bool m_legacy = false;
     SuiteSparseMatrix m_Asp; // For legacy mode only
@@ -312,7 +214,7 @@ void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const
     // TODO: convert to GCD block size instead? Do we have a use case for this?
     // TODO: try block reordering of nonuniform block sizes (then expand to scalar)?
 
-    const bool blockFactorizationSupported = mat.uniformBlockSize() && (mat.maxBlockSize() <= MAX_INSTANTIATED_BLOCK_SIZE);
+    const bool blockFactorizationSupported = m_useBlockAccel && mat.uniformBlockSize() && (mat.maxBlockSize() <= MAX_INSTANTIATED_BLOCK_SIZE);
     if (blockFactorizationSupported) {
         m_blockSize = mat.maxBlockSize();
         m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
@@ -334,7 +236,13 @@ void CatamariFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const s
 // `pinnedVars` always holds scalar variables.
 void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
     const SuiteSparseMatrix *A_reduced;
+    std::vector<SuiteSparse_long> reducedRowForRow_block;
+    std::vector<SuiteSparse_long> blockEntryForReducedBlockEntry; // the original block nz corresponding to each nz in the block row-col-removed matrix
+
     if (m_blockSize > 1 && pinnedVars.size() > 0) {
+        // Check for partially pinned blocks, which currently require a scalar
+        // factorization fallback.
+
         // Convert the scalar variable indices in `pinnedVars` to their
         // corresponding block variable indices.
         size_t numBlockVars = mat.n;
@@ -359,45 +267,53 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 return m_factorizeSymbolic(m_scalarHessian, pinnedVars);
             }
             // TODO: keep the partially pinned block in the sparsity pattern and
-            // apply the scalar pin constraint during numeric factorization.
+            // apply the scalar pin constraint during numeric factorization?
         }
         A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
-        // `m_initRowColRemoval` has now stored the pinned block variable
-        // indices, whereas `m_fixedVars` should store scalar variable indices.
+        blockEntryForReducedBlockEntry.swap(m_entryForReducedEntry);
+        reducedRowForRow_block.swap(m_reducedRowForRow);
+
+        // `m_initRowColRemoval` has now stored the pinned **block** variable
+        // indices, whereas `m_fixedVars` should store **scalar** variable indices.
         m_fixedVars.swap(scalarFixedVars);
 
-        // Convert `m_reducedRowForRow` and `m_entryForReducedEntry` from block to scalar.
-        // TODO: keep block versions around to accelerate fixed var removal
-        // during solve? Also, once we implement the version where the entire
-        // symbolic factorization is constructed from scalar sparsity
-        // pattern, the block version of `m_entryForReducedEntry` will need to
-        // be passed to `constructConversionPlan` below!!!
-        // auto upgrade_block_indices = [&](std::vector<SuiteSparse_long> &indices) {
-        //     std::vector<SuiteSparse_long> scalarIndices;
-        //     scalarIndices.reserve(indices.size() * m_blockSize);
-        //     for (size_t bi : indices) {
-        //         for (size_t j = 0; j < m_blockSize; ++j)
-        //             scalarIndices.push_back(bi * m_blockSize + j);
-        //     }
-        //     indices.swap(scalarIndices);
-        // };
-        // upgrade_block_indices(m_reducedRowForRow);
-
-        // TODO: remove
-        SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
-        m_reducedRowForRow.clear();
-        A_scalar.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &m_reducedRowForRow, &m_entryForReducedEntry);
+        if (!reducedRowForRow_block.empty()) {
+            // Upgrade `reducedRowForRow_block` to a scalar version as needed
+            // for the `solve` phase.
+            m_reducedRowForRow.resize(m_blockSize * mat.n);
+            for (size_t i = 0; i < reducedRowForRow_block.size(); ++i) {
+                SuiteSparse_long brr = reducedRowForRow_block[i];
+                if (brr == SuiteSparseMatrix::INDEX_NONE) {
+                    for (size_t c = 0; c < m_blockSize; ++c)
+                        m_reducedRowForRow[m_blockSize * i + c] = SuiteSparseMatrix::INDEX_NONE;
+                }
+                else {
+                    for (size_t c = 0; c < m_blockSize; ++c)
+                        m_reducedRowForRow[m_blockSize * i + c] = m_blockSize * brr + c;
+                }
+            }
+        }
     }
     else {
         A_reduced = m_initRowColRemoval(mat, pinnedVars);
+        reducedRowForRow_block = m_reducedRowForRow;
     }
 
+    m_permutedReducedRowForRow.clear(); // The upcoming symbolic factorization will change any existing permutation...
+
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
-    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, m_blockSize, m_legacy, m_entryForReducedEntry);
+    // Note: passing `block_size = 1` below prevents the converter from
+    // expanding entries in the (block) sparsity pattern into
+    // `block_size` x `block_size` blocks of scalars in the block case.
+    // (I.e., we leave the pattern in its compressed form.)
+    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, /* block_size = */ 1, m_legacy, m_entryForReducedEntry);
+
+    m_ldlControl->supernodal_control.relaxation_control.block_size = m_blockSize;
 
     if (orderingMethod == OrderingMethod::Catamari)
         m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
-    else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis)) {
+    else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis)
+          || (orderingMethod == OrderingMethod::AMD) || (orderingMethod == OrderingMethod::Adaptive)) {
         if (!m_c) {
             m_c = std::make_unique<cholmod_common>();
             cholmod_l_start(m_c.get());
@@ -419,39 +335,116 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             cholmat.x = const_cast<double *>((const double *) A_reduced->Ai.data());
 
             if (orderingMethod == OrderingMethod::CholmodNesdis) {
+#if 0 // Whether to downcast for ordering -- the difference in time seems negligible
+                if (!m_c_int) {
+                    m_c_int = std::make_unique<cholmod_common>();
+                    cholmod_start(m_c_int.get());
+                }
+
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_nesdis");
+                VecX_T<int> Ai_downcast, Ap_downcast, iperm_downcast;
+
+                Ai_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+                Ap_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+                auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
+                                                            Ai_downcast.data(), Ap_downcast.data());
+                iperm_downcast.resize(A_reduced->m);
+                cholmod_nested_dissection(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0,
+                                            iperm_downcast.data(), (int *) CParent.Data(), (int *) CMember.Data(), m_c_int.get());
+                Eigen::Map<VecX_T<catamari::Int>>(ordering.inverse_permutation.Data(), A_reduced->m) = iperm_downcast.template cast<catamari::Int>();
+#else
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_nested_dissection");
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
                                             (SuiteSparse_long *) ordering.inverse_permutation.Data(),
                                             CParent.Data(), CMember.Data(), m_c.get());
+#endif
             }
-            else {
+            else if (orderingMethod == OrderingMethod::Metis) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_metis");
                 cholmod_l_metis(&cholmat, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
                                 (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
             }
-            quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
+            else if (orderingMethod == OrderingMethod::AMD) {
+#if 0 // Whether to downcast for ordering
+                if (!m_c_int) {
+                    m_c_int = std::make_unique<cholmod_common>();
+                    cholmod_start(m_c_int.get());
+                }
 
-            if (m_blockSize > 1) {
-                // "Upgrade" the block permutation to a scalar permutation.
-                auto upgrade_permutation = [&](auto &perm) {
-                    std::decay_t<decltype(perm)> scalarPermutation(m_blockSize * A_reduced->n);
-                    for (size_t i = 0; i < size_t(A_reduced->m); ++i) {
-                        for (size_t j = 0; j < m_blockSize; ++j)
-                            scalarPermutation[m_blockSize * i + j] = perm[i] * m_blockSize + j;
-                    }
-                    perm = std::move(scalarPermutation);
-                };
-                upgrade_permutation(ordering.permutation);
-                upgrade_permutation(ordering.inverse_permutation);
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_amd");
+                VecX_T<int> Ai_downcast, Ap_downcast, iperm_downcast;
+
+                Ai_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+                Ap_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+                auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
+                                                            Ai_downcast.data(), Ap_downcast.data());
+                iperm_downcast.resize(A_reduced->m);
+                cholmod_amd(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0, iperm_downcast.data(), m_c_int.get());
+                Eigen::Map<VecX_T<catamari::Int>>(ordering.inverse_permutation.Data(), A_reduced->m) = iperm_downcast.template cast<catamari::Int>();
+#else
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_amd");
+                cholmod_l_amd(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
+                              (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
+#endif
             }
+            else throw std::runtime_error("Unknown orderingMethod");
+            quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
         }
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
+    else if (orderingMethod == OrderingMethod::Scotch) {
+#if MESHFEM_WITH_SCOTCH
+        catamari::SymmetricOrdering ordering;
+        ordering.permutation        .Resize(A_reduced->m);
+        ordering.inverse_permutation.Resize(A_reduced->m);
+
+        Eigen::Map<VecX_T<SuiteSparse_long>> perm(ordering.permutation.Data(), A_reduced->m);
+        Eigen::Map<VecX_T<SuiteSparse_long>> iperm(ordering.inverse_permutation.Data(), A_reduced->m);
+
+        scotch_ordering(*A_reduced, perm, iperm, scotchSettings.stratFlag, scotchSettings.imbalanceRatio);
+
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+#else
+        throw std::runtime_error("Scotch support not compiled in");
+#endif
+    }
     else throw std::runtime_error("Unknown orderingMethod");
 
+    std::unique_ptr<catamari::SparseLDL<double>> ldl_block;
+    if (m_blockSize > 1) {
+        // Currently we must expand the symbolic factorization to a scalar one.
+        // TODO: once a full "block factorization type" is supported,
+        // we can omit this conversion.
+        ldl_block = std::move(m_ldl);
+        m_ldl = ldl_block->ExpandSymbolicFactorizationToScalar(m_blockSize);
+    }
+
     if (!m_legacy) {
-        // Build a conversion plan to support direct injection of entries.
-        m_catamariConverter->constructConversionPlan(*m_ldl, m_entryForReducedEntry);
+        // Build a conversion plan to support direct injection of scalar entries
+        // into the Cholesky factor. This must be done specially for non-unit
+        // block sizes.
+        if (m_blockSize > 1) {
+            assert(ldl_block);
+            m_catamariConverter->conversionPlan = catamari_conversion_plan::constructScalarConversionPlan(m_catamariConverter->get(), mat, reducedRowForRow_block, m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
+        }
+        else m_catamariConverter->conversionPlan = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *m_ldl, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, m_entryForReducedEntry);
+
+#if 0
+        // Validation
+        {
+            BENCHMARK_SCOPED_TIMER_SECTION tv("Conversion plan validate");
+            SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
+            std::vector<SuiteSparse_long> reducedRowForRow_scalar;
+            std::vector<SuiteSparse_long> entryForReducedEntry_scalar;
+
+            SuiteSparseMatrix A_scalar_reduced = A_scalar;
+            std::vector<bool> scalarFixedVarMask(A_scalar.n, false);
+            for (size_t i : pinnedVars) scalarFixedVarMask[i] = true;
+            A_scalar_reduced.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &reducedRowForRow_scalar, &entryForReducedEntry_scalar);
+            catamari_conversion_plan::validate(m_catamariConverter->conversionPlan, *m_ldl, A_scalar, reducedRowForRow_scalar, A_scalar_reduced.m);
+        }
+#endif
+
         m_catamariConverter->freeCatamariMatrix();
     }
     m_factorizationType = FactorizationType::Symbolic;
@@ -475,9 +468,9 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     assertFactorization(FactorizationType::Symbolic);
     catamari::SparseLDLResult<double> result;
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
-    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan(), m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
+    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
-    {
+    if constexpr (true) {
         static bool first = true;
         if (first) {
             using catamari::Int;
@@ -608,6 +601,7 @@ void CatamariFactorizer::clearStashedFactorization()       { m_ldlStash.reset();
 
 CatamariFactorizer::~CatamariFactorizer() {
     if (m_c) cholmod_l_finish(m_c.get());
+    if (m_c_int) cholmod_finish(m_c_int.get());
 }
 
 #endif

@@ -12,7 +12,8 @@
 #define MULTIOBJECTIVEPROBLEM_HH
 
 #include "NewtonProblem.hh"
-#include "../SystemAssembler.hh"
+#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEM/SparsityLRU.hh>
 #include <memory>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -476,6 +477,7 @@ private:
     // The dynamic part is rebuilt with every call to m_updateSparsityPattern().
     mutable NewtonHessian m_hessianSparsity, m_hessianSparsityStaticPart;
     mutable std::vector<NewtonHessian> m_hessianSparsityForSemistaticTerms;
+    mutable std::unique_ptr<SparsityLRU> m_sparsityLRU; // Nonzero caching/retaining mechanism for minimizing Symbolic refactorizations
 
     CallbackFunction m_customCallback;
 
@@ -523,13 +525,47 @@ private:
         if (changed) {
             if (staticOnly) m_hessianSparsity = std::move(m_hessianSparsityStaticPart);
             else {
-                m_hessianSparsity = m_hessianSparsityStaticPart;
-                m_hessianSparsity.mergeSparsityPattern(dynamicSparsity);
+                if (!m_sparsityLRU && m_hessianSparsityStaticPart.H_ss && (m_hessianSparsityStaticPart.H_ss->nnz() > 0)) {
+                    m_sparsityLRU = std::make_unique<SparsityLRU>(*(m_hessianSparsityStaticPart.H_ss));
+                    m_hessianSparsity = std::move(m_hessianSparsityStaticPart.H_ss);
+                }
+
+                // TODO: what about the dense parts?
+                NewtonHessian nonstaticPart = std::move(dynamicSparsity);
                 for (const auto &t : m_hessianSparsityForSemistaticTerms)
-                    m_hessianSparsity.mergeSparsityPattern(t);
+                    nonstaticPart.mergeSparsityPattern(t);
+
+                if (m_sparsityLRU) {
+                    changed = m_sparsityLRU->update(*(nonstaticPart.H_ss));
+                    changed |= force; // Ensure the static part rebuild takes effect.
+                    if (changed) {
+                        if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...
+                        m_hessianSparsity.H_ss->Ap = (*m_sparsityLRU)->Ap;
+                        m_hessianSparsity.H_ss->Ai = (*m_sparsityLRU)->Ai;
+                        m_hessianSparsity.H_ss->nz = (*m_sparsityLRU)->nz;
+                    }
+                }
+                else {
+                    m_hessianSparsity = m_hessianSparsityStaticPart;
+                    m_hessianSparsity.mergeSparsityPattern(nonstaticPart);
+                }
             }
 
             m_hessianSparsity.finalize();
+        }
+        else if (m_sparsityLRU) {
+            // Still notify the cache of the sparsity pattern update in case
+            // it triggers a refactorization due to entry expiration.
+            if (m_sparsityLRU->increaseAgeOfOldEntries()) {
+                if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...
+                m_hessianSparsity.H_ss->Ap = (*m_sparsityLRU)->Ap;
+                m_hessianSparsity.H_ss->Ai = (*m_sparsityLRU)->Ai;
+                m_hessianSparsity.H_ss->nz = (*m_sparsityLRU)->nz;
+
+                m_hessianSparsity.finalize();
+
+                changed = true;
+            }
         }
 
         m_fullSparsityRebuildNeeded = false;

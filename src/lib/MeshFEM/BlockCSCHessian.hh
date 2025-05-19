@@ -28,6 +28,7 @@
 #include "SparseMatrices.hh"
 #include "VarStructure.hh"
 #include "ParallelAssembly.hh"
+#include <istream>
 #include <type_traits>
 
 namespace detail {
@@ -448,8 +449,8 @@ struct detail::BlockCSCHTraits<BlockCSCHessian<_VarStructure, _ContiguousBlocks,
     static constexpr bool ContiguousBlocks = _ContiguousBlocks;
 };
 
-struct MESHFEM_EXPORT BlockCSCHessianBase : public CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>> {
-    using CSCMat = CSCMatrix<SuiteSparse_long, double, std::vector<SuiteSparse_long>>;
+struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
+    using CSCMat = SuiteSparseMatrix;
 
     using CSCMat::CSCMat;
 
@@ -754,6 +755,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is currently supported");
 
         Eigen::Map<VXd> resultMap(result, numScalarCols());
+        resultMap.setZero();
         assemble_parallel([&](const tbb::blocked_range<size_t> &r, const Eigen::Ref<VXd> &out) {
                     applyRawColumnRangeAccum(r.begin(), r.end(), x, const_cast<double *>(out.data()));
                 }, resultMap, n);

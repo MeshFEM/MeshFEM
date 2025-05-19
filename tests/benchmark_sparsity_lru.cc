@@ -10,9 +10,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "MeshFEM/Parallelism.hh"
 #include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEM/SparsityLRU.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
-void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads, size_t repeats) {
+void benchmark_method(double retain_pct, const std::string &method, const std::string &directory, size_t tbb_threads, bool dry_run) {
     set_max_num_tbb_threads(tbb_threads);
 
 // #if __linux__
@@ -20,26 +21,49 @@ void benchmark_method(const std::string &method, const std::string &directory, s
 // #endif
 
     std::unique_ptr<CholeskyFactorizerBase> factorizer;
+    std::unique_ptr<SparsityLRU> sparsityCache;
 
-    if (method == "cholmod") {
-        factorizer = make_cholesky_factorizer(CholeskyProvider::CHOLMOD);
+    size_t numSymbolicFactorizations = 0;
+    size_t numSymbolicMatrices = 0;
+    size_t numNumericMatrices = 0;
+
+    if (method.substr(0, 7) == "cholmod") {
+        std::unique_ptr<CholmodFactorizer> cf = std::make_unique<CholmodFactorizer>();
+        if      (method ==    "cholmod_amd") cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::AMD);
+        else if (method ==  "cholmod_metis") cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::Metis);
+        else if (method == "cholmod_nesdis") cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::Nesdis);
+        else throw std::runtime_error("Unknown method");
+
+        factorizer = std::move(cf);
     }
     else if (method.substr(0, 8)  == "catamari") {
 #if MESHFEM_WITH_CATAMARI
         std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>(method == "catamari_legacy");
-        cf->setUseBlockAccel(method.substr(method.size() - 8) != "_noblock");
+        bool blockAccel = true;
+        std::string method_prefix = method;
+        if (method.substr(method.size() - 8) == "_noblock") {
+            blockAccel = false;
+            method_prefix = method.substr(0, method.size() - 8);
+        }
+
+        cf->setUseBlockAccel(blockAccel);
         cf->setUseLeftLooking(method.substr(0, 13) == "catamari_left");
         // Note that `CatamariFactorizer::OrderingMethod::CholmodNesdis` is the default;
         // it will be applied to "catamari_nesdis", "catamari_legacy", and "catamari_left".
-        if (method == "catamari")
+        if (method_prefix == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
-        if (method == "catamari_metis")
+        if (method_prefix == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
+        if (method_prefix  == "catamari_amd")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
+        if (method_prefix.substr(0, 15) == "catamari_scotch") {
 #if MESHFEM_WITH_SCOTCH
-        if (method == "catamari_scotch")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Scotch;
-            if (method.size() > 15) cf->scotchSettings.parse(method.substr(15));
+            if (method_prefix.size() > 15) cf->scotchSettings.parse(method_prefix.substr(15));
+#else
+            throw std::runtime_error("Scotch support not compiled in");
 #endif
+        }
 
         factorizer = std::move(cf);
 #else
@@ -68,7 +92,32 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             }
             else { throw std::runtime_error("Failed to open pinned vars file corresponding to symbolic matrix " + std::to_string(counter)); }
             auto Hsp = BlockCSCHessianBase::constructFromBinaryStream(symFile);
-            factorizer->factorizeSymbolic(*Hsp, pinnedVars);
+
+            bool needsFactorization = false;
+            if (sparsityCache == nullptr) {
+                sparsityCache = std::make_unique<SparsityLRU>(*Hsp);
+                sparsityCache->entryCacheBudgetRatio = retain_pct;
+                // sparsityCache->expirationAge = 100;
+                // sparsityCache->hardExpirationAge = 200;
+                needsFactorization = true;
+            }
+            else {
+                needsFactorization = sparsityCache->update(*Hsp);
+            }
+
+            ++numSymbolicMatrices;
+            numSymbolicFactorizations += needsFactorization;
+
+            if (dry_run)
+                continue;
+
+            if (needsFactorization) {
+                Hsp->Ai = (*sparsityCache)->Ai;
+                Hsp->Ap = (*sparsityCache)->Ap;
+                Hsp->nz = (*sparsityCache)->nz;
+                Hsp->finalize();
+                factorizer->factorizeSymbolic(*Hsp, pinnedVars);
+            }
 
             x_gt = Eigen::VectorXd::Random(Hsp->numScalarRows());
             for (size_t i : factorizer->getFixedVars())
@@ -80,13 +129,29 @@ void benchmark_method(const std::string &method, const std::string &directory, s
         std::string numPath = directory + "/" + CholeskyFactorizerBase::numericMatrixFileName(counter);
         std::ifstream numFile(numPath);
         if (numFile.good()) {
+            ++numNumericMatrices;
+            if (dry_run) continue;
             // std::cout << numPath << std::endl;
             if (!factorizer->hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic))
                 throw std::runtime_error("Numeric matrix encountered before symbolic matrix");
             auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
-            for (size_t r = 0; r < repeats; ++r) {
+            BENCHMARK_START_TIMER_SECTION("Enlarge numeric sparsity");
+            auto H_sparsity_mod = H->clone();
+            H_sparsity_mod->Ai = (*sparsityCache)->Ai;
+            H_sparsity_mod->Ap = (*sparsityCache)->Ap;
+            H_sparsity_mod->nz = (*sparsityCache)->nz;
+            H_sparsity_mod->setZero();
+            H_sparsity_mod->addWithSubSparsityFast(*H);
+            BENCHMARK_STOP_TIMER_SECTION("Enlarge numeric sparsity");
+            // // // We unfortunately cannot move the numeric values over to this new sparsity pattern.
+            // // // For now, just factorize the identity matrix to ensure the numeric factorization succeeds.
+            // // H->setIdentity(/* preserveSparsity = */ true);
+            // //                                                // The resulting timings won't be completely representative since indefinite matrices are processed more quickly.
+            // H_sparsity_mod->setIdentity(/* preserveSparsity = */ true);
+
+            for (size_t r = 0; r < 1; ++r) {
                 try {
-                    factorizer->factorizeNumericWithShift(*H, 1e-4); // Shift needed for parametrization examples
+                    factorizer->factorizeNumericWithShift(*H_sparsity_mod, 0);
                     if (r > 0) continue; // Only verify in first pass
 
                     // Verify
@@ -111,20 +176,29 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     }
 
     BENCHMARK_REPORT();
+    std::cout << "Number of symbolic factorizations: " << numSymbolicFactorizations << " (" << numSymbolicMatrices / double(numSymbolicFactorizations) << "x additional reduction)" << " (" << numNumericMatrices / double(numSymbolicFactorizations) << "x reduction)" << std::endl;
     unset_max_num_tbb_threads();
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc < 4 || argc > 5) {
-        std::cout << "Usage: " << argv[0] << " method tbb_threads matrix_directory [numeric_repeats]" << std::endl;
+    if (argc < 5 || argc > 6) {
+        std::cout << "Usage: " << argv[0] << " retain_pct method tbb_threads matrix_directory [dry_run]" << std::endl;
         std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, catamari_left[_noblock], catamari_right[_noblock], pardiso}" << std::endl;
         exit(-1);
     }
 
-    size_t repeats = 1;
-    if (argc == 5) repeats = std::stoi(argv[4]);
+    bool dry_run = false;
+    if (argc == 6) {
+        if (std::string(argv[5]) != "dry_run") {
+            std::cerr << "Final optional argument must be 'dry_run' or omitted" << std::endl;
+            exit(-1);
+        }
+        dry_run = true;
+    }
 
-    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* tbb_threads = */ std::stoi(argv[2]), repeats);
+    double retain_pct = std::stod(argv[1]);
+
+    benchmark_method(retain_pct, /* method = */ argv[2], /* directory = */ argv[4], /* tbb_threads = */ std::stoi(argv[3]), dry_run);
 
     return 0;
 }

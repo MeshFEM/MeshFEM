@@ -14,6 +14,10 @@ extern "C" {
 #include <SuiteSparse_config.h>
 #include <MeshFEM_export.h>
 
+#if MESHFEM_WITH_SCOTCH
+#include "ScotchOrdering.hh"
+#endif
+
 // Forward declarations of Catamari types.
 struct CatamariConverter;
 namespace catamari {
@@ -26,7 +30,7 @@ namespace catamari {
 
 struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     enum class OrderingMethod {
-        Catamari, CholmodNesdis, Metis
+        Catamari, CholmodNesdis, Metis, AMD, Adaptive, Scotch
     };
 
     // legacy: whether to use Jack Poulson's original implementation for comparison
@@ -82,7 +86,13 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
     CholeskyProvider provider() const override {
         if (m_legacy) return CholeskyProvider::CatamariLegacy;
-        return (orderingMethod == OrderingMethod::CholmodNesdis) ? CholeskyProvider::CatamariNesdis : CholeskyProvider::Catamari;
+
+        if (orderingMethod == OrderingMethod::Catamari)           return CholeskyProvider::Catamari;
+        else if (orderingMethod == OrderingMethod::CholmodNesdis) return CholeskyProvider::CatamariNesdis;
+        else if (orderingMethod == OrderingMethod::AMD)           return CholeskyProvider::CatamariAMD;
+        else if (orderingMethod == OrderingMethod::Adaptive)      return CholeskyProvider::CatamariAdaptive;
+
+        throw std::runtime_error("Unknown orderingMethod in mappign to `CholeskyProvider`");
     }
 
     virtual ~CatamariFactorizer();
@@ -95,6 +105,29 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
 
+#if defined(MESHFEM_WITH_SCOTCH)
+    struct ScotchSettings {
+        SCOTCH_Num stratFlag = SCOTCH_STRATDEFAULT;
+        double imbalanceRatio = 0.01;
+
+        // Parse the suffix of the method string passed to, e.g., `benchmark_linear_systems`.
+        // This is either empty or of the form `_quality_0.01` or `_speed_0.01`.
+        void parse(std::string method_suffix) {
+            std::runtime_error invalid("Invalid Scotch options format");
+            if (method_suffix[0] != '_') { throw invalid; }
+            if      (method_suffix.substr(1, 7) == "quality") stratFlag = SCOTCH_STRATQUALITY;
+            else if (method_suffix.substr(1, 5) == "speed"  ) stratFlag = SCOTCH_STRATSPEED;
+            else { throw invalid; }
+
+            auto underscore = method_suffix.find('_', 1);
+            if (underscore != std::string::npos)
+                imbalanceRatio = std::stod(method_suffix.substr(underscore + 1));
+        }
+    };
+
+    ScotchSettings scotchSettings;
+#endif
+
 private:
     template<typename... Args>
     void m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args);
@@ -106,7 +139,7 @@ private:
 
     std::unique_ptr<CatamariConverter> m_catamariConverter;
 
-    std::unique_ptr<cholmod_common> m_c; // Used for Nesdis and Metis ordering
+    std::unique_ptr<cholmod_common> m_c, m_c_int; // Used for Cholmod's ordering routines
     size_t m_blockSize = 1;
     size_t m_useBlockAccel = true;
 

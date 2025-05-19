@@ -131,6 +131,18 @@ public:
         for (const auto he : halfEdges())
             if (he.isPrimary()) { f(he, i); ++i; }
     }
+    template<class F>
+    void visitInteriorEdges(F &&f) {
+        size_t i = 0;
+        for (const auto he : halfEdges())
+            if (he.isPrimary() && !he.isBoundary()) { f(he, i); ++i; }
+    }
+    template<class F>
+    void visitInteriorEdges(F &&f) const {
+        size_t i = 0;
+        for (const auto he : halfEdges())
+            if (he.isPrimary() && !he.isBoundary()) { f(he, i); ++i; }
+    }
 
     // Get the list of (volume) vertex indices making up the boundary loops
     // (traversed in order with mesh on the right).
