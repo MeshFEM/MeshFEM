@@ -98,3 +98,29 @@ def format(d, print_string = True):
     s += f'Full time:\t{fullTime}'
     if (print_string): print(s)
     else: return s
+
+################################################################################
+# Functionality for accumulating multiple benchmark dictionaries into a single one.
+################################################################################
+from dataclasses import dataclass
+
+@dataclass
+class PyBenchmarkRecord:
+    invocations: int = 0
+    time: float = 0.0
+
+    @property
+    def averageTime(self) -> float:
+        return self.time / self.invocations if self.invocations else 0.0
+
+def sum(dicts):
+    accumulated = {}
+
+    for d in dicts:
+        for key, record in d.items():
+            if key not in accumulated:
+                accumulated[key] = PyBenchmarkRecord()
+            accumulated[key].invocations += record.invocations
+            accumulated[key].time += record.time
+
+    return accumulated
