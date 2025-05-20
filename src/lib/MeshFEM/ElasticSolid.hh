@@ -70,6 +70,15 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         : m_mesh(mesh), m_energyDensities{{energy}} {
         this->m_assembler = std::make_unique<SystemAssembler<N>>(mesh->numNodes());
         setIdentityDeformation();
+
+        // Construct an orthogonal basis for the per-node displacement
+        // space orthogonal to the rigid translations.
+        Eigen::HouseholderQR<VecN_T<Real, numNodesPerElement>> qr(VecN_T<Real, numNodesPerElement>::Ones());
+        auto Q = (qr.householderQ() * Eigen::Matrix<Real, numNodesPerElement, numNodesPerElement>::Identity()).eval();
+        m_translationOrthogonalComplementBasisCompressed = Q.template rightCols<numNodesPerElement - 1>().eval();
+        for (int j = 0; j < numNodesPerElement - 1; ++j)
+            for (int i = 0; i < numNodesPerElement; ++i)
+                m_translationOrthogonalComplementBasis.template block<N, N>(i * N, j * N) = Eigen::Matrix<Real, N, N>::Identity() * m_translationOrthogonalComplementBasisCompressed(i, j);
     }
 
     // Copy and degree-changing constructor
@@ -157,16 +166,31 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
                     weight);
 
         if (!disableProjection && useXBasedProjection) {
-            // First check if the element is already PSD, since
-            // the brute-force eigendecomposition is expensive.
+            // // First check if the element is already PSD, since
+            // // the brute-force eigendecomposition is expensive.
             if (isPSDCholesky(result)) return result;
             // if (isPSDGershgorin(result) == PSDResult::Yes) return result; // Gershgorin circle
 
             // Apply x-based projection
+#if 1
+            // Do eigenvalue decomposition in a compressed space ignoring rigid
+            // translation modes.
+            auto tmp = (result.template selfadjointView<Eigen::Upper>() * m_translationOrthogonalComplementBasis).eval();
+
+            Eigen::Matrix<Real, numElementLocalVars - N, numElementLocalVars - N> H_red = m_translationOrthogonalComplementBasis.transpose() * tmp;
+
+            Eigen::SelfAdjointEigenSolver<decltype(H_red)> Hes(H_red);
+            if (Hes.eigenvalues()[0] < -1e-8) {
+                auto Q = (m_translationOrthogonalComplementBasis * Hes.eigenvectors()).eval();
+                result = Q * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Q.transpose();
+            }
+#else
             result.template triangularView<Eigen::Lower>() = result.transpose();
             Eigen::SelfAdjointEigenSolver<PerElementHessian> Hes(result);
-            if (Hes.eigenvalues()[0] < -1e-8)
+            if (Hes.eigenvalues()[0] < -1e-8) {
                 result = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            }
+#endif
         }
 
         return result;
@@ -200,8 +224,25 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return result;
     }
 
+#if 1
     Eigen::VectorXd minimumElementHessianEigenvaluesNullspaceProjection() const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("minimumElementHessianEigenvaluesNullspaceProjection");
+        Eigen::VectorXd result(numElements());
+        parallel_for_range(numElements(), [&](size_t ei) {
+            PerElementHessian H_e = elementHessian(ei, /* disableProjection = */ true);
+            H_e.template triangularView<Eigen::Lower>() = H_e.transpose();
+
+            auto H_red = (m_translationOrthogonalComplementBasis.transpose() * H_e * m_translationOrthogonalComplementBasis).eval();
+
+            Eigen::SelfAdjointEigenSolver<decltype(H_red)> Hes(H_red);
+            result[ei] = Hes.eigenvalues()[0];
+        }, 128, 256);
+        return result;
+    }
+#else
+    Eigen::VectorXd minimumElementHessianEigenvaluesNullspaceProjection() const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("minimumElementHessianEigenvaluesNullspaceProjection");
+
         using TBasisMatrix = Eigen::Matrix<Real, numElementLocalVars, N>;
         static constexpr size_t numReducedVars = numElementLocalVars - N;
         TBasisMatrix translationBasis;
@@ -229,6 +270,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         }, 128, 256);
         return result;
     }
+#endif
 
     Eigen::VectorXi choleskyElementSPDCheck() const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("choleskyElementSPDCheck");
@@ -542,6 +584,9 @@ protected:
 
     // Deformed positions for each node
     MXNd m_x;
+
+    Eigen::Matrix<Real,  numNodesPerElement,  numNodesPerElement - 1> m_translationOrthogonalComplementBasisCompressed;
+    Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars - N> m_translationOrthogonalComplementBasis;
 
     // All template instantiations must be friends for the degree-converting constructor.
     template<size_t _K2, size_t _Deg2, class _EmbeddingSpace2, class _Energy2>

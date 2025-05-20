@@ -23,7 +23,7 @@
 #include <catamari.hpp>
 #endif
 
-#if 1 // The Lapack version seems slower for small matrices than Eigen...
+#if 0 // The Lapack version seems slower for small matrices than Eigen...
 template<size_t N>
 struct DenseEighRealSolver {
     static constexpr size_t  work_size_upper_bound = 1 + 6 * N + 2 * N * N;
@@ -39,8 +39,8 @@ struct DenseEighRealSolver {
 
         char jobz = 'V'; // Compute eigenvectors
         char uplo = 'L'; // Use upper triangle
-        MKL_INT size = N;
-        MKL_INT lda = N;
+        int64_t size = N;
+        int64_t lda = N;
 
         int info;
         dsyevd_(&jobz, &uplo, &size, m_eigenvectors.data(), &lda,
@@ -54,12 +54,12 @@ struct DenseEighRealSolver {
     const Eigen::Matrix<double, N, N> &eigenvectors() const { return m_eigenvectors; }
 
 private:
-    MKL_INT lwork = work_size_upper_bound,
+    int64_t lwork = work_size_upper_bound,
             liwork = iwork_size_upper_bound;
     Eigen::Matrix<double, N, 1> m_eigenvalues;
     Eigen::Matrix<double, N, N> m_eigenvectors;
     std::array<double,   work_size_upper_bound> work;
-    std::array<MKL_INT, iwork_size_upper_bound> iwork;
+    std::array<int64_t, iwork_size_upper_bound> iwork;
 };
 #else
 template<size_t N>

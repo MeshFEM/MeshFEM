@@ -32,11 +32,6 @@ void test_dsyevd() {
     static constexpr int N = 12; // Matrix size
     const int num_tasks = 1000;
 
-    char jobz = 'V';         // Compute eigenvectors
-    char uplo = 'U';         // Use upper triangle
-    MKL_INT lda = N;
-    MKL_INT info;
-
     std::vector<DenseEighRealSolver<N>> solver_for_thread(get_max_num_tbb_threads());
 
     // Parallel computation
