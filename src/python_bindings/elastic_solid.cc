@@ -85,6 +85,10 @@ struct ElasticSolidBinder {
           .def("deformedElementVolumes", &ES::deformedElementVolumes, "Numerical approximation of each element's volume in the deformed config.")
           .def("blockHessian", [](const ES &es, bool projectionMask) { es.blockHessian(projectionMask); }, py::arg("projectionMask") = false)
 
+          .def("minimumElementHessianEigenvalues", &ES::minimumElementHessianEigenvalues)
+          .def("choleskyElementSPDCheck",          &ES::choleskyElementSPDCheck)
+          .def("gershgorinElementSPDCheck",        &ES::gershgorinElementSPDCheck)
+
           .def_readwrite("useXBasedProjection", &ES::useXBasedProjection)
           .def("contract_d2E_dXdx", &ES::contract_d2E_dXdx, py::arg("y_adjoint"))
          ;

@@ -18,6 +18,7 @@
 #include "FieldSamplerMatrix.hh"
 #include <Eigen/Sparse>
 #include "Utilities/MeshConversion.hh"
+#include "Utilities/DensePSDDetect.hh"
 
 #include "RigidMotionPins.hh"
 #include "FieldPostProcessing.hh"
@@ -156,12 +157,45 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
                     weight);
 
         if (!disableProjection && useXBasedProjection) {
+            // First check if the element is already PSD, since
+            // the brute-force eigendecomposition is expensive.
+            if (isPSDCholesky(result)) return result;
+            // if (isPSDGershgorin(result) == PSDResult::Yes) return result; // Gershgorin circle
+
             // Apply x-based projection
             result.template triangularView<Eigen::Lower>() = result.transpose();
             Eigen::SelfAdjointEigenSolver<PerElementHessian> Hes(result);
-            result = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            if (Hes.eigenvalues()[0] < -1e-8)
+                result = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
         }
 
+        return result;
+    }
+
+    Eigen::VectorXd minimumElementHessianEigenvalues() const {
+        Eigen::VectorXd result(numElements());
+        parallel_for_range(numElements(), [&](size_t ei) {
+            PerElementHessian H_e = elementHessian(ei, /* disableProjection = */ true);
+            H_e.template triangularView<Eigen::Lower>() = H_e.transpose();
+            Eigen::SelfAdjointEigenSolver<PerElementHessian> Hes(H_e);
+            result[ei] = Hes.eigenvalues().minCoeff();
+        }, 128, 256);
+        return result;
+    }
+
+    Eigen::VectorXi choleskyElementSPDCheck() const {
+        Eigen::VectorXi result(numElements());
+        parallel_for_range(numElements(), [&](size_t ei) {
+            result[ei] = isPSDCholesky(elementHessian(ei, /* disableProjection = */ true));
+        }, 128, 256);
+        return result;
+    }
+
+    Eigen::VectorXi gershgorinElementSPDCheck() const {
+        Eigen::VectorXi result(numElements());
+        parallel_for_range(numElements(), [&](size_t ei) {
+            result[ei] = isPSDGershgorin(elementHessian(ei, /* disableProjection = */ true)) == PSDResult::Yes;
+        }, 128, 256);
         return result;
     }
 

@@ -69,11 +69,11 @@ void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBi
 #if 1
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,          LinearElasticEnergy>(b));
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,             NeoHookeanEnergy>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    CorotatedLinearElasticity>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,      StVenantKirchhoffEnergy>(b));
+    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    CorotatedLinearElasticity>(b));
+    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,      StVenantKirchhoffEnergy>(b));
 
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    StVenantKirchhoffEnergyHP>(b));
+    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
+    // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    StVenantKirchhoffEnergyHP>(b));
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,           NeoHookeanEnergyHP>(b));
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,     CommonNeoHookeanEnergyHP>(b));
 #endif
