@@ -413,7 +413,8 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     
     plt.subplot(2,2,2)
     for i in range(num_options):
-        plt.plot(iterations_list[i], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][1][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
@@ -432,7 +433,8 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
 
     plt.subplot(2,2,4)
     for i in range(num_options):
-        plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][1][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
     plt.yscale('log')
     plt.xlabel("Time [sec]", fontsize=12)
     plt.ylabel("Grad Norm", fontsize=14)
