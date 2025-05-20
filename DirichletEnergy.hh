@@ -163,7 +163,9 @@ struct SymDirichletElementEnergy {
         Eigen::Matrix<Real_, 3, 2> E;
         E << e.node(1)->p - e.node(0)->p,
              e.node(2)->p - e.node(0)->p;
-        m_EtE_inv_A = (E.transpose() * E).inverse() * (0.5 * (E.col(0).cross(E.col(1))).norm());
+        Real_ A = (0.5 * (E.col(0).cross(E.col(1))).norm());
+        m_EtE_inv_A = (E.transpose() * E).inverse() * A;
+        m_EtE_A     = (E.transpose() * E)           * A;
     }
 
     template<class LVars>
