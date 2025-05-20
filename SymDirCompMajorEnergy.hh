@@ -32,6 +32,7 @@ struct SymmetricDirichletEDensityADPsi {
     template<class Derived>
     typename Derived::Scalar psi(const Eigen::MatrixBase<Derived> &F) {
         return 0.5 * (F.squaredNorm() + F.inverse().squaredNorm());
+        // return 0.5 * (F.squaredNorm()); //dirichlet energy for testing
     }
 };
 
@@ -108,6 +109,7 @@ struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElem
     {
         auto J = computeJacobian(x);
         return 0.5 * (J.squaredNorm() + J.inverse().squaredNorm()) * m_edata.volume();
+        // return 0.5 * (J.squaredNorm()) * m_edata.volume(); //dirichlet energy for testing
     }
 
     Gradient gradient(Real w, const LocalVars &x) const
@@ -125,21 +127,25 @@ struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElem
         const Eigen::MatrixXd C = D1 * V(0,1) + D2 * V(1,1);  // size 3×1
 
         GradientType DSd, Dsd;
-        Dsd.segment(0,3) = U(0,0) * B;
-        Dsd.segment(3,3) = U(1,0) * B;
+        DSd.segment(0,3) = U(0,0) * B;
+        DSd.segment(3,3) = U(1,0) * B;
 
-        DSd.segment(0,3) = U(0,1) * C;
-        DSd.segment(3,3) = U(1,1) * C;
+        Dsd.segment(0,3) = U(0,1) * C;
+        Dsd.segment(3,3) = U(1,1) * C;
         ////////////////////////////////
         double gS = S(0) - std::pow(invs(0), 3);
         double gs = S(1) - std::pow(invs(1), 3);
+        // double gS = S(0); //dirichlet energy for testing
+        // double gs = S(1); //dirichlet energy for testing
 
-        Gradient result = w * m_edata.volume()* (DSd*gS + Dsd*gs); // this is the gradient
+        Gradient grad = w * m_edata.volume()* (DSd*gS + Dsd*gs); // this is the gradient
+        // // change the order of the from ColMajor to RowMajor
+        // Eigen::Map<Eigen::Matrix<double, 3, 2>> m(grad.data());
+        // auto mt = m.transpose();
+        // Gradient reshaped = Eigen::Map<Gradient>(mt.data(), grad.size());
+        Gradient result;
+        result << grad(0), grad(3), grad(1), grad(4), grad(2), grad(5); // flip the order of the gradient
         return result;
-        // auto grad_uvEdges = (computeJacobian(x) * m_edata.gradBarycentric()).eval();
-        // Gradient result;
-        // Eigen::Map<LocalVars>(result.data()) = (w * m_edata.volume()) * grad_uvEdges.transpose();
-        // return result;
     }
 
     Hessian hessian(Real w, bool project, const LocalVars &x) const {
@@ -154,23 +160,26 @@ struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElem
         const Eigen::MatrixXd C = D1 * V(0,1) + D2 * V(1,1);  // size 3×1
 
         GradientType DSd, Dsd;
-        Dsd.segment(0,3) = U(0,0) * B;
-        Dsd.segment(3,3) = U(1,0) * B;
+        DSd.segment(0,3) = U(0,0) * B;
+        DSd.segment(3,3) = U(1,0) * B;
 
-        DSd.segment(0,3) = U(0,1) * C;
-        DSd.segment(3,3) = U(1,1) * C;
+        Dsd.segment(0,3) = U(0,1) * C;
+        Dsd.segment(3,3) = U(1,1) * C;
         ////////////////////////////////
 
         auto ds = S.unaryExpr([](double a) {return a - 1.0 / (a*a*a); });
         auto hs = S.unaryExpr([](double a) {return 1 + 3.0 / (a*a*a*a); });
+        // auto ds = S.unaryExpr([](double a) {return a;}); //dirichlet energy for testing
+        // auto hs = S.unaryExpr([](double a) {return 1;}); //dirichlet energy for testing
+
         // similarity alpha
         Real a = 0.5 * (J(0,0) + J(1,1));  // a+d
-        Real b = 0.5 * (J(0,1) - J(1,0));  // c-b
+        Real b = 0.5 * (J(1,0) - J(0,1));  // c-b
         // anti similarity beta
         Real c = 0.5 * (J(0,0) - J(1,1));  // a-d
-        Real d = 0.5 * (J(1,0) + J(0,1));  // c+b
+        Real d = 0.5 * (J(0,1) + J(1,0));  // c+b
         
-        VecN_T<Real, 6> a1d, a2d, b1d, b2d;
+        GradientType a1d, a2d, b1d, b2d;
         a1d << 0.5*D1, 0.5*D2;
         a2d << -0.5*D2, 0.5*D1;
         b1d << 0.5*D1, -0.5*D2;
@@ -181,10 +190,27 @@ struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElem
 			a, b, c, d,
 			DSd, Dsd,
 			ds[0], ds[1],
-			hs[0], hs[1], true);
+			hs[0], hs[1], project);
         
         Hessian H = w * m_edata.volume() * Hs;
-        return H;
+        ///////////////////////////
+        // why does this not work? :(
+        // Eigen::PermutationMatrix<6> p;
+        // p.indices() << 0, 3, 1, 4, 2, 5;
+        // Hessian result = p * H * p;
+        ///////////////////////////
+        std::vector<int> order = {0, 3, 1, 4, 2, 5};
+        Hessian result;
+
+        for (int i = 0; i < 6; ++i) {
+            int row = order[i];
+            for (int j = 0; j < 6; ++j) {
+                int col = order[j];
+                result(i, j) = H(row, col);
+            }
+        }
+
+        return result;
         // H = Area(i)*ComputeConvexConcaveFaceHessian(
 		// 	a1i, a2i, b1i, b2i,
 		// 	aY(i), bY(i), cY(i), dY(i),
@@ -217,21 +243,21 @@ struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElem
         //no multiplying by area in this function
         HessianType Hess = HS*dSi*dSi.transpose() + Hs*dsi*dsi.transpose(); //generalized gauss newton
         double walpha = gradfS + gradfs;
-        if (project || walpha > 0)
+        if (!project || walpha > 0)  //if project is disabled, always add this
             Hess += walpha*ComputeFaceConeHessian(a1, a2, aY, bY);
 
         double wbeta = gradfS - gradfs;
-        if (project || wbeta > 1e-7)
+        if (!project || wbeta > 1e-7)  //same. wbeta needs to be slightly positive for some unknown reason.
             Hess += wbeta*ComputeFaceConeHessian(b1, b2, cY, dY);
         return Hess;
     }
 
     void SSVD2x2(const Eigen::Matrix2d& A, Eigen::Matrix2d& U, Eigen::Vector2d& S, Eigen::Matrix2d& V) const
         {
-            double e = (A(0,0) + A(1,1))*0.5;
-            double f = (A(0,0) - A(1,1))*0.5;
-            double g = (A(0,1) + A(1,0))*0.5;
-            double h = (A(0,1) - A(1,0))*0.5;
+            double e = (A(0) + A(3))*0.5;
+            double f = (A(0) - A(3))*0.5;
+            double g = (A(1) + A(2))*0.5;
+            double h = (A(1) - A(2))*0.5;
             double q = sqrt((e*e) + (h*h));
             double r = sqrt((f*f) + (g*g));
             double a1 = atan2(g, f);
@@ -244,22 +270,21 @@ struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElem
 
             double c = cos(phi);
             double s = sin(phi);
-            U(0,0) = c;
-            U(0,1) = s;
-            U(1,0) = -s;
-            U(1,1) = c;
+            U(0) = c;
+            U(1) = s;
+            U(2) = -s;
+            U(3) = c;
 
             c = cos(rho);
             s = sin(rho);
-            V(0,0) = c;
-            V(0,1) = -s;
-            V(1,0) = s;
-            V(1,1) = c;
+            V(0) = c;
+            V(1) = -s;
+            V(2) = s;
+            V(3) = c;
         }
 private:
     const LinearlyEmbeddedElement<2, 1, Vec3_T<Real>> &m_edata;
     Eigen::Vector3<Real> D1, D2;
-    // GradientType DSd, Dsd;
 };
 
 
