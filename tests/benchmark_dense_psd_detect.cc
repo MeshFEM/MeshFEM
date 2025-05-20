@@ -11,8 +11,62 @@
 #include <catamari.hpp>
 #include <Eigen/Dense>
 #include <MeshFEM/Utilities/DensePSDDetect.hh>
-#include <MeshFEM/EnergyDensities/NeoHookeanEnergy.hh>
-#include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
+#include <MeshFEM/Parallelism.hh>
+
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <cassert>
+#include <tbb/tbb.h>
+
+// Helper to fill a symmetric matrix
+void fill_symmetric_matrix(double* a, int N, int id) {
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j <= i; ++j) {
+            a[i + j*N] = a[j + i*N] = std::sin((id + 1) * (i + 1) * (j + 1));
+        }
+    }
+}
+
+void test_dsyevd() {
+    static constexpr int N = 12; // Matrix size
+    const int num_tasks = 1000;
+
+    char jobz = 'V';         // Compute eigenvectors
+    char uplo = 'U';         // Use upper triangle
+    MKL_INT lda = N;
+    MKL_INT info;
+
+    std::vector<DenseEighRealSolver<N>> solver_for_thread(get_max_num_tbb_threads());
+
+    // Parallel computation
+    tbb::parallel_for(0, num_tasks, [&](int i) {
+        std::vector<double> a(N * N);
+
+        fill_symmetric_matrix(a.data(), N, i);
+
+        auto &solver = solver_for_thread[tbb::this_task_arena::current_thread_index()];
+
+        solver.compute(Eigen::Map<Eigen::Matrix<double, N, N>>(a.data()));
+
+        if (i % 200 == 0) {
+            Eigen::Matrix<double, N, N> A_eigen;
+            A_eigen = Eigen::Map<Eigen::Matrix<double, N, N>>(a.data());
+
+            Eigen::SelfAdjointEigenSolver<decltype(A_eigen)> Hes(A_eigen);
+            std::cout << "Matrix " << i
+                      << " first eigenvalue: " << solver.eigenvalues()[0]
+                      << ", " << Hes.eigenvalues()[0] << "\n";
+            std::cout << "Eigenvectors from Lapack:" << std::endl;
+            std::cout << solver.eigenvectors() << std::endl << std::endl;
+            std::cout << "Eigenvectors from Eigen:" << std::endl;
+            std::cout << Hes.eigenvectors() << std::endl << std::endl;
+        }
+    });
+
+    std::cout << "Done.\n";
+}
+
 
 template<size_t N>
 void run() {
@@ -74,17 +128,13 @@ void run() {
 }
 
 int main(int argc, const char *argv[]) {
+    set_max_num_tbb_threads(1);
+    test_dsyevd();
+
     run<6>();  // 2D degree 1 triangles
     run<18>(); // 2D degree 2 triangles
     run<12>(); // 3D degree 1 tetrahedra
     run<30>(); // 3D degree 2 tetrahedra
-
-    using Psi = NeoHookeanEnergy<double, 3>;
-    using Psi_ap = AutoHessianProjection<Psi>;
-    using Psi_ap2 = AutoHessianProjection<Psi_ap>;
-
-    Psi_ap psi_ap;
-    // Psi_ap2 psi_ap2;
 
     BENCHMARK_REPORT();
     return 0;

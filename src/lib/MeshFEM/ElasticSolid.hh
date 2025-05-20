@@ -173,17 +173,65 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     Eigen::VectorXd minimumElementHessianEigenvalues() const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("minimumElementHessianEigenvalues");
         Eigen::VectorXd result(numElements());
         parallel_for_range(numElements(), [&](size_t ei) {
             PerElementHessian H_e = elementHessian(ei, /* disableProjection = */ true);
             H_e.template triangularView<Eigen::Lower>() = H_e.transpose();
             Eigen::SelfAdjointEigenSolver<PerElementHessian> Hes(H_e);
-            result[ei] = Hes.eigenvalues().minCoeff();
+            result[ei] = Hes.eigenvalues()[0];
+        }, 128, 256);
+        return result;
+    }
+
+    Eigen::VectorXd minimumElementHessianEigenvaluesLapack() const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("minimumElementHessianEigenvaluesLapack");
+        Eigen::VectorXd result(numElements());
+
+        std::vector<DenseEighRealSolver<numElementLocalVars>> solver_for_thread(get_max_num_tbb_threads());
+
+        parallel_for_range(numElements(), [&](size_t ei) {
+            PerElementHessian H_e = elementHessian(ei, /* disableProjection = */ true).transpose();
+
+            auto &solver = solver_for_thread[tbb::this_task_arena::current_thread_index()];
+            solver.compute(H_e);
+            result[ei] = solver.eigenvalues()[0];
+        }, 128, 256);
+        return result;
+    }
+
+    Eigen::VectorXd minimumElementHessianEigenvaluesNullspaceProjection() const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("minimumElementHessianEigenvaluesNullspaceProjection");
+        using TBasisMatrix = Eigen::Matrix<Real, numElementLocalVars, N>;
+        static constexpr size_t numReducedVars = numElementLocalVars - N;
+        TBasisMatrix translationBasis;
+        for (size_t i = 0; i < numNodesPerElement; ++i)
+            translationBasis.template middleRows<N>(N * i).setIdentity();
+
+		// QR decomposition of the transpose
+        Eigen::HouseholderQR<TBasisMatrix> qr(translationBasis);
+        auto Q = (qr.householderQ() * Eigen::Matrix<Real, numElementLocalVars, numElementLocalVars>::Identity()).eval();
+        // The last M - N columns of Q span the orthogonal complement
+        auto orthogonalComplement = Q.template rightCols<numElementLocalVars - N>().eval();
+
+        std::cout << "orthogonalComplement:" << std::endl << orthogonalComplement << std::endl;
+
+        Eigen::VectorXd result(numElements());
+        parallel_for_range(numElements(), [&](size_t ei) {
+            PerElementHessian H_e = elementHessian(ei, /* disableProjection = */ true);
+            H_e.template triangularView<Eigen::Lower>() = H_e.transpose();
+
+            using HRed = Eigen::Matrix<Real, numReducedVars, numReducedVars>;
+            HRed H_red = (orthogonalComplement.transpose() * H_e * orthogonalComplement).eval();
+
+            Eigen::SelfAdjointEigenSolver<HRed> Hes(H_red);
+            result[ei] = Hes.eigenvalues()[0];
         }, 128, 256);
         return result;
     }
 
     Eigen::VectorXi choleskyElementSPDCheck() const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("choleskyElementSPDCheck");
         Eigen::VectorXi result(numElements());
         parallel_for_range(numElements(), [&](size_t ei) {
             result[ei] = isPSDCholesky(elementHessian(ei, /* disableProjection = */ true));
@@ -192,6 +240,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     Eigen::VectorXi gershgorinElementSPDCheck() const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("gershgorinElementSPDCheck");
         Eigen::VectorXi result(numElements());
         parallel_for_range(numElements(), [&](size_t ei) {
             result[ei] = isPSDGershgorin(elementHessian(ei, /* disableProjection = */ true)) == PSDResult::Yes;

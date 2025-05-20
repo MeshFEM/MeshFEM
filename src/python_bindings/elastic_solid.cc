@@ -86,6 +86,8 @@ struct ElasticSolidBinder {
           .def("blockHessian", [](const ES &es, bool projectionMask) { es.blockHessian(projectionMask); }, py::arg("projectionMask") = false)
 
           .def("minimumElementHessianEigenvalues", &ES::minimumElementHessianEigenvalues)
+          .def("minimumElementHessianEigenvaluesLapack", &ES::minimumElementHessianEigenvaluesLapack)
+          .def("minimumElementHessianEigenvaluesNullspaceProjection", &ES::minimumElementHessianEigenvaluesNullspaceProjection)
           .def("choleskyElementSPDCheck",          &ES::choleskyElementSPDCheck)
           .def("gershgorinElementSPDCheck",        &ES::gershgorinElementSPDCheck)
 

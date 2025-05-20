@@ -23,6 +23,64 @@
 #include <catamari.hpp>
 #endif
 
+#if 1 // The Lapack version seems slower for small matrices than Eigen...
+template<size_t N>
+struct DenseEighRealSolver {
+    static constexpr size_t  work_size_upper_bound = 1 + 6 * N + 2 * N * N;
+    static constexpr size_t iwork_size_upper_bound = 3 + 5 * N;
+    // Use official upper bounds for workspace storage needed when
+    // computing eigenvectors for a matrix of size `N x N`.
+    DenseEighRealSolver()
+        : lwork(work_size_upper_bound), liwork(iwork_size_upper_bound) { }
+
+    template<typename Derived>
+    void compute(const Eigen::MatrixBase<Derived> &A) {
+        m_eigenvectors = A;
+
+        char jobz = 'V'; // Compute eigenvectors
+        char uplo = 'L'; // Use upper triangle
+        MKL_INT size = N;
+        MKL_INT lda = N;
+
+        int info;
+        dsyevd_(&jobz, &uplo, &size, m_eigenvectors.data(), &lda,
+                m_eigenvalues.data(), work.data(), &lwork,
+                iwork.data(), &liwork, &info);
+
+        if (info != 0) { std::cerr << "dsyevd_ failed with info = " << info << "\n"; }
+    }
+
+    const Eigen::Matrix<double, N, 1> & eigenvalues() const { return m_eigenvalues;  }
+    const Eigen::Matrix<double, N, N> &eigenvectors() const { return m_eigenvectors; }
+
+private:
+    MKL_INT lwork = work_size_upper_bound,
+            liwork = iwork_size_upper_bound;
+    Eigen::Matrix<double, N, 1> m_eigenvalues;
+    Eigen::Matrix<double, N, N> m_eigenvectors;
+    std::array<double,   work_size_upper_bound> work;
+    std::array<MKL_INT, iwork_size_upper_bound> iwork;
+};
+#else
+template<size_t N>
+struct DenseEighRealSolver {
+    using Mat = Eigen::Matrix<double, N, N>;
+    using ES  = Eigen::SelfAdjointEigenSolver<Mat>;
+
+    template<typename Derived>
+    void compute(const Eigen::MatrixBase<Derived> &A) {
+        m_es.compute(A);
+    }
+
+    const Eigen::Matrix<double, N, 1> & eigenvalues() const { return m_es.eigenvalues();  }
+    const Eigen::Matrix<double, N, N> &eigenvectors() const { return m_es.eigenvectors(); }
+
+private:
+    ES m_es;
+};
+#endif
+
+
 // Gershgorin circle theorem-based test is not conclusive
 enum class PSDResult { No, Maybe, Yes };
 
@@ -65,7 +123,7 @@ bool isPSDCholesky(const Eigen::MatrixBase<Derived> &A, double tol = 1e-8) {
 
     A_lower.diagonal().array() += tol;
 
-#if 0 // MESHFEM_WITH_CATAMARI
+#if 1 // MESHFEM_WITH_CATAMARI
     catamari::BlasMatrixView<double> matrix;
     matrix.data = A_lower.data();
     matrix.height = A_lower.rows();
