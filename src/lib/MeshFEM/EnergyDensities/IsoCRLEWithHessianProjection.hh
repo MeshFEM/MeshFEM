@@ -31,6 +31,8 @@ struct IsoCRLEWithHessianProjection {
     using ETensor = ElasticityTensor<_Real, N>;
     using SMatrix = SymmetricMatrixValue<_Real, N>;
 
+    static constexpr bool ImplementsHessianProjection = true;
+
     static constexpr const char *name() { return "IsoCRLEWithHessianProjection"; }
 
     IsoCRLEWithHessianProjection(Real lambda, Real mu)

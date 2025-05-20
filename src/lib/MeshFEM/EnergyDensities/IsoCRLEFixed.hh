@@ -34,6 +34,8 @@ struct IsoCRLEFixed {
     using ETensor = ElasticityTensor<_Real, N>;
     using SMatrix = SymmetricMatrixValue<_Real, N>;
 
+    static constexpr bool ImplementsHessianProjection = true;
+
     static constexpr const char *name() { return "IsoCRLEFixed"; }
 
     IsoCRLEFixed(Real lambda, Real mu)
@@ -66,7 +68,7 @@ struct IsoCRLEFixed {
             V.rightCols(1) *= -1;
             sigma.tail(1) *= -1;
         }
-        
+
         m_R = U * V.transpose();
         if (m_J < 0) {
             Matrix W = svd.matrixV();

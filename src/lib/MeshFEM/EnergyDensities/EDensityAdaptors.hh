@@ -411,8 +411,10 @@ auto evaluate_d2energy_dF2(const Psi_F &psi) {
 ////////////////////////////////////////////////////////////////////////////////
 // Brute-force Hessian Projection for F-based energy densities.
 ////////////////////////////////////////////////////////////////////////////////
+#include <MeshFEM/Utilities/DensePSDDetect.hh>
 template<class Psi_F, class Enable = void>
 struct AutoHessianProjection : Psi_F {
+    static_assert(!implements_hessian_projection_v<Psi_F>, "Psi_F must not implement its own Hessian projection or we double-project!");
     static_assert(Psi_F::EDType == EDensityType::FBased
                || Psi_F::EDType == EDensityType::Membrane, "Psi_F must be F-based or Membrane");
     using Base = Psi_F;
@@ -421,6 +423,8 @@ struct AutoHessianProjection : Psi_F {
     static constexpr size_t Dimension = Base::Dimension;
     static constexpr size_t N         = Base::N;
     static constexpr size_t M         = Matrix::RowsAtCompileTime; // Embedding dimension (may differ from N)
+
+    static constexpr bool ImplementsHessianProjection = true;
 
     using Vector   = Eigen::Matrix<Real, N, 1>;
     using VXd      = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
@@ -446,9 +450,13 @@ struct AutoHessianProjection : Psi_F {
 
         m_hessian = evaluate_d2energy_dF2(*(Psi_F *)(this));
         if (usingProjection()) {
-            ESolver Hes(m_hessian); // TODO: try skipping if diagonally dominant
-            if (Hes.eigenvalues()[0] < 0.0)
-                m_hessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            // First check if the element is already PSD, since
+            // the brute-force eigendecomposition is expensive.
+            if (!isPSDCholesky<true>(m_hessian)) {
+                ESolver Hes(m_hessian);
+                if (Hes.eigenvalues()[0] < -1e-8)
+                    m_hessian = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+            }
         }
     }
 

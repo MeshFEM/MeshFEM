@@ -29,4 +29,21 @@ template<class _Energy> struct isLinearElastic   : public models_concept<Concept
 template<class _Energy> struct isNeoHookean      : public models_concept<Concepts::    NeoHookeanEnergy, _Energy> { };
 template<class _Energy> struct isStVK            : public models_concept<Concepts::          StVKEnergy, _Energy> { };
 
+////////////////////////////////////////////////////////////////////////////////
+// implements_hessian_projection: whether an energy density already provides
+// its own Hessian projection (analytical or otherwise)
+////////////////////////////////////////////////////////////////////////////////
+// Default: false
+template <typename, typename = std::void_t<>>
+struct implements_hessian_projection : std::false_type {};
+
+// Specialization: if T::ImplementsHessianProjection exists and is bool
+template <typename T>
+struct implements_hessian_projection<T, std::void_t<decltype(T::ImplementsHessianProjection)>>
+    : std::bool_constant<T::ImplementsHessianProjection> {};
+
+// Helper variable template (C++17+)
+template <typename T>
+constexpr bool implements_hessian_projection_v = implements_hessian_projection<T>::value;
+
 #endif /* end of include guard: ENERGYTRAITS_HH */
