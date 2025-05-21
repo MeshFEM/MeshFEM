@@ -319,6 +319,18 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             cholmod_l_start(m_c.get());
         }
 
+        OrderingMethod actualOrderingMethod = orderingMethod;
+        if (orderingMethod == OrderingMethod::Adaptive) {
+            actualOrderingMethod = adaptiveOrdering.updateSelection();
+            // std::cout << "Adaptive ordering method selected: "
+            //           << ((actualOrderingMethod == OrderingMethod::CholmodNesdis) ? "Nesdis" : "AMD")
+            //           << "  " << adaptiveOrdering.factorizationTimingDescription();
+            // std::cout << std::endl;
+        }
+
+        // Time the ordering-dependent parts of the symbolic factorization
+        auto sym_fact_start = std::chrono::high_resolution_clock::now();
+
         catamari::SymmetricOrdering ordering;
         {
             static_assert(sizeof(SuiteSparse_long) == sizeof(catamari::Int), "Mismatched integer type");
@@ -334,7 +346,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             // conversion ourselves for Catamari.
             cholmat.x = const_cast<double *>((const double *) A_reduced->Ai.data());
 
-            if (orderingMethod == OrderingMethod::CholmodNesdis) {
+            if (actualOrderingMethod == OrderingMethod::CholmodNesdis) {
 #if 0 // Whether to downcast for ordering -- the difference in time seems negligible
                 if (!m_c_int) {
                     m_c_int = std::make_unique<cholmod_common>();
@@ -359,12 +371,12 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                                             CParent.Data(), CMember.Data(), m_c.get());
 #endif
             }
-            else if (orderingMethod == OrderingMethod::Metis) {
+            else if (actualOrderingMethod == OrderingMethod::Metis) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_metis");
                 cholmod_l_metis(&cholmat, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
                                 (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
             }
-            else if (orderingMethod == OrderingMethod::AMD) {
+            else if (actualOrderingMethod == OrderingMethod::AMD) {
 #if 0 // Whether to downcast for ordering
                 if (!m_c_int) {
                     m_c_int = std::make_unique<cholmod_common>();
@@ -391,6 +403,10 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
         }
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+
+        double sym_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sym_fact_start).count();
+        if (orderingMethod == OrderingMethod::Adaptive)
+            adaptiveOrdering.recordSymbolic(sym_fact_duration);
     }
     else if (orderingMethod == OrderingMethod::Scotch) {
 #if MESHFEM_WITH_SCOTCH
@@ -466,6 +482,9 @@ template<typename... Args>
 void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args) {
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
     assertFactorization(FactorizationType::Symbolic);
+
+    auto num_fact_start = std::chrono::high_resolution_clock::now();
+
     catamari::SparseLDLResult<double> result;
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
     else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
@@ -505,6 +524,10 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
         m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
     }
 #endif
+
+    double num_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - num_fact_start).count();
+    if (orderingMethod == OrderingMethod::Adaptive)
+        adaptiveOrdering.recordNumeric(num_fact_duration);
 
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;

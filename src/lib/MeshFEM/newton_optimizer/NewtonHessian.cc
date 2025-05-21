@@ -31,6 +31,12 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
         needsUpdate |= fixedVarsChanged;
     }
 
+    if (!needsUpdate && m_solver->wantsSymbolicFactorizationRecompute()) {
+        std::cout << "Solver triggered a symbolic factorization recomputation!" << std::endl;
+        needsUpdate = true;
+    }
+    needsUpdate |= m_solver->wantsSymbolicFactorizationRecompute();
+
     if (needsUpdate) {
         NewtonHessian Hsp = m_problem->hessianSparsityPattern(/*needsUpdate = */ false);
         m_sparseDenseStructure = Hsp.varStructure().sparseDenseStructure();

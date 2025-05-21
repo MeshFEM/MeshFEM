@@ -27,6 +27,7 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
     // symbolic factorization if it exists.
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool isInTryCatch=false) override;
 
+    using CholeskyFactorizerBase::factorize; // Don't hide.
     void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool isInTryCatch = false) override {
         factorizeSymbolic(mat, fixedVars);
         factorizeNumeric(mat, isInTryCatch);

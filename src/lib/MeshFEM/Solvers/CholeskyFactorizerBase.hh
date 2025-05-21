@@ -191,6 +191,12 @@ struct CholeskyFactorizerBase {
             m_factorizationType = FactorizationType::Symbolic;
     }
 
+    // Whether the solver thinks it is beneficial to recompute the symbolic
+    // factorization even if the sparsity pattern is unchanged
+    // (e.g., because it thinks a higher-quality variable ordering
+    // will pay off).
+    virtual bool wantsSymbolicFactorizationRecompute() const { return false; }
+
     void assertFactorization(FactorizationType type)           const { if (!hasFactorization(type)) throw std::runtime_error(((type == FactorizationType::Numeric) ? "Numeric" : "Symbolic") + std::string(" factorization does not exist")); }
     void assertFactorization(CholeskySys sys = CholeskySys::A) const { if (!hasFactorization( sys)) throw std::runtime_error("Factorization does not exist"); }
 
