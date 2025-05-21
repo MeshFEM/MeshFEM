@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.1...3.29)
 project(MeshFEMDemos)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.13")
@@ -35,9 +35,5 @@ endif()
 # Color errors/warnings.
 list(APPEND CMAKE_MODULE_PATH ${THIRD_PARTY_DIR}/MeshFEM/cmake)
 include(UseColors)
-
-add_library(DiscreteShell INTERFACE)
-target_sources(DiscreteShell INTERFACE DiscreteShell.hh)
-target_link_libraries(DiscreteShell INTERFACE MeshFEM warnings::all)
 
 add_subdirectory(python_bindings)
