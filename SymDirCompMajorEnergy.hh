@@ -108,6 +108,7 @@ struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElem
     Real energy(const LocalVars &x) const
     {
         auto J = computeJacobian(x);
+        if (J.determinant() < 0)  return std::numeric_limits<double>::infinity();
         return 0.5 * (J.squaredNorm() + J.inverse().squaredNorm()) * m_edata.volume();
         // return 0.5 * (J.squaredNorm()) * m_edata.volume(); //dirichlet energy for testing
     }
