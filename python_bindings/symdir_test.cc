@@ -19,7 +19,7 @@ PYBIND11_MODULE(symdir_test, m)
     using Stencil = ElementStencil</* K = */ 2, /* Deg = */ 1, /* N = */ 2>;
 
     using ME1 = MeshEnergy<Mesh, Vars, Stencil, SymDirCompMajorParamElement<double>>;
-    bindMeshEnergy<ME1>("param_sym_dirichlet_element", m, detail);
+    bindMeshEnergy<ME1>("param_sym_dirichlet_element_compmajor", m, detail);
 
     // using ME2 = MeshEnergy<Mesh, Vars, Stencil, DirichletParamElementAD<double>>;
     // bindMeshEnergy<ME2>("param_dirichlet_element_ad", m, detail);

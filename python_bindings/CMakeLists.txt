@@ -22,3 +22,8 @@ pybind11_add_module(dirichlet_demo dirichlet_demo.cc)
 set_target_properties(dirichlet_demo PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(dirichlet_demo PUBLIC MeshFEM)
 target_compile_options(dirichlet_demo PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(symdir_test symdir_test.cc)
+set_target_properties(symdir_test PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(symdir_test PUBLIC MeshFEM)
+target_compile_options(symdir_test PRIVATE -ftemplate-backtrace-limit=0)
