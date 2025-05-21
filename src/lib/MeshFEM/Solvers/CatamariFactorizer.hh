@@ -18,6 +18,8 @@ extern "C" {
 #include "ScotchOrdering.hh"
 #endif
 
+#include "AdaptiveOrderingSelection.hh"
+
 // Forward declarations of Catamari types.
 struct CatamariConverter;
 namespace catamari {
@@ -83,6 +85,11 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void  swapStashedFactorization()       override;
     void clearStashedFactorization()       override;
 
+    bool wantsSymbolicFactorizationRecompute() const override {
+        if (orderingMethod != OrderingMethod::Adaptive) return false;
+        return adaptiveOrdering.shouldTriggerSymbolicFactorizationRecompute();
+    }
+
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
     CholeskyProvider provider() const override {
         if (m_legacy) return CholeskyProvider::CatamariLegacy;
@@ -92,12 +99,21 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         else if (orderingMethod == OrderingMethod::AMD)           return CholeskyProvider::CatamariAMD;
         else if (orderingMethod == OrderingMethod::Adaptive)      return CholeskyProvider::CatamariAdaptive;
 
-        throw std::runtime_error("Unknown orderingMethod in mappign to `CholeskyProvider`");
+        throw std::runtime_error("Unknown orderingMethod in mapping to `CholeskyProvider`");
     }
 
     virtual ~CatamariFactorizer();
 
     OrderingMethod orderingMethod = OrderingMethod::CholmodNesdis;
+
+    struct OrderingChoices {
+        static constexpr OrderingMethod   primary_method = OrderingMethod::CholmodNesdis;
+        static constexpr OrderingMethod alternate_method = OrderingMethod::AMD;
+        static constexpr double alternate_method_num_time_multiplier_estimate = 1.5; // AMD leads to a typical 1.3-1.5x slowdown on numeric factorization
+        static constexpr double alternate_method_sym_time_multiplier_estimate = 0.1; // but is 10x faster for symbolic factorization.
+    };
+
+    AdaptiveOrderingSelection<OrderingChoices> adaptiveOrdering;
 
     void setUseLeftLooking(bool use_left);
     bool getUseLeftLooking() const;
