@@ -177,6 +177,8 @@ def main():
             os.environ['OMP_NUM_THREADS'] = str(thread_num)
     else:  
         os.environ['OMP_NUM_THREADS'] = '1'
+        os.environ['MKL_THREADING_LAYER'] = 'SEQUENTIAL'
+        os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
         parallelism.set_max_num_tbb_threads(int(thread_num))
     
     if save_uv_option.lower() == 'no':
