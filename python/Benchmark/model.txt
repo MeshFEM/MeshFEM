@@ -1,0 +1,20 @@
+armadilloDisc
+armchairDisc
+bear_cut
+bimba100KDisc
+bladeDisc
+buddha_cut
+bumpy_sphereDisc
+bunnyBotschDisc
+busteDisc
+camille_hand100KDisc
+chinese_dragon
+dragonHead2
+gargoyle_cut
+hand
+Superman_cut1
+Superman_cut2
+Superman_cut3
+# Test
+vase_lion
+# Test
