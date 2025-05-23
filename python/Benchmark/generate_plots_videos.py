@@ -13,7 +13,13 @@ import numpy as np
 import time
 import plot_video_utils
 
-MODEL_BASE = '../Models/TableOneModels'  # Configure The Path If you Want to Generate Parametrization Videos!
+MODEL_BASE = '../../../Models/TableOneModels'  # Configure The Path If you Want to Generate Parametrization Videos!
+
+# Used to determine how many iteration we show in the "energy and gradient norm vs time plot"
+section_dict = {"armadilloDisc": 35, "armchairDisc": 35, "bear_cut": 30, "bimba100KDisc": 30, "bladeDisc": 50, "buddha_cut": 30,
+                "bumpy_sphereDisc": 30, "bunnyBotschDisc": 40, "busteDisc": 35, "camille_hand100KDisc": 45, "chinese_dragon": 125,
+                "dragonHead2": 35, "gargoyle_cut": 50, "hand": 35, "Superman_cut1": 35, "Superman_cut2": 30, "Superman_cut3": 35,
+                "vase_lion": 50, "cow2Disc": 100, "davidDisc": 100, "deformed_armadilloDisc": 100, "denteDisc": 100, "eros": 100, "Lucy_3cuts": 100}
 
 def read_non_comment_lines(txt_path):
     """
@@ -38,7 +44,7 @@ def read_non_comment_lines(txt_path):
     return result_lines
 
 def gen_plots_videos(base_path, modeltxt_path, plots_folder_name, videos_folder_name, hessian_option_list, video_flag=False, 
-                     thread_num_list=[0]):
+                     thread_num_list=None):
     # Check if the result path exists
     if not os.path.exists(base_path):
         print(f"Error: The specified result path '{base_path}' does not exist.")
@@ -58,41 +64,64 @@ def gen_plots_videos(base_path, modeltxt_path, plots_folder_name, videos_folder_
         # uv_dist_list = plot_video_utils.readUVdist(os.path.join(base_path, model_name), hessian_option_list)
         model_dict = plot_video_utils.readDictData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
 
-        plot_dir = os.path.join(base_path, plots_folder_name, model_name)
-        if not os.path.exists(plot_dir):  os.makedirs(plot_dir)
-
-        # generate no-timing related figures
-        plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, hessian_option_list=hessian_option_list)
-        plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, sect=30, hessian_option_list=hessian_option_list, scName='ProjIndef', hessian_indef_list=hessian_indef_list) # for hessian projection scatter
-        
-        plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, sect=30 ,hessian_option_list=hessian_option_list)
-        plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, hessian_option_list=hessian_option_list)
-        # plot_video_utils.saveMetricIterFigure(uv_dist_list, hessian_projected_list, model_name, 'UVdist', plot_dir, offset=1, hessian_option_list=hessian_option_list)
-        # plot_video_utils.saveMetricIterFigure(step_list, hessian_projected_list, model_name, 'Step', plot_dir, offset=1, hessian_option_list=hessian_option_list)
-        # plot_video_utils.saveMetricIterFigure(dd_list, hessian_projected_list, model_name, 'DD', plot_dir, offset=1, hessian_option_list=hessian_option_list)
-
-        # generate bar plots
-        metric_key_list = ['time', 'hessian_eval', 'linsolve']
-        for metric_keyword in metric_key_list:
-            plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list)
-            plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list, divideIter=True)
-
-        # generate timing related figures and videos
         numThreads = len(thread_num_list)
-        for i in range(numThreads):
-            plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list)
-            plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=30)
-            if video_flag:
-                # confirm video flag
+        if video_flag:
+            # we can only render videos when thread_num = 16
+            for i in range(numThreads):
+                if thread_num_list[i] != 16:  continue
                 video_dir = os.path.join(base_path, videos_folder_name, model_name)
                 if not os.path.exists(video_dir):  os.makedirs(video_dir)
-                plot_video_utils.gen_MetricIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_list, 
-                                                       model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
-                plot_video_utils.gen_MetricIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, 
-                                                       model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
-                plot_video_utils.gen_Param_videos(base_path, obj_list, obj_grad_time_list, 
-                                                  model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1)
+
+                obj_sected_list = plot_video_utils.sectMetricList(obj_list, sect=section_dict[model_name])
+                grad_norm_sected_list = plot_video_utils.sectMetricList(grad_norm_list, sect=section_dict[model_name])
+                hessian_projected_sected_list = plot_video_utils.sectMetricList(hessian_projected_list, sect=section_dict[model_name])
+                obj_grad_time_sected_list = plot_video_utils.sectObjGradTimeList(obj_grad_time_list, sect=section_dict[model_name])
+
+                # full version
+                # plot_video_utils.gen_MetricIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_list, 
+                #                                        model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
+                # plot_video_utils.gen_MetricIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, 
+                #                                        model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
+                # plot_video_utils.gen_Param_videos(base_path, obj_list, obj_grad_time_list, 
+                #                                     model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1)
+                
+                # sected Version
+                plot_video_utils.gen_MetricIter_videos(grad_norm_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
+                                                       model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
+                plot_video_utils.gen_MetricIter_videos(obj_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
+                                                       model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
+                
+                plot_video_utils.gen_Param_videos(base_path, obj_sected_list, obj_grad_time_sected_list, 
+                                                    model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
+                
         
+        else:
+            plot_dir = os.path.join(base_path, plots_folder_name, model_name)
+            if not os.path.exists(plot_dir):  os.makedirs(plot_dir)
+
+            # generate no-timing related figures
+            plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, hessian_option_list=hessian_option_list)
+            plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, sect=section_dict[model_name], hessian_option_list=hessian_option_list, scName='ProjIndef', hessian_indef_list=hessian_indef_list) # for hessian projection scatter
+            
+            plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, sect=section_dict[model_name], hessian_option_list=hessian_option_list)
+            plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, hessian_option_list=hessian_option_list)
+            
+            # Debug Only
+            # plot_video_utils.saveMetricIterFigure(uv_dist_list, hessian_projected_list, model_name, 'UVdist', plot_dir, offset=1, hessian_option_list=hessian_option_list)
+            # plot_video_utils.saveMetricIterFigure(step_list, hessian_projected_list, model_name, 'Step', plot_dir, offset=1, hessian_option_list=hessian_option_list)
+            # plot_video_utils.saveMetricIterFigure(dd_list, hessian_projected_list, model_name, 'DD', plot_dir, offset=1, hessian_option_list=hessian_option_list)
+
+            # generate bar plots
+            metric_key_list = ['time', 'hessian_eval', 'linsolve']
+            for metric_keyword in metric_key_list:
+                plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list)
+                plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list, divideIter=True)
+
+            # generate timing related figures and videos
+            for i in range(numThreads):
+                plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list)
+                plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=section_dict[model_name])
+            
         in_model_elapsed_time = time.time() - in_model_timer
         print(f"{model_ind+1}/{numModels} Model: {model_name} -- All plots and videos generation completed! Time: {in_model_elapsed_time:.4f} seconds.")
         print("-----------------------------------------------------------------------------------------------------------------------------------------")

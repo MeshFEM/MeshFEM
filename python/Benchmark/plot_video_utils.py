@@ -10,7 +10,7 @@ import os, sys
 sys.path.append('../')
 import MeshFEM, mesh, mesh_energy,viewer, benchmark
 import mesh_operations
-import numpy as np
+import numpy as np, copy
 import re
 import math, bisect, time
 import pickle
@@ -24,7 +24,7 @@ def getColorLineList(options):
     # color_list = ['dodgerblue', 'magenta', 'tomato', 'forestgreen', 
     #               'gold', 'darkorange', 'mediumvioletred', 'royalblue']
     
-    cmap = plt.get_cmap("tab10")  # or "Set1", "viridis", etc.
+    cmap = plt.get_cmap("Set1")  # or "Set1", "viridis", etc.
     color_list = [cmap(i) for i in range(options)]
     
     line_style_list = [
@@ -383,6 +383,33 @@ def saveObjGradTimeFigures_AdaptiveExpWrapper(adap_exp_data_dict, model_name,sav
     save_obj_grad_time_figure(obj_grad_time_list, model_name, save_directory, 
                               thread_ind, thread_num_list, step_tuple_str_list, sect)
 
+
+# For a Metric List (list containing lists of different hessian options), 
+def sectMetricList(metric_list, sect=None):
+    if sect is not None:
+        num_lists = len(metric_list)
+        metric_sected_list = create_list_of_lists(num_lists)
+        for i in range(num_lists):  metric_sected_list[i] = metric_list[i][:sect]
+        return metric_sected_list
+    else:  return metric_list
+
+def sectObjGradTimeList(obj_grad_time_list, sect=None):
+    if sect is not None:
+        num_options = len(obj_grad_time_list)
+        obj_grad_time_sected_list = create_list_of_lists(num_options)
+        for i in range(num_options):
+            num_threads = len(obj_grad_time_list[i])
+            for j in range(num_threads):
+                obj_grad_time_arr = obj_grad_time_list[i][j]
+                temp_obj_sected_arr = obj_grad_time_arr[0, :][ : sect]
+                temp_grad_sected_arr = obj_grad_time_arr[1, :][ : sect]
+                temp_time_sected_arr = obj_grad_time_arr[2, :][ : sect]
+                temp_obj_grad_time_sected = np.vstack((temp_obj_sected_arr, temp_grad_sected_arr, temp_time_sected_arr)) # make a (3,n) numpy array
+                obj_grad_time_sected_list[i].append(temp_obj_grad_time_sected)
+        return obj_grad_time_sected_list
+
+    else: return obj_grad_time_list
+
 # Plot different hessian projection options under one thread configuration
 def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, 
                               thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], sect=None):
@@ -454,19 +481,19 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
 # metric_list: any list return from readHessianData(...)
 # obj_grad_time_list: acquire timing list for specific thread
 def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name, model_base_path, save_directory, 
-                     thread_ind=0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], fps=30, speedup=1):
+                     thread_ind=0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], fps=30, speedup=1, sect=None):
     
     num_options = len(hessian_option_list)
     model_name_fex = user_model_name + '.off'
     model_path = os.path.join(model_base_path, model_name_fex)
     m = mesh.Mesh(model_path)
 
+    aligned_timing_list = alignTiming(obj_grad_time_list, metric_list, thread_ind=thread_ind)
     # Check if TinyAD is in hessian_option_list
     if 'TinyAD' in hessian_option_list:
         tinyad_ind = hessian_option_list.index('TinyAD')
-    aligned_timing_list = alignTiming(obj_grad_time_list, metric_list, thread_ind=thread_ind)
-    # Speedup for TinyAD's timing 
-    aligned_timing_list[tinyad_ind] /= speedup
+        # Speedup for TinyAD's timing 
+        aligned_timing_list[tinyad_ind] /= speedup
 
     for hessian_ind, hessian_option in enumerate(hessian_option_list):
         uv = mesh_energy.NodalVars(m, 2)
@@ -486,7 +513,8 @@ def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name
         spf = 1 / fps
         total_time = aligned_timing_list[hessian_ind][-1]
         numFrames = int(math.ceil(total_time / spf))
-        video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
+        if sect is not None:  video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(thread_num_list[thread_ind]) + '_sect' + str(sect) + '.mp4'
+        else:                 video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
         
         start_record_timer = time.time()
         v.recordStart(os.path.join(save_directory, video_fn), renderScale=8, outputScale=2, framerate=fps, lineWidthScale=0.25)
@@ -513,7 +541,7 @@ def getBarPlotsYAxisTitle(metric_key : str):
     if metric_key == 'time':  yAxisTitle = "Total Time"
     elif metric_key == 'iter': yAxisTitle = "Iteration"
     elif metric_key == 'linsolve':  yAxisTitle = "Linear Solve Time"
-    elif metric_key == 'hessian_eval':  yAxisTitle = "Hessian Evaluation Time"
+    elif metric_key == 'hessian_eval':  yAxisTitle = "Derivative Evaluation Time"
     return yAxisTitle
 
 def getMetricTitleFromKey(metric_key : str):
@@ -645,7 +673,7 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
 def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, thread_num_list, hessian_option_list, width=0.2, default_fig_size=(16, 8), divideIter=False):
     yAxisTitle = getBarPlotsYAxisTitle(metric_key)
     if not divideIter:  yAxisTitle += "[sec]"
-    else:               yAxisTitle += " per Iteration"
+    else:               yAxisTitle += " per Iteration [sec]"
     # Base positions for groups of bars (one per thread number)
     a = np.arange(len(thread_num_list)) * (len(hessian_option_list) + 1) * width  # Add space between groups
 
@@ -679,7 +707,7 @@ def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, 
 # fps and figsize
 def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_list, user_model_name, metric_title,
                         save_directory, thread_ind = 0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'],
-                        fps=30, default_fig_size=(8, 8), speedup=1):
+                        fps=30, default_fig_size=(8, 8), speedup=1, sect=None):
     
     num_options = len(hessian_option_list)
     scatter_list = []
@@ -687,17 +715,25 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
     if 'AutoDiff' in hessian_option_list:  scatter_list.append(hessian_option_list.index('AutoDiff'))
 
     max_num_steps, max_obj, min_obj = getStepsMaxMin_FromMetricList(metric_list)
-    max_N_obj = math.ceil(math.log10(max_obj)) + 1
-    min_N_obj = math.floor(math.log10(min_obj)) - 1
     yAxisTitle = getYAxisTitle(metric_title)
 
     iter_projTrue_list = create_list_of_lists(num_options)
     metric_projTrue_list = create_list_of_lists(num_options)
 
-    obj_iter_vdname = user_model_name + '_' + metric_title +'VSIter' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
+    if sect is not None:  obj_iter_vdname = user_model_name + '_' + metric_title +'VSIter' + '_thread' + str(thread_num_list[thread_ind]) + '_sect' + str(sect) + '.mp4'
+    else:                 obj_iter_vdname = user_model_name + '_' + metric_title +'VSIter' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
     fig = plt.figure(figsize=default_fig_size)
+
     plt.xlim(0, max_num_steps)
-    plt.ylim(10**(min_N_obj), 10**(max_N_obj))
+    if metric_title == 'Grad':  
+        max_N_obj = math.ceil(math.log10(max_obj)) + 1
+        min_N_obj = math.floor(math.log10(min_obj)) - 1
+        plt.ylim(10**(min_N_obj - 1), 10**(max_N_obj + 1))
+    elif metric_title == 'Obj': 
+        max_N_obj = max(math.ceil(math.log10(max_obj)), 1)
+        min_N_obj = math.log10(1.5)
+        plt.ylim(10**(min_N_obj), 10**(max_N_obj))
+
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
@@ -716,7 +752,7 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
     # Check if TinyAD is in hessian_option_list
     if 'TinyAD' in hessian_option_list:
         tinyad_ind = hessian_option_list.index('TinyAD')
-    aligned_timing_list[tinyad_ind] /= speedup
+        aligned_timing_list[tinyad_ind] /= speedup
 
     _, totalTime, _ = getStepsMaxMin_FromMetricList(aligned_timing_list)
     numFrames = int(math.ceil(totalTime / spf))
