@@ -253,6 +253,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         factorizeNumeric(*m_Ashift, isInTryCatch);
     }
 
+    using CholeskyFactorizerBase::factorize; // Don't hide.
     void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool isInTryCatch = false) override {
         clearFactors();
         factorizeSymbolic(mat, fixedVars);

@@ -135,7 +135,7 @@ struct AdaptiveOrderingSelection {
 
     // State and historical data
     size_t current_method = 0; // 0: primary, 1: alternate
-    std::array<OrderingMethod, 2> ordering_methods = { OrderingChoices::primary_method, OrderingChoices::alternate_method };
+    std::array<OrderingMethod, 2> ordering_methods = {{ OrderingChoices::primary_method, OrderingChoices::alternate_method }};
 
     // Over the last `window_size` symbolic factorizations,
     // how many numeric factorizations were done using them?

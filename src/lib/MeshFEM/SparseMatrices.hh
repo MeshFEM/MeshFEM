@@ -1495,11 +1495,6 @@ struct CSCMatrix {
 
     template<bool parallel = true>
     void addWithSubSparsityFast(const CSCMatrix &b, const _Real alpha = 1.0, const _Index offset = 0) {
-        auto it  = begin(), bit  = b.begin(),
-             ite = end(),   bite = b.end();
-        auto bi = [&]() { return offset + bit.get_i(); };
-        auto bj = [&]() { return offset + bit.get_j(); };
-
         auto addColumn = [&](_Index jA) {
             _Index jB = jA - offset;
 
