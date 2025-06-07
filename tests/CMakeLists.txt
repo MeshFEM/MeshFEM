@@ -38,6 +38,9 @@ target_link_libraries(benchmark_linear_systems MeshFEM)
 add_executable(benchmark_sparsity_lru benchmark_sparsity_lru.cc)
 target_link_libraries(benchmark_sparsity_lru MeshFEM)
 
+add_executable(benchmark_solves benchmark_solves.cc)
+target_link_libraries(benchmark_solves MeshFEM)
+
 add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
 target_link_libraries(benchmark_dense_linalg MeshFEM)
 
