@@ -103,6 +103,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
                         std::cerr << "x_gt[0:10]: " << x_gt.head(10).transpose() << std::endl;
                     }
                 }
+                factorizer->writeSolveTimers();
             }
             catch (const std::runtime_error &e) {
                 std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;

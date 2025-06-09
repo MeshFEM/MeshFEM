@@ -6,6 +6,7 @@
 #if MESHFEM_WITH_CATAMARI
 
 #include <MeshFEM/Parallelism.hh>
+#include <MeshFEM/ParallelVectorOps.hh>
 
 extern "C" {
 #include <cholmod.h>
@@ -66,14 +67,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const override;
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override {
-        // Catamari does the solve in-place! Copy `b` into `x` and wrap it in a
-        // catamari::BlasMatrixView.
-        const size_t s = m_reduced();
-        Eigen::Map<Eigen::VectorXd>(x, s) = Eigen::Map<const Eigen::VectorXd>(b, s);
-
-        solveRawReducedInPlace(x, sys, alreadyPermuted);
-    }
+    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override;
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
     void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override;
@@ -122,6 +116,8 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
 
+    void writeSolveTimers() const override;
+
 #if defined(MESHFEM_WITH_SCOTCH)
     struct ScotchSettings {
         SCOTCH_Num stratFlag = SCOTCH_STRATDEFAULT;
@@ -165,6 +161,8 @@ private:
 
     // Whether to use Jack Poulson's original code for comparison
     bool m_legacy = false;
+
+    mutable Eigen::VectorXd m_permuted_rhs_scratch;
 };
 #endif
 

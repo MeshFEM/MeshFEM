@@ -537,6 +537,68 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     m_factorizationType = FactorizationType::Numeric;
 }
 
+void CatamariFactorizer::writeSolveTimers() const {
+#if CATAMARI_FINEGRAINED_TIMERS
+    static std::string directory = "catamari_solve_timers";
+    static size_t counter = 0;
+    if (counter == 0) {
+        // Get a unique directory name.
+        size_t id = 0;
+        while (std::filesystem::exists(directory)) directory = "catamari_solve_timers_" + std::to_string(id++);
+        std::filesystem::create_directory(directory);
+
+        std::cout << "Writing Catamari solve timers to " << directory << std::endl;
+        std::cout << "To disable, set CATAMARI_FINEGRAINED_TIMERS to 0" << std::endl;
+    }
+    std::string dirname = directory + "/" + std::to_string(counter++);
+    std::filesystem::create_directory(dirname);
+    m_ldl->supernodal_factorization->WriteFinegrainedSolveTimerStats(dirname);
+    m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
+    m_ldl->supernodal_factorization->ResetFinegrainedSolveTimerStats();
+#endif
+}
+
+// Raw pointer version (Use with care! Caller must allocate/own both pointers)
+void CatamariFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys, bool alreadyPermuted) const {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariFactorizer.solveRawReduced");
+    const size_t s = m_reduced();
+    if (alreadyPermuted) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer2("copy " + std::to_string(s) + " entries");
+        // Eigen::Map<Eigen::VectorXd>(x, s) = Eigen::Map<const Eigen::VectorXd>(b, s);
+        copyParallel(m_reduced(), b, x);
+
+        solveRawReducedInPlace(x, sys, alreadyPermuted);
+    }
+    else {
+        // Avoid extra copy step by permuting into the scratch RHS
+        if (size_t(m_permuted_rhs_scratch.size()) < s)
+            m_permuted_rhs_scratch.resize(s);
+
+        catamari::BlasMatrixView<double> v_perm;
+        v_perm.height = s;
+        v_perm.width = 1;
+        v_perm.leading_dim = s;
+        v_perm.data = m_permuted_rhs_scratch.data();
+
+        catamari::BlasMatrixView<double> v = v_perm;
+        v.data = const_cast<Real *>(b);
+
+        auto f = m_ldl->supernodal_factorization.get();
+        if (f == nullptr) throw std::runtime_error("solveRawReduced: only supernodal factorizations are supported");
+        InversePermute(f->ordering_.inverse_permutation, v, &v_perm); // Note: InversePermute is faster than Permute due to contiguous writes avoiding false sharing.
+
+        {
+            BENCHMARK_SCOPED_TIMER_SECTION solveTimer("Catamari Solve");
+            m_ldl->Solve(&v_perm, /* alreadyPermuted = */ true);
+        }
+
+        catamari::BlasMatrixView<double> v_x = v_perm;
+        v_x.data = x;
+
+        InversePermute(f->ordering_.permutation, v_perm, &v_x);
+    }
+}
+
 void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool alreadyPermuted) const {
     assertFactorization(sys);
     if (sys != CholeskySys::A) {

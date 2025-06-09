@@ -341,6 +341,8 @@ struct CholeskyFactorizerBase {
     static std::string  numericMatrixFileName(size_t i) { return "/numeric_mat_"  + m_matrixIdString(i) + ".bin"; }
     static std::string     pinnedVarsFileName(size_t i) { return "/pinned_vars_"  + m_matrixIdString(i) + ".txt"; }
 
+    virtual void writeSolveTimers() const { /* Only some subclasses record timers */ }
+
 protected:
     // An increasing identifier used to sequence each matrix written
     // to disk during recording (symbolic and numeric).
