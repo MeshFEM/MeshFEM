@@ -230,7 +230,8 @@ def parse_custom_csv(folder_path, csv_filename):
 
     return table_data, summary_stats
 
-def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adaptive', grad_tol=None, uvsave_path=None):
+def runSYDParam(m, ProjectionStrategy, EigenvalueModification, ProjectionType, AutodiffSetting, 
+                max_iter=200, hessian_shift=1e-8, grad_tol=None, uvsave_path=None):
     
     obj_history = []
     time_history = []
@@ -264,14 +265,26 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
     uv_init = tutteInitialization(m, bdry_uv)
     uv.setVars(uv_init.ravel())
 
-    if hessian_proj_option == 'AutoDiff':  symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
-    elif hessian_proj_option == 'AutoDiffAbs':
-        symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
-        symmdiri_energy.useAbsProjection = True
-    elif hessian_proj_option == 'AdaptiveAbs':
-        symmdiri_energy = energy.SymmetricDirichlet(2)
-        symmdiri_energy.useAbsProjection = True
-    else:  symmdiri_energy = energy.SymmetricDirichlet(2)
+    # Configuring User Options 
+    # AutodiffSetting
+    if AutodiffSetting == 'AD':  symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
+    elif AutodiffSetting == 'NoAD': symmdiri_energy = energy.SymmetricDirichlet(2)
+    else:  raise NameError(f"[runSYDParam] MeshFEM Solver Configuration: Autodiff Setting {AutodiffSetting} is not implemented.")
+
+    # EigenvalueModification
+    if EigenvalueModification == 'Clamp': symmdiri_energy.useAbsProjection = False
+    elif EigenvalueModification == 'Abs': symmdiri_energy.useAbsProjection = True
+    else: raise NameError(f"[runSYDParam] MeshFEM Solver Configuration: Eigenvalue Modification {EigenvalueModification} is not implemented.")
+
+    # if hessian_proj_option == 'AutoDiff':  symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
+    # elif hessian_proj_option == 'AutoDiffAbs':
+    #     symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
+    #     symmdiri_energy.useAbsProjection = True
+    # elif hessian_proj_option == 'AdaptiveAbs':
+    #     symmdiri_energy = energy.SymmetricDirichlet(2)
+    #     symmdiri_energy.useAbsProjection = True
+    # else:  symmdiri_energy = energy.SymmetricDirichlet(2)
+
     # Construct `SymmetricDirichlet` parametrization energy and problem
     param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
@@ -282,26 +295,49 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         prob.setCustomIterationCallback(customSaveUVCallback)
     prob.setCustomLineSearchBeganCallback(customSaveStepDCallback)
 
+    # Configuration User Options pt.2
+    # Projection Type
+    if ProjectionType == 'FBased':  param.useXBasedProjection = False
+    elif ProjectionType == 'XBased': param.useXBasedProjection = True
+    else:  raise NameError(f"[runSYDParam] MeshFEM Solver Configuration: Projection Type {ProjectionType} is not implemented.")
+
     # Work around energy nullspace by adding a small shift
     prob.hessianShift = hessian_shift
     opt = prob.optimizer()
     opt.options.niter = max_iter
-    if hessian_proj_option in ['Adaptive', 'AutoDiff', 'AutoDiffAbs', 'AdaptiveAbs']:
-        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
-    elif hessian_proj_option == 'Always':
-        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
-    elif hessian_proj_option == 'Never':
-        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionNever()
-    elif hessian_proj_option == 'xbasedAlways':
-        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
-        param.useXBasedProjection = True
-    else:  raise RuntimeError("[Error] Usage of hessian_proj_option: Adaptive, Always, Never, xbasedAlways")
     if grad_tol is not None: opt.options.gradTol = grad_tol  # default is 2e-8
 
+    # Configure User Options pt.3
+    # Projection Strategy
+    if ProjectionStrategy == 'Adaptive':
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
+        opt.options.hessianProjectionController.numConsecutiveIndefiniteStepsBeforeEnable = 0
+        opt.options.hessianProjectionController.numProjectionStepsBeforeDisable = 2
+    elif ProjectionStrategy == 'Always':
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
+    elif ProjectionStrategy == 'Never':
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionNever()
+    else:  raise NameError(f"[runSYDParam] MeshFEM Solver Configuration: Projection Strategy {ProjectionStrategy} is not implemented.")
+
+    # if hessian_proj_option in ['Adaptive', 'AutoDiff', 'AutoDiffAbs', 'AdaptiveAbs']:
+    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
+    #     opt.options.hessianProjectionController.numConsecutiveIndefiniteStepsBeforeEnable = 0
+    #     opt.options.hessianProjectionController.numProjectionStepsBeforeDisable = 2
+    # elif hessian_proj_option == 'Always':
+    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
+    # elif hessian_proj_option == 'Never':
+    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionNever()
+    # elif hessian_proj_option == 'xbasedAlways':
+    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
+    #     param.useXBasedProjection = True
+    # else:  raise RuntimeError("[Error] Usage of hessian_proj_option: Adaptive, Always, Never, xbasedAlways")
+    
+    # Run Optimization
     benchmark.reset()
     start_time = time.time()
     cr = opt.optimize()
     # benchmark.report()
+
     if uvsave_path is not None:      
         hessian_projected_history.append(int(prob.hessianWasProjected)) # The projection status of the Hessian used in are i-1
         hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
@@ -336,6 +372,7 @@ def runSYDParam(m, max_iter=200, hessian_shift=1e-8, hessian_proj_option='Adapti
         time_arr = np.array(time_history) - start_time
         return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict
     
+
 def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
 
     bdry_uv = getBDdataOnNormalizedCircle(m)
@@ -446,7 +483,7 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
 
 def runCompMajor(model_name, model_path, uvsave_path=None):
-    exe_binary_str = "./CompMajor_bin"
+    exe_binary_str = "../../../CompMajor/build/CompMajor_bin"
     model_out_name = model_name + "_out.obj"
     # create TEMP_FILE_PATH if it doesn't exists
     UV_FILE_PATH = "CompMajor_TEMP_UV"
@@ -515,8 +552,8 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         benchmark_dict['totalTime'] = summary_stats["total_time"]
         benchmark_dict['symbolic_fac_time'] = summary_stats["analyze_pattern_time"]
         benchmark_dict['numeric_fac_time'] = np.sum(table_data["factorization_time"]) 
-        benchmark_dict['hessian_eval_time'] = np.sum(table_data["eval_hessian_time"]) + np.sum(table_data["eval_gradient_time"])
-        benchmark_dict['linear_solve_time'] = np.sum(table_data["solve_time"]) + np.sum(table_data["matrix_prep_time"])
+        benchmark_dict['hessian_eval_time'] = np.sum(table_data["eval_hessian_time"]) + np.sum(table_data["eval_gradient_time"]) + np.sum(table_data["matrix_prep_time"])
+        benchmark_dict['linear_solve_time'] = np.sum(table_data["solve_time"]) 
         return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
         
 # Input Parameter:

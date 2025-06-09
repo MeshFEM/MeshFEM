@@ -3,6 +3,7 @@ import sys
 import argparse
 import subprocess
 import numpy as np
+import MeshFEMParamSolverEnum as SolverOptionEnum
 import time
 from datetime import datetime
 
@@ -120,7 +121,70 @@ def validate_save_uv_option(value):
         raise argparse.ArgumentTypeError(f"Invalid value for save_uv_option: '{value}'. Must be one of {valid_options}.")
     return value.lower()  # Return the lowercase version for consistency
 
+# No return, just a check function
+def validate_hessian_options(values):
+    # avoid duplicates
+    numOptions = len(values)
+    if numOptions != len(set(values)):  raise argparse.ArgumentTypeError("Duplicated values in your hessian_options list.")
+
+    # each option should be case-sensitive
+    valid_hessian_option_list = ['MeshFEM', 'TinyAD', 'SLIM', 'CompMajor']
+    for i in range(numOptions):
+        if values[i] not in valid_hessian_option_list:
+            raise argparse.ArgumentTypeError(f"Invalid value for hessian_options: '{values[i]}'. Must be one of {valid_hessian_option_list}.")
+    
+def validate_solver_varind_list(values):
+    if len(values) == 1:
+        val = values[0].lower()
+        if val == 'all':
+            return 'all'
+        elif val == 'none':
+            return 'none'
+    
+    # Otherwise, interpret as list of integers
+    try:
+        int_list = [int(v) for v in values]
+    except ValueError:
+        raise argparse.ArgumentTypeError("All values must be integers or 'all'/'none'.")
+
+    for x in int_list:
+        if not (0 <= x < 16):
+            raise argparse.ArgumentTypeError(f"Invalid value {x}: must be >= 0 and < 16.")
+    
+    # check for duplicates in int_list
+    if len(int_list) != len(set(int_list)):  raise argparse.ArgumentTypeError("Duplicated values in your solver_varind_list.")
+    
+    return int_list
+
+def composeSolverOptionList(hessian_options, solver_varind_list):
+    solver_options_list = []
+    for option in hessian_options:
+        if option == 'MeshFEM':
+            if solver_varind_list == 'all': solver_options_list += [f'MeshFEM{n}' for n in range(2**4)]
+            elif solver_varind_list == 'none': continue
+            else:
+                for varind in solver_varind_list:  
+                    solver_str = 'MeshFEM' + str(varind)
+                    solver_options_list.append(solver_str)
+        else:  solver_options_list.append(option)
+    return solver_options_list
+
+
 def main():
+
+    # --- Build help text dynamically ---
+    variant_lines = []
+    for i in range(16):
+        names = SolverOptionEnum.optionNamesFromIndex(i)
+        line = f"  {i:2d}: {', '.join(names)}"
+        variant_lines.append(line)
+    variant_help_suffix = "\n".join(variant_lines)
+
+    help_text = (
+        "Specify 'all', 'none', or a space-separated list of integers in [0–15], each representing a solver variant of MeshFEM:\n"
+        + variant_help_suffix
+    )
+
     # Set up argument parsing
     parser = argparse.ArgumentParser(
         description="Run all models for a given experiment setup with specified options."
@@ -137,7 +201,14 @@ def main():
         type=str,
         nargs="+",
         required=True,
-        help="List of hessian options to test (e.g., -hessian_options Adaptive AutoDiff).",
+        help="List of hessian options to test (e.g., -hessian_options MeshFEM TinyAD SLIM CompMajor).",
+    )
+    parser.add_argument(
+        "-solver_varind_list",
+        nargs='+',
+        type=str,
+        required=True,
+        help=help_text,
     )
     parser.add_argument(
         "-threads",
@@ -161,8 +232,11 @@ def main():
         print("[Error] <repeat> must be a positive integer >= 1.")
         sys.exit(1)
 
-    # Get hessian_option_list and thread_num_list
-    hessian_option_list = args.hessian_options
+    # Prepare hessian_option_list 
+    args.solver_varind_list = validate_solver_varind_list(args.solver_varind_list)
+    validate_hessian_options(args.hessian_options)
+    hessian_option_list = composeSolverOptionList(args.hessian_options, args.solver_varind_list)
+
     thread_num_list = args.threads  # Automatically parsed as a list of integers
 
     # Debugging information (optional)
@@ -189,7 +263,8 @@ def main():
 
 if __name__ == "__main__":
     print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_list_option> <thread_list_option> [<repeat_num>]")
-    print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
+    # print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
+    print("Supported Hessian Options: <MeshFEM+int(0~15)> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
     print("--------------------------------------------------------------------------------------------------------------------")
 
     main()
