@@ -116,6 +116,12 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail, 
     return pyME;
 }
 
+// Bind a single MeshEnergy instantiation using an automatically generated name.
+template<class ME, class RawMaterial = typename ME::Material>
+auto bindMeshEnergy(py::module &m, py::module &detail, bool bindConstructors = true) {
+    return bindMeshEnergy<ME, RawMaterial>(ME::name(), m, detail, bindConstructors);
+}
+
 // Support for binding a mesh energy template for all mesh types.
 template<class MEVars_, class Stencil_, class Element_>
 struct MeshEnergyBinder {

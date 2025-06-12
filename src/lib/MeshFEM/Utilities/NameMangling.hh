@@ -116,4 +116,38 @@ struct NameMangler<SymmetricMatrix<t_N, Storage>> {
     }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// Determine whether a class defines a `name()` method
+////////////////////////////////////////////////////////////////////////////////
+template<class C, typename = void>
+struct has_name_method : std::false_type {};
+
+template<class C>
+struct has_name_method<C, std::void_t<decltype(C::name())>> : std::true_type {};
+
+// Hack to get type names without C++26 reflection
+#include <type_traits>
+
+template <typename T>
+std::string get_name_of_type() {
+#if defined(__clang__)
+    std::string name = __PRETTY_FUNCTION__;
+    auto start = name.find("T = ") + 4;
+    auto end = name.find(']', start);
+    return name.substr(start, end - start);
+#elif defined(__GNUC__)
+    std::string name = __PRETTY_FUNCTION__;
+    auto start = name.find("with T = ") + 9;
+    auto end = name.find(';', start);
+    return name.substr(start, end - start);
+#elif defined(_MSC_VER)
+    std::string name = __FUNCSIG__;
+    auto start = name.find("type_name<") + 10;
+    auto end = name.find(">(void)", start);
+    return name.substr(start, end - start);
+#else
+    throw std::runtime_error("Unsupported compiler for type_name");
+#endif
+}
+
 #endif /* ecnd of include guard: NAME_MANGLING_HH */

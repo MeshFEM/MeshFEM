@@ -16,6 +16,7 @@
 #include "ElementBase.hh"
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/AutomaticDifferentiation.hh>
+#include <MeshFEM/Utilities/NameMangling.hh>
 
 template<class ElementEnergy>
 struct AutodiffElement;
@@ -45,6 +46,14 @@ struct AutodiffElement : public ElementBase<AutodiffElement<ElementEnergy>>, pri
     AutodiffElement(size_t ei, const Mesh &m, const LocalVars &x, MaterialAssignment<MaterialBase> &materials)
         : Base(ei, materials), ElementEnergy(ei, m) {
         setDeformedConfiguration(x);
+    }
+
+    static std::string name() {
+        if constexpr (has_name_method<ElementEnergy>::value) {
+            return ElementEnergy::name();
+        } else {
+            return get_name_of_type<ElementEnergy>() + std::string("AD");
+        }
     }
 
     static constexpr bool CachesDeformedQuantities = true;
