@@ -18,8 +18,17 @@ MODEL_BASE = '../../../Models/TableOneModels'  # Configure The Path If you Want 
 # Used to determine how many iteration we show in the "energy and gradient norm vs time plot"
 section_dict = {"armadilloDisc": 35, "armchairDisc": 35, "bear_cut": 30, "bimba100KDisc": 30, "bladeDisc": 50, "buddha_cut": 30,
                 "bumpy_sphereDisc": 30, "bunnyBotschDisc": 40, "busteDisc": 35, "camille_hand100KDisc": 45, "chinese_dragon": 125,
-                "dragonHead2": 35, "gargoyle_cut": 50, "hand": 35, "Superman_cut1": 35, "Superman_cut2": 30, "Superman_cut3": 35,
-                "vase_lion": 50, "cow2Disc": 100, "davidDisc": 100, "deformed_armadilloDisc": 100, "denteDisc": 100, "eros": 100, "Lucy_3cuts": 100}
+                "dragonHead2": 35, "gargoyle_cut": 50, "hand": 35, "Superman_cut1": 35, "Superman_cut2": 30, "Superman_cut3": 30,
+                "vase_lion": 50, "cow2Disc": 50, "davidDisc": 35, "deformed_armadilloDisc": 45, "denteDisc": 30, "eros": 30, "Lucy_3cuts": 80}
+
+# For plotting ObjGradVSTime Plots
+timesection_dict = {"armadilloDisc": 100, "armchairDisc": 80, "bear_cut": 80, "bimba100KDisc": 65, "bladeDisc": 70, "buddha_cut": 50,
+                "bumpy_sphereDisc": 30, "bunnyBotschDisc": 200, "busteDisc": 110, "camille_hand100KDisc": 195, "chinese_dragon": 200,
+                "dragonHead2": 80, "gargoyle_cut": 200, "hand": 50, "Superman_cut1": 50, "Superman_cut2": 40, "Superman_cut3": 40,
+                "vase_lion": 125, "cow2Disc": 100, "davidDisc": 70, "deformed_armadilloDisc": 200, "denteDisc": 190, "eros": 65, "Lucy_3cuts": 200}
+
+# For TinyAD Only
+speedup_dict = {"bear_cut": 5, "buddha_cut": 5, "deformed_armadilloDisc": 5, "Superman_cut1": 5}
 
 def read_non_comment_lines(txt_path):
     """
@@ -86,13 +95,18 @@ def gen_plots_videos(base_path, modeltxt_path, plots_folder_name, videos_folder_
                 #                                     model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1)
                 
                 # sected Version
+                
+                # plot_video_utils.gen_MetricIter_videos(obj_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
+                #                                        model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
+
                 plot_video_utils.gen_MetricIter_videos(grad_norm_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
                                                        model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
-                plot_video_utils.gen_MetricIter_videos(obj_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
-                                                       model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
                 
-                plot_video_utils.gen_Param_videos(base_path, obj_sected_list, obj_grad_time_sected_list, 
-                                                    model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
+                # plot_video_utils.gen_Param_videos(base_path, obj_sected_list, obj_grad_time_sected_list, 
+                #                                     model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=speedup_dict[model_name], sect=section_dict[model_name])
+                # For TinyAD
+                # plot_video_utils.gen_Param_videos(base_path, obj_sected_list, obj_grad_time_sected_list, 
+                #                                     model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
                 
         
         else:
@@ -101,9 +115,9 @@ def gen_plots_videos(base_path, modeltxt_path, plots_folder_name, videos_folder_
 
             # generate no-timing related figures
             plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, hessian_option_list=hessian_option_list)
-            plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, sect=section_dict[model_name], hessian_option_list=hessian_option_list, scName='ProjIndef', hessian_indef_list=hessian_indef_list) # for hessian projection scatter
+            plot_video_utils.saveMetricIterFigure(grad_norm_list, hessian_projected_list, model_name, 'Grad', plot_dir, sect=timesection_dict[model_name], hessian_option_list=hessian_option_list, scName='ProjIndef', hessian_indef_list=hessian_indef_list) # for hessian projection scatter
             
-            plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, sect=section_dict[model_name], hessian_option_list=hessian_option_list)
+            plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, sect=timesection_dict[model_name], hessian_option_list=hessian_option_list)
             plot_video_utils.saveMetricIterFigure(obj_list, hessian_projected_list, model_name, 'Obj', plot_dir, hessian_option_list=hessian_option_list)
             
             # Debug Only
@@ -117,10 +131,14 @@ def gen_plots_videos(base_path, modeltxt_path, plots_folder_name, videos_folder_
                 plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list)
                 plot_video_utils.saveMetricBarPlots(model_dict, model_name, metric_keyword, plot_dir, thread_num_list, hessian_option_list, divideIter=True)
 
-            # generate timing related figures and videos
+            # # generate timing related figures and videos
             for i in range(numThreads):
-                plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list)
-                plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=section_dict[model_name])
+                if thread_num_list[i] == 16: # only plot when thread = 16
+                    plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list)
+                    # plot_video_utils.save_obj_grad_time_figure_MiddleCut(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list)
+                    plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=timesection_dict[model_name])
+                    plot_video_utils.save_obj_grad_time_figure(obj_grad_time_list, model_name, plot_dir, i, thread_num_list, hessian_option_list, sect=100) # another 100
+                    
             
         in_model_elapsed_time = time.time() - in_model_timer
         print(f"{model_ind+1}/{numModels} Model: {model_name} -- All plots and videos generation completed! Time: {in_model_elapsed_time:.4f} seconds.")

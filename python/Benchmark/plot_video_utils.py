@@ -203,6 +203,11 @@ def readConvergenceTimingData(directory, thread_num_list=[0], hessian_option_lis
             repeat_dir_name = 'repeat' + '_' + fast_ind
             data_dir = os.path.join(cur_dir, repeat_dir_name)
             obj_arr, time_arr, grad_norm_arr, benchmark_dict = read_benchmark_data(data_dir)
+            # add analyze_pattern_time for CompMajor
+            if hessian_option == "CompMajor":
+                iter_steps = time_arr.shape[0]
+                for i in range(1, iter_steps): time_arr[i] += benchmark_dict['symbolic_fac_time']
+
             obj_grad_time = np.vstack((obj_arr, grad_norm_arr, time_arr)) # make a (3,n) numpy array
             obj_grad_time_list[hessopt_ind].append(obj_grad_time)
     
@@ -305,7 +310,10 @@ def readDictData(directory : str, thread_num_list, hessian_option_list):
             # build dictionary different for TinyAD
             thread_dict = {}
             thread_dict['iter'] = obj_arr.shape[0]
+            thread_dict['final_energy'] = obj_arr[-1]
             thread_dict['time'] = time_arr[-1]
+            if hessian_option == 'CompMajor':  thread_dict['time'] += benchmark_dict['symbolic_fac_time']
+
             if hessian_option == 'TinyAD':
                 thread_dict['linsolve'] = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
                 thread_dict['hessian_eval'] = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
@@ -413,6 +421,10 @@ def sectObjGradTimeList(obj_grad_time_list, sect=None):
 # Plot different hessian projection options under one thread configuration
 def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, 
                               thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], sect=None):
+    
+    # Set global font
+    plt.rcParams.update({'font.family': 'Times New Roman', 'font.size': 12})
+    
     tn = thread_ind
     num_options = len(hessian_option_list)
     iterations_list = []  # iteration numbers for each hessian projection option
@@ -426,62 +438,170 @@ def save_obj_grad_time_figure(obj_grad_time_list, user_model_name, save_director
     plt.figure(figsize=(12, 12))
     plt.subplot(2,2,1)
     for i in range(num_options):
-        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=hessian_option_list[i])
-        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][0], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][0], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
-    plt.ylabel(" Energy ", fontsize=14)
+    plt.ylabel(" Energy ", fontsize=12)
     plt.legend()
     # Ensure x-axis values are only positive integers
     ax = plt.gca()  # Get the current axis
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # Force integer x-axis ticks
-    plt.xlim(0, None) 
+    # plt.xlim(0, None) 
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
     
     plt.subplot(2,2,2)
     for i in range(num_options):
-        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][1][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
-        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(iterations_list[i][:sect], obj_grad_time_list[i][tn][1][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+        else:                 plt.plot(iterations_list[i], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
-    plt.ylabel(" Grad Norm ", fontsize=14)
+    plt.ylabel(" Grad Norm ", fontsize=12)
     plt.legend()
+    ax = plt.gca()
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+    
 
     plt.subplot(2,2,3)
     for i in range(num_options):
-        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=hessian_option_list[i])
-        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][0], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][0][:sect], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][0], ls=line_style_list[i], lw=line_width_list[i],color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
 
     plt.yscale('log')
     plt.xlabel("Time [sec]", fontsize=12)
-    plt.ylabel(" Energy ", fontsize=14)
+    plt.ylabel(" Energy ", fontsize=12)
     plt.legend()
+    ax = plt.gca()
+    if sect is not None:  ax.set_xlim(left=0, right=0.25)
+    else:                 ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
 
     plt.subplot(2,2,4)
     for i in range(num_options):
-        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][1][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
-        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None:  plt.plot(obj_grad_time_list[i][tn][2][:sect], obj_grad_time_list[i][tn][1][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+        else:                 plt.plot(obj_grad_time_list[i][tn][2], obj_grad_time_list[i][tn][1], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
     plt.yscale('log')
     plt.xlabel("Time [sec]", fontsize=12)
-    plt.ylabel("Grad Norm", fontsize=14)
+    plt.ylabel("Grad Norm", fontsize=12)
     plt.legend()
-    plt.tight_layout()
+    ax = plt.gca()
+    if sect is not None:  ax.set_xlim(left=0, right=0.25)
+    else:                 ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+
+
+    plt.tight_layout(pad=0.2)
     
     full_fn = user_model_name + '_objgradvsT' + '_thread' + str(thread_num_list[thread_ind])
     if sect is not None:  full_fn += '_sect' + str(sect)
-    file_ext = '.png'
+    file_ext = '.pdf'
     full_fn += file_ext
-    plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    # plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    plt.savefig(os.path.join(save_directory, full_fn), format='pdf', bbox_inches='tight', pad_inches=0)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
+
+
+def save_obj_grad_time_figure_MiddleCut(obj_grad_time_list, user_model_name, save_directory, thread_ind=0, 
+                              thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], sect=None):
+    
+    # Set global font
+    plt.rcParams.update({'font.family': 'Times New Roman', 'font.size': 12})
+    
+    tn = thread_ind
+    num_options = len(hessian_option_list)
+    iterations_list = [np.arange(obj_grad_time_list[i][tn].shape[1]) for i in range(num_options)]
+    color_list, line_style_list, line_width_list = getColorLineList(num_options)
+
+    # === FIGURE 1: ENERGY PLOTS ===
+    fig1, axs1 = plt.subplots(2, 1, figsize=(4, 8))
+
+    # Top: Energy vs Iteration
+    for i in range(num_options):
+        x = iterations_list[i][:sect] if sect else iterations_list[i]
+        y = obj_grad_time_list[i][tn][0][:sect] if sect else obj_grad_time_list[i][tn][0]
+        axs1[0].plot(x, y, ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+    axs1[0].set_title(f"Model: {user_model_name}", fontsize=16)
+    axs1[0].set_yscale('log')
+    axs1[0].set_xlabel("Iteration", fontsize=12)
+    axs1[0].set_ylabel("Energy", fontsize=12)
+    axs1[0].legend()
+    axs1[0].xaxis.set_major_locator(MaxNLocator(integer=True))
+    axs1[0].set_xlim(left=0)
+    axs1[0].set_ylim(bottom=0)
+
+    # Bottom: Energy vs Time
+    for i in range(num_options):
+        x = obj_grad_time_list[i][tn][2][:sect] if sect else obj_grad_time_list[i][tn][2]
+        y = obj_grad_time_list[i][tn][0][:sect] if sect else obj_grad_time_list[i][tn][0]
+        axs1[1].plot(x, y, ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+    axs1[1].set_yscale('log')
+    axs1[1].set_xlabel("Time [sec]", fontsize=12)
+    axs1[1].set_ylabel("Energy", fontsize=12)
+    axs1[1].legend()
+    axs1[1].set_xlim(left=0)
+    axs1[1].set_ylim(bottom=0)
+
+    fig1.tight_layout(pad=0.2)
+    fig1_fn = f"{user_model_name}_EnergyPlots_thread{thread_num_list[thread_ind]}"
+    if sect is not None:
+        fig1_fn += f"_sect{sect}"
+    fig1_fn += '.pdf'
+    fig1.savefig(os.path.join(save_directory, fig1_fn), format='pdf', bbox_inches='tight', pad_inches=0)
+    print(f"[Plot] '{fig1_fn}' saved in {save_directory}!")
+    plt.close(fig1)
+
+    # === FIGURE 2: GRADIENT NORM PLOTS ===
+    fig2, axs2 = plt.subplots(2, 1, figsize=(4, 8))
+
+    # Top: Grad Norm vs Iteration
+    for i in range(num_options):
+        x = iterations_list[i][:sect] if sect else iterations_list[i]
+        y = obj_grad_time_list[i][tn][1][:sect] if sect else obj_grad_time_list[i][tn][1]
+        axs2[0].plot(x, y, ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+    axs2[0].set_title(f"Model: {user_model_name}", fontsize=16)
+    axs2[0].set_yscale('log')
+    axs2[0].set_xlabel("Iteration", fontsize=12)
+    axs2[0].set_ylabel("Grad Norm", fontsize=12)
+    axs2[0].legend()
+    axs2[0].xaxis.set_major_locator(MaxNLocator(integer=True))
+    axs2[0].set_xlim(left=0)
+    axs2[0].set_ylim(bottom=0)
+
+    # Bottom: Grad Norm vs Time
+    for i in range(num_options):
+        x = obj_grad_time_list[i][tn][2][:sect] if sect else obj_grad_time_list[i][tn][2]
+        y = obj_grad_time_list[i][tn][1][:sect] if sect else obj_grad_time_list[i][tn][1]
+        axs2[1].plot(x, y, ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+    axs2[1].set_yscale('log')
+    axs2[1].set_xlabel("Time [sec]", fontsize=12)
+    axs2[1].set_ylabel("Grad Norm", fontsize=12)
+    axs2[1].legend()
+    axs2[1].set_xlim(left=0)
+    axs2[1].set_ylim(bottom=0)
+
+    fig2.tight_layout(pad=0.2)
+    fig2_fn = f"{user_model_name}_GradNormPlots_thread{thread_num_list[thread_ind]}"
+    if sect is not None:
+        fig2_fn += f"_sect{sect}"
+    fig2_fn += '.pdf'
+    fig2.savefig(os.path.join(save_directory, fig2_fn), format='pdf', bbox_inches='tight', pad_inches=0)
+    print(f"[Plot] '{fig2_fn}' saved in {save_directory}!")
+    plt.close(fig2)
+
+
+
 
 
 # Generate videos recording parametrization process of models under 3 different Hessian Options and one thread
 # metric_list: any list return from readHessianData(...)
 # obj_grad_time_list: acquire timing list for specific thread
 def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name, model_base_path, save_directory, 
-                     thread_ind=0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], fps=30, speedup=1, sect=None):
+                     thread_ind=0, thread_num_list=[0], hessian_option_list=['Adaptive', 'Always', 'Never'], fps=30, speedup=None, sect=None):
     
     num_options = len(hessian_option_list)
     model_name_fex = user_model_name + '.off'
@@ -493,7 +613,7 @@ def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name
     if 'TinyAD' in hessian_option_list:
         tinyad_ind = hessian_option_list.index('TinyAD')
         # Speedup for TinyAD's timing 
-        aligned_timing_list[tinyad_ind] /= speedup
+        if speedup is not None:  aligned_timing_list[tinyad_ind] /= speedup
 
     for hessian_ind, hessian_option in enumerate(hessian_option_list):
         uv = mesh_energy.NodalVars(m, 2)
@@ -513,8 +633,12 @@ def gen_Param_videos(base_path, metric_list, obj_grad_time_list, user_model_name
         spf = 1 / fps
         total_time = aligned_timing_list[hessian_ind][-1]
         numFrames = int(math.ceil(total_time / spf))
-        if sect is not None:  video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(thread_num_list[thread_ind]) + '_sect' + str(sect) + '.mp4'
-        else:                 video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(thread_num_list[thread_ind]) + '.mp4'
+
+        video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(thread_num_list[thread_ind])
+        if sect is not None:  video_fn += '_sect' + str(sect)
+        if hessian_option == 'TinyAD':
+            if speedup is not None:  video_fn += '_speedup' + str(speedup)
+        video_fn += '.mp4'
         
         start_record_timer = time.time()
         v.recordStart(os.path.join(save_directory, video_fn), renderScale=8, outputScale=2, framerate=fps, lineWidthScale=0.25)
@@ -573,6 +697,13 @@ def saveMetricIterFigure_AdapExpWrapper(adap_exp_data_dict, thread_num, model_na
     saveMetricIterFigure(metric_list, hessian_projected_list, model_name, metric_title, save_directory,
                              offset, sect, step_tuple_str_list, addScatter, scName, hessian_indef_list)
     
+
+def addOursinLabel(label_option : str) -> str :
+    if label_option in ['TinyAD', 'CompMajor', 'SLIM']:  return label_option
+    else:  
+        label_str = 'Ours, ' + label_option
+        return label_str
+
 
 # Plot metric with numIter - offset size
 # Under different hessian projection options under one thread configuration
@@ -633,10 +764,12 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
                 iter_Hindef_list[ind] = adaptive_Hindef_iter
                 metric_Hindef_list[ind] = metric_Hindef_ind_list
     
+    # Add this to enforce font settings globally
+    plt.rcParams.update({'font.family': 'Times New Roman', 'font.size': 12})
     plt.figure(figsize=(8, 8))
     for i in range(num_options):
-        if sect is not None: plt.plot(iterations_list[i][:sect], metric_list[i][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
-        else:                plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+        if sect is not None: plt.plot(iterations_list[i][:sect], metric_list[i][:sect], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+        else:                plt.plot(iterations_list[i], metric_list[i], ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
     
     if addScatter:
         for ind in scatter_list:
@@ -653,24 +786,30 @@ def saveMetricIterFigure(metric_list, hessian_projected_list, user_model_name, m
     plt.title(f"Model: {user_model_name}", fontsize=16)
     plt.yscale('log')
     plt.xlabel("Iteration", fontsize=12)
-    plt.ylabel(yAxisTitle, fontsize=14)
+    plt.ylabel(yAxisTitle, fontsize=12)
     plt.legend()
-    plt.tight_layout()
+    plt.tight_layout(pad=0.2)
 
     # Ensure x-axis values are only positive integers
     ax = plt.gca()  # Get the current axis
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # Force integer x-axis ticks
-    plt.xlim(0, None) 
+    # plt.xlim(0, None) 
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
 
     full_fn = user_model_name + '_' + metric_title + 'VSIter'
     if addScatter:  full_fn += '_' + scName
     if sect is not None:  full_fn += '_sect' + str(sect)
-    full_fn += '.png'
-    plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    full_fn += '.pdf'
+    # plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    plt.savefig(os.path.join(save_directory, full_fn), format='pdf', bbox_inches='tight', pad_inches=0)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
 
 def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, thread_num_list, hessian_option_list, width=0.2, default_fig_size=(16, 8), divideIter=False):
+    # Set global font
+    plt.rcParams.update({'font.family': 'Times New Roman', 'font.size': 12})
+    
     yAxisTitle = getBarPlotsYAxisTitle(metric_key)
     if not divideIter:  yAxisTitle += "[sec]"
     else:               yAxisTitle += " per Iteration [sec]"
@@ -685,7 +824,7 @@ def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, 
         else:               metric_list = [(model_dict[hessian_option][thread_num][metric_key] / model_dict[hessian_option][thread_num]['iter']) for thread_num in thread_num_list]
         # Adjust positions for bars in each group
         position = a + hessian_ind * width  # Spread bars within each group
-        ax.bar(position, metric_list, width=width, label=hessian_option)
+        ax.bar(position, metric_list, width=width, label=addOursinLabel(hessian_option))
     
     # Adjust x-axis ticks to be centered
     ax.set_xticks(a + (num_options - 1) * width / 2)  # Center ticks within the group
@@ -694,10 +833,17 @@ def saveMetricBarPlots(model_dict, user_model_name, metric_key, save_directory, 
     ax.set_ylabel(yAxisTitle)
     ax.grid(True, linestyle='--', alpha=0.7)  # Add a grid
     ax.legend(loc='upper right')
+
+    # Ensure y-axis starts from 0
+    ax.set_ylim(bottom=0)
+
+    # Compact layout (preserves labels)
+    plt.tight_layout(pad=0.2)
     
-    if not divideIter:  full_fn = user_model_name + '_' + metric_key + '_thread' + list_to_string(thread_num_list) + '.png'
-    else:               full_fn = user_model_name + '_' + metric_key + '_perIter' + '_thread' + list_to_string(thread_num_list) + '.png'
-    plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    if not divideIter:  full_fn = user_model_name + '_' + metric_key + '_thread' + list_to_string(thread_num_list) + '.pdf'
+    else:               full_fn = user_model_name + '_' + metric_key + '_perIter' + '_thread' + list_to_string(thread_num_list) + '.pdf'
+    # plt.savefig(os.path.join(save_directory, full_fn), dpi=300)
+    plt.savefig(os.path.join(save_directory, full_fn), format='pdf', bbox_inches='tight', pad_inches=0)
     print(f"[Plot] '{full_fn}' saved in {save_directory}!")
     plt.close()
 
@@ -770,7 +916,7 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
         for i in range(num_options):
             iterationForFrame = max(0, bisect.bisect_right(aligned_timing_list[i], frameTime) - 1)
             plt.plot(iterations_list[i][:iterationForFrame+1], metric_list[i][:iterationForFrame+1], 
-                    ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=hessian_option_list[i])
+                    ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
             if i in scatter_list:  index_for_dots = max(0, bisect.bisect_left(iter_projTrue_list[i], iterationForFrame))
             plt.scatter(iter_projTrue_list[i][:index_for_dots], metric_projTrue_list[i][:index_for_dots], 
                         edgecolors=color_list[i], marker='o', facecolors='none',  s=30)
