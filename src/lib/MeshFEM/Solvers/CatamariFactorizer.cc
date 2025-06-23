@@ -537,6 +537,11 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     m_factorizationType = FactorizationType::Numeric;
 }
 
+size_t CatamariFactorizer::getFactorNNZ() const {
+    assertFactorization(FactorizationType::Symbolic);
+    return m_ldl->supernodal_factorization->GetFactorNNZ();
+}
+
 void CatamariFactorizer::writeSolveTimers() const {
 #if CATAMARI_FINEGRAINED_TIMERS
     static std::string directory = "catamari_solve_timers";

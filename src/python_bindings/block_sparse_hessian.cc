@@ -46,9 +46,9 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
     py::class_<BlockCSCHessianBase, std::shared_ptr<BlockCSCHessianBase>>(m, "BlockCSCHessianBase")
         .def(py::init([](const std::string &path) { return BlockCSCHessianBase::constructFromBinaryFile(path); }), py::arg("path"))
-        .def_property_readonly("Ap", [](BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, "Offsets into Ai/Ax of the entries for each column")
-        .def_property_readonly("Ai", [](BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, "Row indices of nonzero entries")
-        .def_property_readonly("Ax", [](BlockCSCHessianBase &A) { return py::array_t<Real>(A.Ax.size(), A.Ax.data(),             /* owner = */ py::cast(A)); }, "Values of nonzero entries")
+        .def_property("Ap", [](const BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ap) { A.Ap = Ap; }, "Offsets into Ai/Ax of the entries for each column")
+        .def_property("Ai", [](const BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ai) { A.Ai = Ai; }, "Row indices of nonzero entries")
+        .def_property("Ax", [](const BlockCSCHessianBase &A) { return py::array_t<            Real>(A.Ax.size(), A.Ax.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<            Real> Ax) { A.Ax = Ax; }, "Values of nonzero entries")
 
         .def("blockVarSizesAndCounts", &BlockCSCHessianBase::blockVarSizesAndCounts)
         .def("numScalarCols", &BlockCSCHessianBase::numScalarCols)
@@ -60,13 +60,15 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("uniformBlockSize", &BlockCSCHessianBase::uniformBlockSize)
         .def("blockSizeGCD",     &BlockCSCHessianBase::blockSizeGCD)
 
+        .def("setIdentity", &BlockCSCHessianBase::setIdentity, py::arg("preserveSparsity"))
+
         .def("trace", &BlockCSCHessianBase::trace)
 
         .def_property_readonly("scalarNNZ", &BlockCSCHessianBase::scalarNNZ)
 
-        .def_readonly( "m", &BlockCSCHessianBase::m )
-        .def_readonly( "n", &BlockCSCHessianBase::n )
-        .def_readonly("nz", &BlockCSCHessianBase::nz)
+        .def_readwrite( "m", &BlockCSCHessianBase::m )
+        .def_readwrite( "n", &BlockCSCHessianBase::n )
+        .def_readwrite("nz", &BlockCSCHessianBase::nz)
 
         .def("dumpBinaryToFile", &BlockCSCHessianBase::dumpBinaryToFile, py::arg("path"))
 

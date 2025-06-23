@@ -48,6 +48,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
     void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;
+    void factorizeSymbolic(const BlockCSCHessianBase &H) override { factorizeSymbolic(H, std::vector<size_t>()); }
 
     void factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */ = false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override;
@@ -86,6 +87,9 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     }
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
+
+    size_t getFactorNNZ() const override;
+
     CholeskyProvider provider() const override {
         if (m_legacy) return CholeskyProvider::CatamariLegacy;
 
