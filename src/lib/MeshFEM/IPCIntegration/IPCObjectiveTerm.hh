@@ -61,6 +61,9 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     void set_ccdTol(Real ccdTol) { m_ipcWrapper->ccdTol = ccdTol; }
     Real get_ccdTol() const { return m_ipcWrapper->ccdTol; }
 
+    void set_ccdMaxIters(Real ccdMaxIters) { m_ipcWrapper->ccdMaxIters = ccdMaxIters; }
+    Real get_ccdMaxIters() const { return m_ipcWrapper->ccdMaxIters; }
+
     // Get the last attempted Newton step (for debugging the line search)
     const MXd &getCollisionVertexPositions() const { return m_collisionVertexPositions;     }
     const MXi &getCollisionMeshFaces()       const { return m_combinedCollisionMesh->faces; }
@@ -97,7 +100,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     NewtonHessian hessianSparsityPattern() const override;
 
     // Determine the maximum collision-free step size.
-    Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override;
+    Real customFeasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha = 1.0, Real currentObjectiveValue = std::numeric_limits<Real>::max()) const override;
 
     // Adaptive barrier stiffness support
     // Note that `initialBarrierStiffness` needs access to the current primary

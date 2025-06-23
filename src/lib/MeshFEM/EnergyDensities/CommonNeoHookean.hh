@@ -55,7 +55,7 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
 
     Real energy() const {
         // Standard behavior: return inf for inverted elements
-        if (m_detF < 0) return std::numeric_limits<Real>::max();
+        if (m_detF < 0) return std::numeric_limits<Real>::infinity();
         return m_mu / 2.0 * (m_F.squaredNorm() - Dimension - 2.0 * m_logDetF) + m_lambda / 2.0 * m_logDetF * m_logDetF;
     }
 

@@ -51,7 +51,12 @@ struct DynamicSimulator {
     {
         v.setZero(m_obj->numVars());
 
-        m_noninertiaTerms.push_back(eo);
+        // Insert the elastic object at the beginning so that its
+        // customFeasibleStepLength is called first, enabling it to cut
+        // the CCD step short. This works around an OOM crash in the hashgrid
+        // broad phase of `ipc_toolkit` that can apparently be triggered by
+        // element inversions.
+        m_noninertiaTerms.insert(m_noninertiaTerms.begin(), eo);
 
         m_inertiaLoad = std::make_shared<Loads::Inertia<EO>>(eo, useLumpedMass);
         m_noninertiaTerms.push_back(m_inertiaLoad); // Include the inertia term in the equilibrium problem loads.
