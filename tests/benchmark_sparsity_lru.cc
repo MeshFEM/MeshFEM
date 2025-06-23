@@ -77,6 +77,8 @@ void benchmark_method(double retain_pct, const std::string &method, const std::s
 
     Eigen::VectorXd x_gt, b;
 
+    std::vector<double> numeric_posdef_times, numeric_indef_times;
+
     for (int counter = 0; ; counter++) {
         std::string symPath = directory + "/" + CholeskyFactorizerBase::symbolicMatrixFileName(counter);
         std::ifstream symFile(symPath);
@@ -104,6 +106,8 @@ void benchmark_method(double retain_pct, const std::string &method, const std::s
             else {
                 needsFactorization = sparsityCache->update(*Hsp);
             }
+
+            // needsFactorization = true;
 
             ++numSymbolicMatrices;
             numSymbolicFactorizations += needsFactorization;
@@ -150,8 +154,14 @@ void benchmark_method(double retain_pct, const std::string &method, const std::s
             // H_sparsity_mod->setIdentity(/* preserveSparsity = */ true);
 
             for (size_t r = 0; r < 1; ++r) {
+                // // sleep for 0.001 seconds to allow "cooldown"
+                // std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+                std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
                 try {
                     factorizer->factorizeNumericWithShift(*H_sparsity_mod, 0);
+                    numeric_posdef_times.push_back(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+
                     if (r > 0) continue; // Only verify in first pass
 
                     // Verify
@@ -166,6 +176,7 @@ void benchmark_method(double retain_pct, const std::string &method, const std::s
                 }
                 catch (const std::runtime_error &e) {
                     std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
+                    numeric_indef_times.push_back(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
                 }
             }
 
@@ -177,6 +188,18 @@ void benchmark_method(double retain_pct, const std::string &method, const std::s
 
     BENCHMARK_REPORT();
     std::cout << "Number of symbolic factorizations: " << numSymbolicFactorizations << " (" << numSymbolicMatrices / double(numSymbolicFactorizations) << "x additional reduction)" << " (" << numNumericMatrices / double(numSymbolicFactorizations) << "x reduction)" << std::endl;
+    std::cout << "Writing numeric timings to numeric_posdef_times.txt and numeric_indef_times.txt" << std::endl;
+    {
+        std::ofstream posdefFile("numeric_posdef_times.txt");
+        for (double t : numeric_posdef_times)
+            posdefFile << t << std::endl;
+    }
+    {
+        std::ofstream indefFile("numeric_indef_times.txt");
+        for (double t : numeric_indef_times)
+            indefFile << t << std::endl;
+    }
+
     unset_max_num_tbb_threads();
 }
 

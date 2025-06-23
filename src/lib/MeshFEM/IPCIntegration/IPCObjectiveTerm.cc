@@ -62,16 +62,31 @@ void IPCObjectiveTerm<_Real>::accumulateHessian(Real weight, NewtonHessian &H, b
     m_ipcWrapper->hessian(H, m_collisionVertexPositions, m_combinedCollisionMesh->nodeForCollisionMeshVertex, weight * m_k, projectionMask);
 }
 
+#include <cfenv>
+
 template<typename _Real>
-_Real IPCObjectiveTerm<_Real>::customFeasibleStepLength(const VXd &vars, const VXd &step) const {
+_Real IPCObjectiveTerm<_Real>::customFeasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha, Real currentObjectiveValue) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.feasibleStepLength");
+    // std::cout << "IPCObjectiveTerm::customFeasibleStepLength with initialAlpha = " << initialAlpha << std::endl;
 
     const MXd &cvp0 = getCollisionVertexPositions();
-    const MXd &cvp1 = m_combinedCollisionMesh->vertexPositionsForVars(vars + step);
+    const MXd &cvp1 = m_combinedCollisionMesh->vertexPositionsForVars(vars + initialAlpha * step);
 
-    if (CCD == CCDMethod::CFL)            return m_ipcWrapper->compute_collision_cfl_stepsize(cvp0, cvp1);
-    if (CCD == CCDMethod::TightInclusion) return m_ipcWrapper->compute_collision_tightInclusion_stepsize(cvp0, cvp1);
-    throw std::runtime_error("Unknown CCDMethod");
+    Real ccdAlphaScale;
+    if      (CCD == CCDMethod::CFL)            ccdAlphaScale = m_ipcWrapper->compute_collision_cfl_stepsize(cvp0, cvp1);
+    else if (CCD == CCDMethod::TightInclusion) ccdAlphaScale = m_ipcWrapper->compute_collision_tightInclusion_stepsize(cvp0, cvp1);
+    else throw std::runtime_error("Unknown CCDMethod");
+
+    // Changing the rounding mode to round down is done to match PolyFEM.
+    // It's unlikely this is actually enough to guarantee robustness against
+    // rounding errors (since the roundings of each entry of
+    // `ccdAlphaScale * (initialAlpha * step)` and `(ccdAlphaScale * initialAlpha) * step`
+    // will differ regardless of selected rounding mode.
+    const int current_round = std::fegetround();
+    std::fesetround(FE_DOWNWARD);
+    Real alpha = ccdAlphaScale * initialAlpha;
+    std::fesetround(current_round);
+    return alpha;
 }
 
 template<typename _Real>

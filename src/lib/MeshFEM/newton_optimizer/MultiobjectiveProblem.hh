@@ -204,9 +204,17 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // Accumulate the matvec: result_accum += weight * (d2E / dpdx) * adjoint_state
     virtual void contract_d2E_dpdx(Real weight, const VXd &adjoint_state, VXd &result_accum) const { throw std::runtime_error("contract_d2E_dpdx unimplemented"); }
 
-    // Allow subclasses to impose an upper bound on the step size (e.g., to
-    // enforce interpenetration-free steps).
-    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
+    // Allow subclasses to impose an upper bound on the step size `alpha`
+    // before starting the line search (e.g., to enforce interpenetration-free steps).
+    // This method is called on each term in a `NewtonMultiobjectiveProblem`
+    // in order. The step length imposed by/feasible for all previous terms is
+    // passed as `initialAlpha`. The current value of the full
+    // `NewtonMultiobjectiveProblem` objective is also passed in case
+    // the term wishes to implement an energy-based step length filter
+    // (e.g., if all objective terms are known to be positive, then
+    //  backtracking is necessary if a single term already exceeds the current
+    //  objective value).
+    virtual Real customFeasibleStepLength(const VXd &/* vars */, const VXd &/* step */, Real initialAlpha = 1.0, Real /* currentObjectiveValue */ = std::numeric_limits<Real>::max()) const { return initialAlpha; }
 
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
@@ -434,9 +442,9 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
     // Allow subclasses to impose an upper bound on the step size (e.g., to
     // enforce interpenetration-free steps).
     virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override {
-        Real stepLength = std::numeric_limits<Real>::max();
+        Real stepLength = 1.0;
         for (const auto &term : m_terms)
-            stepLength = std::min(term->customFeasibleStepLength(vars, step), stepLength);
+            stepLength = std::min(term->customFeasibleStepLength(vars, step, stepLength), stepLength); // Note that the `min` here shouldn't be necessary because the term should never grow the step length. But we keep it just in case...
         return stepLength;
     }
 
@@ -509,7 +517,7 @@ private:
                 // change. Otherwise, we ask the term to detect a change
                 // wrt. the currently incorporated version of its sparsity pattern.
                 if (force || t.sparsityPatternChanged || t.detectSparsityPatternChange(m_hessianSparsityForSemistaticTerms[i])) {
-                    std::cout << "Building semistatic term sparsity pattern" << std::endl;
+                    // std::cout << "Building semistatic term sparsity pattern" << std::endl;
                     m_hessianSparsityForSemistaticTerms[i] = t.hessianSparsityPattern();
                     changed = true;
                     staticOnly = false;

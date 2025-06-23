@@ -6,6 +6,7 @@
 #if MESHFEM_WITH_CATAMARI
 
 #include <MeshFEM/Parallelism.hh>
+#include <MeshFEM/ParallelVectorOps.hh>
 
 extern "C" {
 #include <cholmod.h>
@@ -47,6 +48,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
     void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;
+    void factorizeSymbolic(const BlockCSCHessianBase &H) override { factorizeSymbolic(H, std::vector<size_t>()); }
 
     void factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */ = false) override;
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override;
@@ -66,14 +68,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const override;
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
-    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override {
-        // Catamari does the solve in-place! Copy `b` into `x` and wrap it in a
-        // catamari::BlasMatrixView.
-        const size_t s = m_reduced();
-        Eigen::Map<Eigen::VectorXd>(x, s) = Eigen::Map<const Eigen::VectorXd>(b, s);
-
-        solveRawReducedInPlace(x, sys, alreadyPermuted);
-    }
+    void solveRawReduced(const Real *b, Real *x, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override;
 
     // Raw pointer version (Use with care! Caller must allocate/own both pointers)
     void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override;
@@ -92,6 +87,9 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     }
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
+
+    size_t getFactorNNZ() const override;
+
     CholeskyProvider provider() const override {
         if (m_legacy) return CholeskyProvider::CatamariLegacy;
 
@@ -121,6 +119,8 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
 
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
+
+    void writeSolveTimers() const override;
 
 #if defined(MESHFEM_WITH_SCOTCH)
     struct ScotchSettings {
@@ -165,6 +165,8 @@ private:
 
     // Whether to use Jack Poulson's original code for comparison
     bool m_legacy = false;
+
+    mutable Eigen::VectorXd m_permuted_rhs_scratch;
 };
 #endif
 

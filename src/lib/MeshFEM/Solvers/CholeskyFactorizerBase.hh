@@ -171,6 +171,8 @@ struct CholeskyFactorizerBase {
     virtual void setSuppressWarnings(bool /* suppressWarnings */) { }
     virtual bool checkPosDef() const = 0;
 
+    virtual size_t getFactorNNZ() const { throw std::runtime_error("getFactorNNZ not implemented by this factorizer"); }
+
     // Check whether the factorization needed to solve `sys` exists;
     // this is generally a numeric factorization, but only a symbolic
     // factorization if `sys`is `P` or `Pt`.
@@ -340,6 +342,8 @@ struct CholeskyFactorizerBase {
     static std::string symbolicMatrixFileName(size_t i) { return "/symbolic_mat_" + m_matrixIdString(i) + ".bin"; }
     static std::string  numericMatrixFileName(size_t i) { return "/numeric_mat_"  + m_matrixIdString(i) + ".bin"; }
     static std::string     pinnedVarsFileName(size_t i) { return "/pinned_vars_"  + m_matrixIdString(i) + ".txt"; }
+
+    virtual void writeSolveTimers() const { /* Only some subclasses record timers */ }
 
 protected:
     // An increasing identifier used to sequence each matrix written

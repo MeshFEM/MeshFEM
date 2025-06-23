@@ -100,7 +100,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     NewtonHessian hessianSparsityPattern() const override;
 
     // Determine the maximum collision-free step size.
-    Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override;
+    Real customFeasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha = 1.0, Real currentObjectiveValue = std::numeric_limits<Real>::max()) const override;
 
     // Adaptive barrier stiffness support
     // Note that `initialBarrierStiffness` needs access to the current primary

@@ -59,6 +59,22 @@ void copyParallel(const Eigen::MatrixBase<Derived> &in, const Eigen::MatrixBase<
         }, ap);
 }
 
+template<typename T>
+void copyParallel(size_t s, const T *in, T *result) {
+    static constexpr size_t grain_size = 8192;
+    static constexpr size_t parallelism_threshold = grain_size * 4;
+
+    if (s >= parallelism_threshold) {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, s, grain_size),
+                          [in, result](const tbb::blocked_range<size_t> &r) {
+            std::memcpy(result + r.begin(), in + r.begin(), (r.end() - r.begin()) * sizeof(T));
+        });
+    }
+    else {
+        std::memcpy(result, in, s * sizeof(T));
+    }
+}
+
 template<class Derived>
 typename Derived::Scalar squaredNormParallel(const Eigen::MatrixBase<Derived> &v) {
     using Scalar = typename Derived::Scalar;

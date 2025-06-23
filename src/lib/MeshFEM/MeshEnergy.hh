@@ -139,6 +139,17 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
+    static std::string name() {
+        std::string ename;
+        if constexpr (has_name_method<Element>::value) {
+            ename = Element::name();
+        } else {
+            ename = get_name_of_type<Element>();
+        }
+
+        return ename + "MeshEnergy";
+    }
+
     auto extractLocalVars(size_t si) const {
         return stencils[si].template extract<LocalVars>(m_vars.globalVars(), m_vars.varStructure());
     }

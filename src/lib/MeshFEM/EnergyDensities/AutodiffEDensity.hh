@@ -13,6 +13,7 @@
 
 #include <Eigen/Dense>
 #include <MeshFEM/AutomaticDifferentiation.hh>
+#include <MeshFEM/Utilities/NameMangling.hh>
 #include "EnergyTraits.hh"
 
 template<class Psi, typename Real_, size_t Dim_, EDensityType EDType_ = EDensityType::FBased>
@@ -29,6 +30,14 @@ struct AutodiffEDensity : public Psi {
 
     using ADScalar  = Eigen::AutoDiffScalar<Eigen::Matrix<Real,     M * N, 1>>;
     using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, M * N, 1>>;
+
+    static std::string name() {
+        if constexpr (has_name_method<Psi>::value) {
+            return Psi::name();
+        } else {
+            return get_name_of_type<Psi>() + std::string("AD");
+        }
+    }
 
     AutodiffEDensity() { setDeformationGradient(Matrix::Identity()); }
     AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&)
@@ -148,8 +157,6 @@ private:
 
 // Example:
 struct SymmetricDirichletPsi {
-    static std::string name() { return "SymmetricDirichletDerivativeFree"; }
-
     template<class Derived>
     typename Derived::Scalar psi(const Eigen::MatrixBase<Derived> &A) { // Don't use the `auto` return type here! We must evaluate the expression template before returning...
         auto J = A.determinant();
