@@ -67,7 +67,7 @@ void IPCObjectiveTerm<_Real>::accumulateHessian(Real weight, NewtonHessian &H, b
 template<typename _Real>
 _Real IPCObjectiveTerm<_Real>::customFeasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha, Real currentObjectiveValue) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.feasibleStepLength");
-    std::cout << "IPCObjectiveTerm::customFeasibleStepLength with initialAlpha = " << initialAlpha << std::endl;
+    // std::cout << "IPCObjectiveTerm::customFeasibleStepLength with initialAlpha = " << initialAlpha << std::endl;
 
     const MXd &cvp0 = getCollisionVertexPositions();
     const MXd &cvp1 = m_combinedCollisionMesh->vertexPositionsForVars(vars + initialAlpha * step);
