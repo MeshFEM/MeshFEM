@@ -26,7 +26,7 @@ using LoadCollection = std::vector<std::shared_ptr<Loads::Load<_Real>>>;
 struct MESHFEM_EXPORT TimestepLimiter {
     TimestepLimiter() { };
     virtual double getTimestepLength (double t, double dt) { return 1.0; }
-    virtual void initialBarrierStiffness(double w, const Eigen::VectorXd &primaryPotentialGradient) = 0;
+    virtual void initialBarrierStiffness(double w, const Eigen::VectorXd &primaryPotentialGradient, double primaryObjectMass) = 0;
     virtual ~TimestepLimiter() { };
     void setAdaptiveTimestep(bool flag) { if (flag) throw std::runtime_error("Adaptive timestep is disabled until further testing"); m_useAdaptiveTimestep = flag; }
     bool useAdaptiveTimestep() { return m_useAdaptiveTimestep; }
@@ -169,7 +169,9 @@ struct DynamicSimulator {
             const auto &term = m_noninertiaTerms[i];
             auto derivedObj = std::dynamic_pointer_cast<TimestepLimiter>(term);
             if (derivedObj != nullptr){
-                derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/, primaryPotentialGradient()); // Need weight = dt^2 to match IPC formulation
+                const EO &o = *m_obj;
+                double mass = o.getMassDensity() * o.volume();
+                derivedObj->initialBarrierStiffness(dt * dt /** m_prob->weight(i)*/, primaryPotentialGradient(), mass); // Need weight = dt^2 to match IPC formulation
             }
         }
    

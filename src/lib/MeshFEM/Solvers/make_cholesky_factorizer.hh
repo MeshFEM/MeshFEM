@@ -44,7 +44,7 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
 
 inline CholeskyProvider get_default_cholesky_provider() noexcept {
 #if MESHFEM_WITH_CATAMARI
-    return CholeskyProvider::CatamariNesdis;
+    return CholeskyProvider::CatamariAdaptive;
 #else
     return CholeskyProvider::CHOLMOD;
 #endif
