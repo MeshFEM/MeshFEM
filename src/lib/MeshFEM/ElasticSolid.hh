@@ -576,78 +576,10 @@ private:
     }
 
     //////////////////////////////////////////////////////
-    // IPC  Support
+    // IPC Support
     //////////////////////////////////////////////////////
     // Get the edges and faces of the boundary mesh
-    using CollisionMesh = typename Base::CollisionMesh;
-    CollisionMesh getCollisionMesh() const override {
-        CollisionMesh result;
-        auto &faces = result.faces;
-        auto &edges = result.edges;
-        const bool use_midedge_nodes = (Deg == 2);
-        const auto &m = mesh();
-        if constexpr (K == 3) {
-            // For tet meshes, first extract the boundary triangles
-            // and then use those to determine edges.
-            if (!use_midedge_nodes) {
-                faces.resize(m.numBoundaryElements(), 3);
-                for (auto be : m.boundaryElements())
-                    for (auto bv : be.vertices())
-                        faces(be.index(),bv.localIndex()) = bv.index();
-            }
-            else {
-                faces.resize(4 * m.numBoundaryElements(), 3);
-                for (auto be : m.boundaryElements()) {
-                    //     0
-                    //    / \ 
-                    //   3---5
-                    //  / \ / \ 
-                    // 1---4---2
-                    faces.row(4 * be.index() + 0) << be.node(0).index(), be.node(3).index(), be.node(5).index();
-                    faces.row(4 * be.index() + 1) << be.node(3).index(), be.node(1).index(), be.node(4).index();
-                    faces.row(4 * be.index() + 2) << be.node(3).index(), be.node(4).index(), be.node(5).index();
-                    faces.row(4 * be.index() + 3) << be.node(4).index(), be.node(2).index(), be.node(5).index();
-                }
-            }
-
-            std::map<UnorderedPair, size_t> emap;
-            for (size_t fi = 0; fi < faces.rows(); ++fi) {
-                for (size_t c = 0; c < 3; ++c) {
-                    UnorderedPair key(faces(fi, c), faces(fi, (c + 1) % 3));
-                    if (emap.count(key) == 0) emap.emplace(key, emap.size());
-                }
-            }
-            edges.resize(emap.size(), 2);
-            for (auto &k : emap)
-                edges.row(k.second) << k.first[0], k.first[1];
-        }
-        else {
-            // For triangle meshes, we have only edges to extract.
-            static_assert(K == 2, "Only 2D and 3D simplicial meshes are supported");
-            if (!use_midedge_nodes) {
-                edges.resize(m.numBoundaryElements(), 2);
-                for (auto be : m.boundaryElements())
-                    edges.row(be.index()) << be.node(0).index(), be.node(1).index();
-            }
-            else {
-                edges.resize(2 * m.numBoundaryElements(), 2);
-                for (auto be : m.boundaryElements()) {
-                    edges.row(2 * be.index() + 0) << be.node(0).index(), be.node(2).index();
-                    edges.row(2 * be.index() + 1) << be.node(2).index(), be.node(1).index();
-                }
-            }
-        }
-
-        auto &nfcv = result.nodeForCollisionMeshVertex;
-        nfcv.resize(use_midedge_nodes ? m.numBoundaryNodes() : m.numBoundaryVertexNodes());
-        for (int i = 0; i < nfcv.size(); ++i)
-            nfcv[i] = m.boundaryNode(i).volumeNode().index();
-        result.N = N;
-        result.bbox = m.boundingBox();
-        result.fullModelBlockVars = m.numNodes();
-        return result;
-    }
-
+    CollisionMesh getCollisionMesh() const override { return CollisionMesh::constructForMesh(mesh()); }
     Real volume() const override { return mesh().volume(); }
 
 protected:

@@ -5,10 +5,10 @@
 #if MESHFEM_WITH_IPC_TOOLKIT
 
 template<typename _Real>
-IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<EO> eo, const ObstaclesCollection &obsts)
-    : NewtonObjectiveTerm(eo), m_obj(eo), m_k(1.0e6)
+IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obsts)
+    : NewtonObjectiveTerm(vars), m_k(1.0e6)
 {
-    m_combinedCollisionMesh = std::make_unique<CombinedCollisionMesh<Real>>(*eo, obsts);
+    m_combinedCollisionMesh = std::make_unique<CombinedCollisionMesh<Real>>(cm, obsts);
     m_collisionVertexPositions = m_combinedCollisionMesh->vertexPositionsForVars(getVars());
     
     m_N = m_combinedCollisionMesh->N;
@@ -90,13 +90,13 @@ _Real IPCObjectiveTerm<_Real>::customFeasibleStepLength(const VXd &vars, const V
 }
 
 template<typename _Real>
-void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double dtSq, const Eigen::VectorXd &primaryPotentialGradient) {
-    BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.initialBarrierStiffness");
+void IPCObjectiveTerm<_Real>::initialBarrierStiffness(double dtSq, const Eigen::VectorXd &primaryPotentialGradient, double primaryObjectMass) {
     if (!useAdaptiveBarrier) return;
 
+    BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.initialBarrierStiffness");
+
     VXd dB_dVO = contactGradient(true);
-    const EO &o = object();
-    double avgMass = o.getMassDensity() * o.volume() / (m_combinedCollisionMesh->numCombinedNodes());
+    double avgMass = primaryObjectMass / (m_combinedCollisionMesh->numCombinedNodes());
 
     size_t numObstacleVars = m_combinedCollisionMesh->numObstaclesVertices() * m_N;
     size_t numVarsPlusObstacles = numVars() + numObstacleVars;

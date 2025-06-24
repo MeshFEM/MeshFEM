@@ -40,8 +40,6 @@ struct AutodiffElement : public ElementBase<AutodiffElement<ElementEnergy>>, pri
     using Material  = typename Base::Material;
     using LocalVars = typename ElementEnergy::LocalVars;
 
-    using ElementEnergy::name;
-
     template<class Mesh>
     AutodiffElement(size_t ei, const Mesh &m, const LocalVars &x, MaterialAssignment<MaterialBase> &materials)
         : Base(ei, materials), ElementEnergy(ei, m) {

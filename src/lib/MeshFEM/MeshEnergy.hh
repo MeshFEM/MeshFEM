@@ -172,7 +172,7 @@ struct MeshEnergy : public MeshEnergyBase {
     const auto &assembler() const { return m_vars.assembler(); }
 
     void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.accumulateGradient");
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".accumulateGradient");
         if constexpr (Element::CachesDeformedQuantities) {
             assembler().assembleGradient(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight);
@@ -186,7 +186,7 @@ struct MeshEnergy : public MeshEnergyBase {
     }
 
     void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.hessian");
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian");
         if (!useXBasedProjection || !projectionMask) {
             // Use projection implemented by the element itself (e.g., F-based projection)
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
@@ -223,7 +223,7 @@ struct MeshEnergy : public MeshEnergyBase {
     void varsUpdated() override {
         // Update cached state for each element.
         if constexpr (Element::CachesDeformedQuantities) {
-            BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy<" + Element_::name() + ">.varsUpdated");
+            BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".varsUpdated");
             parallel_for_range(elements.size(),
                 [&](size_t i) { elements[i].setDeformedConfiguration(extractLocalVars(i)); },
                 /* grain_size = */ 100, /* parallelism_threshold = */ 1000);
@@ -251,6 +251,15 @@ private:
     const Vars &m_vars;
     std::shared_ptr<Vars> m_vars_ptr; // Keep the variables structure alive.
     std::shared_ptr<Mesh> m_mesh;     // Keep the mesh alive in case the element energy class references it.
+};
+
+// A Lagrange FEM discretization of an energy functional that is a function of
+// the mesh's embedding (node positions).
+// This embedding (e.g., the deformed configuration of an elastic solid) maps to R^N.
+template<class Mesh_, size_t N, class Element_>
+struct MeshEmbeddingEnergy : public MeshEnergy<Mesh_, NodalVars<N>, ElementStencil</* K = */ Mesh_::K, Mesh_::Deg, N>, Element_> {
+    using Base = MeshEnergy<Mesh_, NodalVars<N>, ElementStencil</* K = */ Mesh_::K, Mesh_::Deg, N>, Element_>;
+    using Base::Base;
 };
 
 #endif /* end of include guard: MESHENERGY_HH */

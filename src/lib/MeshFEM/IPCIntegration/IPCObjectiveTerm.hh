@@ -14,13 +14,12 @@ template<typename _Real>
 struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public TimestepLimiter {
     enum class CCDMethod { TightInclusion, CFL };
     using Real = _Real;
-    using EO   = ElasticObject<Real>;
 
     using MXd = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
     using MXdRowMajor = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
     using MXi = Eigen::MatrixXi;
 
-    IPCObjectiveTerm(std::shared_ptr<EO> eo, const ObstaclesCollection &obsts);
+    IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obsts = ObstaclesCollection());
 
     virtual void varsUpdated() override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.varsUpdated");
@@ -29,7 +28,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         m_buildCollisionConstraints();
     }
 
-    const VXd getVars() const { return object().getVars().template cast<double>(); }
+    const VXd getVars() const { return this->getNVars().getVars().template cast<double>(); }
 
     virtual Real objective() const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.energy");
@@ -40,7 +39,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateGradient");
         // Add contact potential gradient computed by IPC
         const VXd &dB_dCV = contactPotentialGradient();
-        // Only consider the ElasticObject Collision Mesh, not obstacles.
+        // Extract entries from the gradient with respect to each collision mesh vertex.
         for (size_t i = 0; i < m_combinedCollisionMesh->numEOCollisionVertices(); ++i) {
             int bvar = m_combinedCollisionMesh->nodeForCollisionMeshVertex[i];
             if (bvar < 0) continue;
@@ -84,10 +83,10 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
 
         g.setZero(gSize);
         const VXd &dB_dCV = contactPotentialGradient();
-        // Only consider the ElasticObject Collision Mesh, not obstacles.
+        // Extract entries from the gradient with respect to each collision mesh vertex.
         for (size_t i = 0; i < m_combinedCollisionMesh->numEOCollisionVertices(); ++i) {
             int bvar = m_combinedCollisionMesh->nodeForCollisionMeshVertex[i];
-            if (bvar < 0) continue;
+            if (bvar < 0) continue; // Ignore obstacle vertices.
             g.segment(m_N * bvar, m_N) += dB_dCV.segment(m_N * i, m_N);
         }
         if (includeObstacleVertices) g.tail(numObstacleVars) = dB_dCV.tail(numObstacleVars);
@@ -106,23 +105,21 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     // Note that `initialBarrierStiffness` needs access to the current primary
     // potential gradient; for a dynamic simulation this must incorporate the
     // inertia term gradient!
-    void initialBarrierStiffness(double dtSq, const Eigen::VectorXd &primaryPotentialGradient) override;
-    // Convenience method for the case where the primary potential consists only
-    // of the elastic object (e.g., static simulation, parametrization)
-    void initialBarrierStiffness(double dtSq) { initialBarrierStiffness(dtSq, object().gradient()); }
+    void initialBarrierStiffness(double dtSq, const Eigen::VectorXd &primaryPotentialGradient, double primaryObjectMass) override;
     void updateBarrierStiffness();
 
     size_t numCollisionConstraints() const;
 
-    // Adaptive time stepping, time will progress with alpha*dt due to the linear trajectory of obstacle movement
-    // in the scene to prevent collision of obstacle and Elastic Object.
+    // Determine a timestep attentuation factor `alpha` so that the moving
+    // obstacle does not collide with the primary object over the time
+    // interval [0, alpha * dt].
     virtual Real getTimestepLength(Real t, Real dt) override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.AddaptiveTimeStepLength");
         Real alpha;
         VXd vars = getVars();
         // Move Obstacle with t time in linear trajectory
         m_combinedCollisionMesh->updateObstaclePosition(t + dt);
-        // Fix ElasticObject and run CCD to detect collision of obstacle with ElasticObject  
+        // Fix primary object and run CCD to detect collision with the moving obstacle
         alpha = customFeasibleStepLength(vars, VXd::Zero(numVars()));
         if (alpha != 1.0) m_combinedCollisionMesh->updateObstaclePosition(t + alpha*dt);
         m_collisionVertexPositions = m_combinedCollisionMesh->vertexPositionsForVars(vars);
@@ -147,8 +144,6 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
 
     Real CCDStepSize(const VXd &x0, const VXd &x1) const;
 
-    const EO &object() const { return *m_obj; }
-
     ~IPCObjectiveTerm();
     
     CCDMethod CCD = CCDMethod::TightInclusion;
@@ -167,9 +162,7 @@ protected:
     std::unique_ptr<CombinedCollisionMesh<Real>> m_combinedCollisionMesh;
     std::unique_ptr<IPCWrapperBase> m_ipcWrapper;
 
-    std::shared_ptr<EO> m_obj;
-
-    // m_obj embeddingSpace dimension
+    // Embedding dimension
     size_t m_N;
 
     ////////////////////////////////////////////////////////////////////////////////

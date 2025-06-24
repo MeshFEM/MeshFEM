@@ -11,13 +11,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef ELASTICOBJECT_HH
 #define ELASTICOBJECT_HH
-#include "Types.hh"
 #include <cstdlib>
 #include <functional>
 
 #include "FieldSampler.hh"
 #include "SparseMatrices.hh"
 #include "newton_optimizer/MultiobjectiveProblem.hh"
+#include "IPCIntegration/CollisionMesh.hh"
 
 ////////////////////////////////////////////////////////////////////////////
 // Generic variables:
@@ -161,46 +161,17 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
         return M;
     }
 
-    //////////////////////////////////////////////////////////////////////////
-    // Methods needed for IPCEquilibriumSolver
-    //////////////////////////////////////////////////////////////////////////
-    struct CollisionMesh {
-        // Index tables representing the boundary mesh used for collision (e.g.,
-        // for IPC). Note that these tables hold indices of *collision mesh
-        // vertices*, which are different from nodes/vertices of the underlying
-        // elastic object. Currently we only implement support for elastic
-        // objects whose collision mesh vertices coincide with nodes of a FEM
-        // mesh (which can be determined by `nodeForCollisionMeshVertex`). This
-        // notably exludes elastic rods.
-        Eigen::MatrixXi edges, faces;
-        Eigen::VectorXi nodeForCollisionMeshVertex;
-
-        using VMaxd = VecMaxN_T<Real, 3>;
-        BBox<VMaxd> bbox;
-
-        size_t fullModelBlockVars = 0; // number of block variables (nodes) in the volumetric simulation mesh
-        size_t N = 0;
-        size_t numCollisionVertices() const { return nodeForCollisionMeshVertex.size(); }
-
-        // Extract a per-vertex vector field over this collision mesh from the
-        // full simulation DoF vector `vars.`
-        Eigen::MatrixXd extractVectorField(const VXd &vars) const {
-            const size_t ncv = numCollisionVertices();
-            Eigen::MatrixXd result(ncv, N);
-            for (size_t i = 0 ; i < ncv; ++i)
-                result.row(i) = vars.segment(N * nodeForCollisionMeshVertex[i], N);
-            return result;
-        }
-    };
-
-    virtual CollisionMesh getCollisionMesh() const { throw std::runtime_error("Unimplemented"); }
-    virtual Real volume()            const { throw std::runtime_error("Unimplemented"); }
-
     // Note: changing the mass density invalidates certain rest-state-cache
     // quantities (like the gravity load vector), so we issue a rest-state
     // update notification below.
     Real getMassDensity() const { return m_rho; }
     void setMassDensity(Real rho) { m_rho = rho; m_restConfigUpdated(); }
+
+    //////////////////////////////////////////////////////////////////////////
+    // Methods needed for IPCEquilibriumSolver
+    //////////////////////////////////////////////////////////////////////////
+    virtual CollisionMesh getCollisionMesh() const { throw std::runtime_error("Unimplemented"); }
+    virtual Real volume()            const { throw std::runtime_error("Unimplemented"); }
 
     virtual ~ElasticObject() { }
 private:

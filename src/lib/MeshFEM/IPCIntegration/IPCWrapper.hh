@@ -1,18 +1,16 @@
 #ifndef IPCWRAPPER_HH
 #define IPCWRAPPER_HH
 
-#include <MeshFEM/ElasticObject.hh>
+#include "CollisionMesh.hh"
 #include "Obstacle.hh"
 
 using ObstaclesCollection = std::vector<std::shared_ptr<Obstacle>>;
 
-// This CombinedCollisionMesh appends the obstacles to the ElasticObject's
-// CollisionMesh.
+// CombinedCollisionMesh appends obstacles to the primary elastic object's CollisionMesh.
 template<typename _Real>
 struct CombinedCollisionMesh {
     using Real = _Real;
     using VXi  = Eigen::VectorXi;
-    using EO   = ElasticObject<Real>;
     using MXi  = Eigen::MatrixXi;
     using MXd  = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
     using MXdRowMajor = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
@@ -20,14 +18,14 @@ struct CombinedCollisionMesh {
 
     using VMaxd = VecMaxN_T<Real, 3>;
 
-    CombinedCollisionMesh(const EO &eo, const ObstaclesCollection &obsts) : m_obsts(obsts) {
-        m_eocm = eo.getCollisionMesh();
-        N = m_eocm.N;
-        numEONodes = eo.numVars() / N;
-        fullModelBlockVars = m_eocm.fullModelBlockVars;
-        bbox = m_eocm.bbox;
-        edges = m_eocm.edges;
-        if (N == 3) faces = m_eocm.faces;
+    CombinedCollisionMesh(CollisionMesh primaryCM, const ObstaclesCollection &obsts)
+        : m_primaryCM(primaryCM), m_obsts(obsts)
+    {
+        N = m_primaryCM.N;
+        fullModelBlockVars = m_primaryCM.fullModelBlockVars;
+        bbox = m_primaryCM.bbox;
+        edges = m_primaryCM.edges;
+        if (N == 3) faces = m_primaryCM.faces;
         m_obstaclesVertices = MXd();
 
         // Counting pass
@@ -46,7 +44,7 @@ struct CombinedCollisionMesh {
 
         // Appending pass
         size_t vtxOffset = numEOCollisionVertices(); // Index of the first vertex of the obstacle after appending.
-        size_t ovBack = 0, eBack = m_eocm.edges.rows(), fBack = m_eocm.faces.rows();
+        size_t ovBack = 0, eBack = m_primaryCM.edges.rows(), fBack = m_primaryCM.faces.rows();
         for (auto &o : m_obsts) { m_obstaclesVertices.middleRows(ovBack, o->numVertices()) = o->getVertices();
             ovBack += o->numVertices();
 
@@ -64,22 +62,22 @@ struct CombinedCollisionMesh {
         nodeForCollisionMeshVertex = getNodeForCombinedCollisionMeshVertex();
     }
 
-    const typename EO::CollisionMesh &getElasticObjectCollisionMesh() const { return m_eocm; }
+    const CollisionMesh &getElasticObjectCollisionMesh() const { return m_primaryCM; }
 
     // Number of ElasticObject vertices which will be used for finite element computations
-    size_t numEOCollisionVertices() const { return m_eocm.numCollisionVertices(); }
+    size_t numEOCollisionVertices() const { return m_primaryCM.numCollisionVertices(); }
     // Number of obstacle vertices
     size_t numObstaclesVertices() const { return m_obstaclesVertices.rows(); }
 
     bool isObstacleVertex(size_t vi) const { return vi >= numEOCollisionVertices(); }
 
     size_t numCombinedCollisionVertices() const { return numEOCollisionVertices() + numObstaclesVertices(); }
-    size_t numCombinedNodes() const { return numEONodes + numObstaclesVertices(); }
+    size_t numCombinedNodes() const { return fullModelBlockVars + numObstaclesVertices(); }
     // Concatenate nodeForCollisionMeshVertex with vector of -1 with the number of
     // obstacle vertices
     VXi getNodeForCombinedCollisionMeshVertex() const {
         VXi result(numCombinedCollisionVertices());
-        result << m_eocm.nodeForCollisionMeshVertex,
+        result << m_primaryCM.nodeForCollisionMeshVertex,
                   VXi::Constant(numObstaclesVertices(), -1);
         return result;
     }
@@ -87,11 +85,11 @@ struct CombinedCollisionMesh {
     // Get the position of the collision mesh vertices from the simulation
     // `vars` and the passed obstacle vertex positions `obstVars`.
     MXd extractPositions(const Eigen::Ref<const VXd> &vars, const MXd &obstPositions) {
-        if (size_t(vars.size()) != N * numEONodes)                  throw std::runtime_error("Unexpected vars size.");
+        if (size_t(vars.size()) != N * fullModelBlockVars)          throw std::runtime_error("Unexpected vars size.");
         if (size_t(obstPositions.rows()) != numObstaclesVertices()) throw std::runtime_error("Unexpected obstacle vertex positions size.");
         const size_t nccv = numCombinedCollisionVertices();
         MXd result(nccv, N);
-        result << m_eocm.extractVectorField(vars),
+        result << m_primaryCM.extractVectorField(vars),
                   obstPositions;
         return result;
     }
@@ -101,8 +99,8 @@ struct CombinedCollisionMesh {
     // PolyFEM includes the obstacle vertex positions at the end of the vars vector.
     MXd vertexPositionsForPolyfemVars(const VXd &vars) {
         if (size_t(vars.size()) != N * numCombinedNodes()) throw std::runtime_error("Unexpected PolyFEM vars size.");
-        return extractPositions(vars.head(N * numEONodes),
-                                Eigen::Map<const MXdRowMajor>(vars.data() + N * numEONodes, numObstaclesVertices(), N));
+        return extractPositions(vars.head(N * fullModelBlockVars),
+                                Eigen::Map<const MXdRowMajor>(vars.data() + N * fullModelBlockVars, numObstaclesVertices(), N));
     }
 
     // Need to remove, it seems unnecessary
@@ -136,14 +134,15 @@ struct CombinedCollisionMesh {
     MXi edges, faces;
     size_t N;
     BBox<VMaxd> bbox;
-    size_t numEONodes;
 
 private:
-    typename EO::CollisionMesh m_eocm; // Elastic Object Collision Mesh
+    CollisionMesh m_primaryCM;
     ObstaclesCollection m_obsts; // Vector of Obstacles
     std::vector<size_t> m_numObstsVertices;
     MXd m_obstaclesVertices;
 };
+
+#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
 
 // Forward declaration of struct holding all IPC state and functionality that
 // requires IPC headers
