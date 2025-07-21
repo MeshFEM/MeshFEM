@@ -99,7 +99,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     NewtonHessian hessianSparsityPattern() const override;
 
     // Determine the maximum collision-free step size.
-    Real customFeasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha = 1.0, Real currentObjectiveValue = std::numeric_limits<Real>::max()) const override;
+    Real feasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha = 1.0, Real currentObjectiveValue = std::numeric_limits<Real>::max()) const override;
 
     // Adaptive barrier stiffness support
     // Note that `initialBarrierStiffness` needs access to the current primary
@@ -120,7 +120,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         // Move Obstacle with t time in linear trajectory
         m_combinedCollisionMesh->updateObstaclePosition(t + dt);
         // Fix primary object and run CCD to detect collision with the moving obstacle
-        alpha = customFeasibleStepLength(vars, VXd::Zero(numVars()));
+        alpha = feasibleStepLength(vars, VXd::Zero(numVars()));
         if (alpha != 1.0) m_combinedCollisionMesh->updateObstaclePosition(t + alpha*dt);
         m_collisionVertexPositions = m_combinedCollisionMesh->vertexPositionsForVars(vars);
         m_buildCollisionConstraints();

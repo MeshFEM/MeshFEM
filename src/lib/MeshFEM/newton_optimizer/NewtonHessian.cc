@@ -120,6 +120,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
     // Euclidean distance in the parameter space. For instance,
     // the mass matrix is a good choice.
     Real tau = 0;
+    m_shift = 0.0;
 
     auto &s = solver();
     s.setSuppressWarnings(!m_options.verboseNonPosDef);
@@ -149,6 +150,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
             if (tau != 0) {
                 if (m_options.useIdentityMetric || !(m_problem->providesMetric())) {
                     s.factorizeNumericWithShift(getH(), tau * currentTauScale);
+                    m_shift = tau * currentTauScale;
                 }
                 else {
                     if (!M) {
@@ -164,7 +166,13 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
             else {
                 if (m_problem->hessianShift == 0)
                     s.factorizeNumeric(getH());
-                else s.factorizeNumericWithShift(getH(), m_problem->hessianShift);
+                else {
+                    Real shift = m_problem->hessianShift;
+                    if (m_problem->useRelativeHessianShift)
+                        shift *= (getH().trace() / m_problem->numVars());
+                    s.factorizeNumericWithShift(getH(), shift);
+                    m_shift = shift;
+                }
             }
 
             if (!s.checkPosDef()) throw std::runtime_error("System matrix is not positive definite"); // Needed in case CHOLMOD decides on an LDL factorization...
@@ -404,4 +412,20 @@ void BorderedSparseFactorization::solve(const Eigen::VectorXd &b, Eigen::VectorX
 
     m_sparseDenseStructure.sparseVars(x) = x_s;
     m_sparseDenseStructure.denseVars(x)  = y.head(ndv);
+}
+
+void NewtonHessianFactorization::solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const {
+    BorderedSparseFactorization::solve(b, x);
+
+    if (m_shift > 0) {
+        // Attempt to use Neumann series to correct for the shift applied during factorization...
+        size_t numCorrections = 0;
+        Eigen::VectorXd x_orig = x;
+        Eigen::VectorXd x_tilde;
+        for (size_t i = 0; i < numCorrections; ++i) {
+            x.swap(x_tilde);
+            BorderedSparseFactorization::solve(x_tilde, x);
+            x = x_orig + m_shift * x;
+        }
+    }
 }

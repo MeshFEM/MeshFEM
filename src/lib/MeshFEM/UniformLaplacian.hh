@@ -64,6 +64,7 @@ TripletMatrix<> construct(_Mesh &mesh, const std::vector<size_t> &varForVertex =
     }
 
     TripletMatrix<> L(numVars, numVars);
+    L.symmetry_mode = TripletMatrix<>::SymmetryMode::UPPER_TRIANGLE;
     L.reserve(2 * numEdges + numVars);
     for (size_t vi = 0; vi < numVars; ++vi) {
         const auto &adj_i = adj.at(vi);
@@ -71,8 +72,10 @@ TripletMatrix<> construct(_Mesh &mesh, const std::vector<size_t> &varForVertex =
         // if (numNeighbors == 0)
         //     std::cerr << "WARNING: variable " << vi << " unreferenced" << std::endl;
         L.addNZ(vi, vi, (Real) numNeighbors);
-        for (size_t vj : adj_i)
+        for (size_t vj : adj_i) {
+            if (vi > vj) continue; // only add upper triangle
             L.addNZ(vi, vj, -1.0);
+        }
     }
     return L;
 }

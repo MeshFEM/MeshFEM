@@ -439,6 +439,8 @@ struct MESHFEM_EXPORT NewtonHessianFactorization final : public BorderedSparseFa
     // overhead of comparing the sets unless `m_fixedVarsCouldHaveChanged` is true.
     void updateSymbolicFactorization();
 
+    void solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const;
+
     using BorderedSparseFactorization::solver;
     CholeskyFactorizerBase &solver();
 
@@ -462,6 +464,9 @@ private:
     // Record the sparsity pattern for which the most recent symbolic
     // factorization was computed by `m_solver`.
     size_t m_factorizedSparsityPatternID = std::numeric_limits<size_t>::max(); // None
+
+    Real m_shift = 0.0; // The multiple of the identity matrix added during
+                        // factorization to make the Hessian positive definite.
 };
 
 ////////////////////////////////////////////////////////////////////////////////

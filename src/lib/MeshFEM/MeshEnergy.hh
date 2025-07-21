@@ -74,7 +74,7 @@ struct MESHFEM_EXPORT MeshEnergyVars : public NewtonVars {
         ((MVSpec::initialize(m, m_x.segment(v.offsetForType(type), v.numVarsOfType(type))), ++type), ...);
     }
 
-    const Assembler &assembler() const override { return dynamic_cast<const Assembler &>(NewtonVars::assembler()); }
+    const Assembler &assembler() const override { return static_cast<const Assembler &>(NewtonVars::assembler()); }
     const auto &varStructure() const { return assembler().varStructure(); }
     const VXd &globalVars() const { return m_x; }
 
@@ -154,6 +154,14 @@ struct MeshEnergy : public MeshEnergyBase {
         return stencils[si].template extract<LocalVars>(m_vars.globalVars(), m_vars.varStructure());
     }
 
+    auto extractLocalVars(size_t si, const VXd &x) const {
+        return stencils[si].template extract<LocalVars>(x, m_vars.varStructure());
+    }
+
+    auto extractLocalVars(size_t si, const VXd &x, const typename Assembler::VarStructure &vs) const {
+        return stencils[si].template extract<LocalVars>(x, vs);
+    }
+
     Real elementEnergy(size_t ei) const {
         if constexpr (Element::CachesDeformedQuantities) {
             return elements[ei].energy();
@@ -179,8 +187,9 @@ struct MeshEnergy : public MeshEnergyBase {
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
+            const auto &vs = m_vars.varStructure();
             assembler().assembleGradient(g, elements.size(), [&](size_t ei) {
-                return elements[ei].gradient(weight, extractLocalVars(ei));
+                return elements[ei].gradient(weight, extractLocalVars(ei, m_vars.globalVars(), vs));
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
     }
@@ -230,6 +239,8 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
+    const VXd &globalVars() const { return m_vars.globalVars(); }
+
     size_t numElements() const override { return elements.size(); }
 
     void setHomogeneousMaterial(const Material &mat) { materials.setHomogeneous(mat); }
@@ -245,6 +256,7 @@ struct MeshEnergy : public MeshEnergyBase {
     StencilCollection<Stencil> stencils;
     std::vector<Element> elements;
     MA materials; // must come after stencils so stencil count is initialized first.
+
 private:
     Material &m_getMaterial(size_t ei) override { return materials[ei]; }
 

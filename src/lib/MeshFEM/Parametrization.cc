@@ -4,6 +4,7 @@
 #include "MassMatrix.hh"
 #include "Eigensolver.hh"
 #include <MeshFEM/Solvers/SPSDSystem.hh>
+#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 
 namespace Parametrization {
 
@@ -103,9 +104,7 @@ NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte) {
     TripletMatrix<> L;
     if (tutte) L = UniformLaplacian::construct(mesh);
     else       L = Laplacian::construct(mesh);
-    L.sumRepeated();
-    L.needs_sum_repeated = false;
-    SPSDSystemSolver Lsys(L);
+    SuiteSparseMatrix Lss(L);
 
     // Avoid resetting the SPSDSystemSolver and fixing variables anew for each component solve
     // by always fixing the boundary variables to "0" and directly computing the "load"
@@ -113,15 +112,19 @@ NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte) {
     std::vector<size_t> fixedVars(nbn);
     for (auto bn : mesh.boundaryNodes())
         fixedVars[bn.index()] = bn.volumeNode().index();
-    Lsys.fixVariables(fixedVars, std::vector<double>(nbn, 0.0));
-    std::vector<double> negDirichletValues(nn, 0.0);
-    std::vector<double> soln;
+
+    auto solver = make_cholesky_factorizer(get_default_cholesky_provider(CholeskyProviderHint::CheapSymbolic));
+    solver->factorize(Lss, fixedVars);
+
+    Eigen::VectorXd negDirichletValues;
+    negDirichletValues.setZero(nn);
+    Eigen::VectorXd soln;
 
     for (size_t c = 0; c < numComponents; ++c) {
         for (auto bn : mesh.boundaryNodes())
             negDirichletValues[bn.volumeNode().index()] = -boundaryData(bn.index(), c);
-        auto rhs = L.apply(negDirichletValues);
-        Lsys.solve(rhs, soln);
+        Eigen::VectorXd rhs = Lss.apply(negDirichletValues);
+        soln = solver->solve(rhs);
 
         for (auto n : mesh.nodes()) {
             auto bn = n.boundaryNode();
