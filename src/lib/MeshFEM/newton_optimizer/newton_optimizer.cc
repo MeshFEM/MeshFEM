@@ -168,7 +168,7 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
     bool isIndefinite = false;
     auto reportIterate = [&](size_t i, Real energy, Real g_free_norm, bool forcePrintIfVerbose) {
         prob->writeIterateFiles(i);
-        report.addEntry(energy, g_free_norm, alpha, isIndefinite);
+        report.addEntry(energy, g_free_norm, alpha, isIndefinite, prob->hessianWasProjected());
 
         if (options.verbose && (((i % options.verbose) == 0) || forcePrintIfVerbose)) {
             std::cout << i << '\t';

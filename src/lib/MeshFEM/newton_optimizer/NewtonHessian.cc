@@ -83,6 +83,7 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     // If `m_updateSparseFactorization` forces a Hessian reevaluation, then
     // `H_hn` will be updated in-place!
     // (This is what we want for the subsequent dense factorization steps.)
+    // std::cout << "NewtonHessianFactorization update hProjCtr.shouldUseProjection(): " << hProjCtr.shouldUseProjection() << std::endl;
     const NewtonHessian &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
 
     H_nh.validate(); // Make sure everything in H_nh is of the expected size.
@@ -186,6 +187,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
                 // returns `true`, then we need to recompute the Hessian with
                 // projection before trying shifts.
                 if (m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ true)) {
+                    // std::cout << "Indefinite Hessian; hessian projection controller requested a reevaluation of the Hessian with projection.\n";
                     m_problem->invalidateCachedHessian();
                     m_problem->hessian(true).validate(); // Updates the Hessian obtained by `getH` in-place.
                     continue; // No shifts at this time; we've just enabled projection

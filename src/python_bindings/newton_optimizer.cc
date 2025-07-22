@@ -35,6 +35,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
          .def("notifyDefiniteness",  &HessianProjectionController::notifyDefiniteness,  py::arg("isIndefinite"))
          .def("notifyStep",          &HessianProjectionController::notifyStep,          py::arg("step"))
          .def("notifyDirectionalDerivative", &HessianProjectionController::notifyDirectionalDerivative, py::arg("directionalDerivative"))
+         .def("reset", &HessianProjectionController::reset, "Reset the controller to its initial state (e.g., automatically called at the start of each Newton optimization).")
         ;
 
     bindController<HessianProjectionNever,    HessianProjectionController>(m, "HessianProjectionNever"   );
