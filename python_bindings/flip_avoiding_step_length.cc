@@ -11,5 +11,6 @@ PYBIND11_MODULE(flip_avoiding_step_length, m)
 
     py::class_<FlipAvoidingStepLength, FeasibleStepLengthComputer, std::shared_ptr<FlipAvoidingStepLength>>(m, "FlipAvoidingStepLength")
         .def(py::init<const Eigen::MatrixXi &>(), py::arg("F"))
+        .def_readwrite("backoffFactor", &FlipAvoidingStepLength::backoffFactor)
         ;
 }

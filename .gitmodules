@@ -1,3 +1,6 @@
 [submodule "3rdparty/MeshFEM_dev"]
 	path = 3rdparty/MeshFEM
 	url = git@github.com:MeshFEM/MeshFEM_dev
+[submodule "3rdparty/TaylorAutodiff"]
+	path = 3rdparty/TaylorAutodiff
+	url = git@github.com:MeshFEM/TaylorAutodiff.git

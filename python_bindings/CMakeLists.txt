@@ -16,3 +16,13 @@ pybind11_add_module(dirichlet_demo dirichlet_demo.cc)
 set_target_properties(dirichlet_demo PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(dirichlet_demo PUBLIC MeshFEM)
 target_compile_options(dirichlet_demo PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(flip_avoiding_step_length flip_avoiding_step_length.cc)
+set_target_properties(flip_avoiding_step_length PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(flip_avoiding_step_length PUBLIC MeshFEM)
+target_compile_options(flip_avoiding_step_length PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(continuation_parametrization continuation_parametrization.cc)
+set_target_properties(continuation_parametrization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(continuation_parametrization PUBLIC MeshFEM)
+target_compile_options(continuation_parametrization PRIVATE -ftemplate-backtrace-limit=0)

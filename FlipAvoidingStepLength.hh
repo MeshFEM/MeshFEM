@@ -307,9 +307,10 @@ struct FlipAvoidingStepLength : public FeasibleStepLengthComputer {
         using MXdr = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
         Eigen::Map<const MXdr> x(vars.data(), numNodes, dim);
         Eigen::MatrixXd d = Eigen::Map<const MXdr>(step.data(), numNodes, dim);
-        return 0.8 * flip_avoiding::compute_max_step_from_singularities(x, F, d);
+        return backoffFactor * flip_avoiding::compute_max_step_from_singularities(x, F, d);
     }
 
+    Real backoffFactor = 0.8;
     int dim = 0;
     Eigen::MatrixXi F;
 };
