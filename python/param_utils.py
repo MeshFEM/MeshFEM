@@ -4,6 +4,51 @@ from tri_mesh_viewer import TriMeshViewer
 import parametrization
 import numpy as np
 
+################################################################################
+# I/O utilities
+################################################################################
+def load_gzipped_msh(path, *args, **kwargs):
+    '''
+    Load a mesh from a `.msh` file that has been gzipped to save space;
+    works by temporary decompressing the file.
+    '''
+    import shutil, gzip, tempfile, mesh
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".msh") as tmp:
+        with gzip.open(path, "rb") as gzipped_file:
+            shutil.copyfileobj(gzipped_file, tmp)
+            tmp.flush()  # Ensure all data is written to disk
+        m = mesh.Mesh(tmp.name, *args, **kwargs)
+    return m
+
+def load_xz_msh(path, *args, **kwargs):
+    '''
+    Load a mesh from a `.msh` file that has been gzipped to save space;
+    works by temporary decompressing the file.
+    '''
+    import shutil, lzma, tempfile, mesh
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".msh") as tmp:
+        with lzma.open(path, "rb") as xzipped_file:
+            shutil.copyfileobj(xzipped_file, tmp)
+            tmp.flush()  # Ensure all data is written to disk
+        m = mesh.Mesh(tmp.name, *args, **kwargs)
+    return m
+
+def load(path, *args, **kwargs):
+    '''
+    Load a mesh from a file, supporting both gzipped and xzipped msh formats.
+    '''
+    import os
+    ext = os.path.splitext(path)[-1].lower()
+    if ext == '.gz':
+        return load_gzipped_msh(path, *args, **kwargs)
+    elif ext == '.xz':
+        return load_xz_msh(path, *args, **kwargs)
+    else:
+        return mesh.Mesh(path, *args, **kwargs)
+
+################################################################################
+# Initialization
+################################################################################
 def map_vertices_to_circle_area_normalized(V, F, bnd):
     """
     Python equivalent of the C++ function:
@@ -86,19 +131,6 @@ def tutteInitialization(m, bdry_uv = None):
     flip_list = parametrization.getFlips(m, uv_init)
     if len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True)
     return uv_init
-
-def load_gzipped_msh(path, *args, **kwargs):
-    '''
-    Load a mesh from a `.msh` file that has been gzipped to save space;
-    works by temporary decompressing the file.
-    '''
-    import shutil, gzip, tempfile, mesh
-    with tempfile.NamedTemporaryFile(delete=True, suffix=".msh") as tmp:
-        with gzip.open(path, "rb") as gzipped_file:
-            shutil.copyfileobj(gzipped_file, tmp)
-            tmp.flush()  # Ensure all data is written to disk
-        m = mesh.Mesh(tmp.name, *args, **kwargs)
-    return m
 
 ################################################################################
 # Analysis and visualization
