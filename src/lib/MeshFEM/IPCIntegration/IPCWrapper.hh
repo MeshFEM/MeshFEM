@@ -1,6 +1,7 @@
 #ifndef IPCWRAPPER_HH
 #define IPCWRAPPER_HH
 
+#include <memory>
 #include "CollisionMesh.hh"
 #include "Obstacle.hh"
 
