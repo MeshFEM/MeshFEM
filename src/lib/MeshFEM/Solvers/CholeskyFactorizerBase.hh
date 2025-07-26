@@ -171,7 +171,8 @@ struct CholeskyFactorizerBase {
     virtual void setSuppressWarnings(bool /* suppressWarnings */) { }
     virtual bool checkPosDef() const = 0;
 
-    virtual size_t getFactorNNZ() const { throw std::runtime_error("getFactorNNZ not implemented by this factorizer"); }
+    virtual size_t    getFactorNNZ() const { throw std::runtime_error("getFactorNNZ not implemented by this factorizer"); }
+    virtual double getFlopEstimate() const { throw std::runtime_error("getFlopEstimate not implemented by this factorizer"); } // Numeric factorization flop estimate
 
     // Check whether the factorization needed to solve `sys` exists;
     // this is generally a numeric factorization, but only a symbolic

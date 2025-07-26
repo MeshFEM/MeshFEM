@@ -240,6 +240,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
     std::vector<SuiteSparse_long> blockEntryForReducedBlockEntry; // the original block nz corresponding to each nz in the block row-col-removed matrix
 
     if (m_blockSize > 1 && pinnedVars.size() > 0) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSC Pin Handling");
         // Check for partially pinned blocks, which currently require a scalar
         // factorization fallback.
 
@@ -442,6 +443,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         if (m_blockSize > 1) {
             assert(ldl_block);
             m_catamariConverter->conversionPlan = catamari_conversion_plan::constructScalarConversionPlan(m_catamariConverter->get(), mat, reducedRowForRow_block, m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
+            // auto cp_compare = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
         }
         else m_catamariConverter->conversionPlan = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *m_ldl, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, m_entryForReducedEntry);
 
@@ -540,6 +542,11 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
 size_t CatamariFactorizer::getFactorNNZ() const {
     assertFactorization(FactorizationType::Symbolic);
     return m_ldl->supernodal_factorization->GetFactorNNZ();
+}
+
+double CatamariFactorizer::getFlopEstimate() const {
+    assertFactorization(FactorizationType::Symbolic);
+    return m_ldl->supernodal_factorization->EstimateTotalWork();
 }
 
 void CatamariFactorizer::writeSolveTimers() const {

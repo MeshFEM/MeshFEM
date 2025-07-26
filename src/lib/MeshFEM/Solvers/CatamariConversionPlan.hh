@@ -30,7 +30,7 @@ using Int = catamari::Int;
 //          map nonzero indices in `A_rowcolreduced` to their corresponding
 //          entries in the original matrix `A`.
 ConversionPlan constructConversionPlan(const CMat &A_rowcolreduced_full, const LDL &ldl, const std::vector<SuiteSparse_long> &srcReducedEntryForFullMatrixEntry, const std::vector<SuiteSparse_long> &entryForReducedEntry) {
-    BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
+    BENCHMARK_SCOPED_TIMER_SECTION ctimer("constructConversionPlan");
     auto f = ldl.supernodal_factorization.get();
     if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
 
@@ -167,7 +167,7 @@ ConversionPlan constructScalarConversionPlan(const CMat &A_rowcolreduced_full_bl
                    const catamari::SparseLDL<double> &ldl_scalar, const catamari::SparseLDL<double> &ldl_block,
                    const std::vector<SuiteSparse_long> &srcReducedEntryForFullMatrixEntry_block,
                    const std::vector<SuiteSparse_long> &entryForReducedEntry_block) {
-    BENCHMARK_SCOPED_TIMER_SECTION ctimer("Construct plan");
+    BENCHMARK_SCOPED_TIMER_SECTION ctimer("constructScalarConversionPlan");
     auto f = ldl_block.supernodal_factorization.get();
     auto f_scalar = ldl_scalar.supernodal_factorization.get();
     if (f == nullptr) throw std::runtime_error("Only supernodal factorizations are supported");
@@ -208,29 +208,33 @@ ConversionPlan constructScalarConversionPlan(const CMat &A_rowcolreduced_full_bl
     // We work with the *full* (non-triangular) matrix so that we can efficiently loop over all nonzeros in a given
     // column of the *permuted* lower factor.
     Int *columnSizes = cplan.columnOffsets.data() + 1;
-    static tbb::affinity_partitioner ap;
-    tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
-        for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
-            const Int supernode_end = sno[supernode + 1];
-            for (Int j_perm = sno[supernode]; j_perm < supernode_end; ++j_perm) {
-                Int j_orig = o.inverse_permutation[j_perm];
-                const Int col_entries_end = A_rowcolreduced_full_block.RowEntryOffset(j_orig + 1);
-                Int colSize = 0;
-                for (Int ii = A_rowcolreduced_full_block.RowEntryOffset(j_orig); ii < col_entries_end; ++ii)
-                    if (o.permutation[A_rowcolreduced_full_block.Entry(ii).column] >= j_perm) ++colSize; // entry in lower triangle?
+    {
+        BENCHMARK_SCOPED_TIMER_SECTION t("Compute column sizes");
+        static tbb::affinity_partitioner ap;
+        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes, 10), [&](const tbb::blocked_range<catamari::Int> &r) {
+            for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
+                const Int supernode_end = sno[supernode + 1];
+                for (Int j_perm = sno[supernode]; j_perm < supernode_end; ++j_perm) {
+                    Int j_orig = o.inverse_permutation[j_perm];
+                    const Int col_entries_end = A_rowcolreduced_full_block.RowEntryOffset(j_orig + 1);
+                    Int colSize = 0;
+                    for (Int ii = A_rowcolreduced_full_block.RowEntryOffset(j_orig); ii < col_entries_end; ++ii)
+                        if (o.permutation[A_rowcolreduced_full_block.Entry(ii).column] >= j_perm) ++colSize; // entry in lower triangle?
 
-                Int scalarColSize = block_size * colSize;
-                for (Int c = 0; c < block_size; ++c)
-                    columnSizes[block_size * j_perm + c] = scalarColSize--; // one less scalar entry in each successive column (due to diag)
+                    Int scalarColSize = block_size * colSize;
+                    for (Int c = 0; c < block_size; ++c)
+                        columnSizes[block_size * j_perm + c] = scalarColSize--; // one less scalar entry in each successive column (due to diag)
+                }
             }
-        }
-    }, ap);
+        }, ap);
+    }
 
     // Convert sizes to offsets and allocate conversion plan entries.
     cplan.columnOffsets[0] = 0;
     Int *columnBacks = cplan.columnOffsets.data() + 1; // Back indices of the (initially empty) column buckets
                                                        // These will be incremented and eventually become the column end indices.
     {
+        BENCHMARK_SCOPED_TIMER_SECTION t("Allocate Entries");
         Int back = 0;
         for (Int i = 0; i < nc; ++i) {
             // Note: we are updating in-place (columnSizes == columnBacks)!

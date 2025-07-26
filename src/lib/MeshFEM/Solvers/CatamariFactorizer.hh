@@ -89,6 +89,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
 
     size_t getFactorNNZ() const override;
+    double getFlopEstimate() const override;
 
     CholeskyProvider provider() const override {
         if (m_legacy) return CholeskyProvider::CatamariLegacy;
