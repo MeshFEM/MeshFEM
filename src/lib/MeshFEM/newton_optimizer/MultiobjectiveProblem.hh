@@ -450,6 +450,7 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
     // Allow subclasses to impose an upper bound on the step size (e.g., to
     // enforce interpenetration-free steps).
     virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.customFeasibleStepLength");
         Real stepLength = 1.0;
         if (initialFeasibleStepLengthComputer)
             stepLength = std::min(stepLength, initialFeasibleStepLengthComputer->eval(vars, step));
