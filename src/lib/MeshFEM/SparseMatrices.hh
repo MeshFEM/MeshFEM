@@ -890,6 +890,7 @@ struct CSCMatrix {
     // Overwrite the numerical values to zero, preserving the sparsity pattern.
     // If this is a sparsity-only matrix, upgrade it to an ordinary one.
     template<bool multithreaded = true> void setZero() {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CSCMatrix::setZero");
         if (Ax.size() == 0) {
             Ax.resize(nz); // upgrade sparsity-only matrix
             return;
@@ -944,6 +945,7 @@ struct CSCMatrix {
         InOrderBuilder(CSCMatrix &mat, SizeCalculator &&columnSizeCalculator, bool sparsityOnly = false)
             : m_result(mat)
         {
+            BENCHMARK_SCOPED_TIMER_SECTION timer("InOrderBuilder constructor");
             const _Index out_n = mat.n;
             m_result.Ap.assign(out_n + 1, 0);
             // We use a trick to avoid using any additional storage to hold
@@ -954,7 +956,10 @@ struct CSCMatrix {
 
             // Compute the size of output column j in Ap[j + 1];
             _Index *colSizes = m_result.Ap.data() + 1;
-            columnSizeCalculator(colSizes);
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION t2("columnSizeCalculator");
+                columnSizeCalculator(colSizes);
+            }
 
             // Next calculate the start pointer for column i in Ap[i + 1]; this is
             // the cumulative size of the previous output columns, which we
@@ -968,6 +973,9 @@ struct CSCMatrix {
                     accum_nz += colsize_j;
                 }
             }
+
+            BENCHMARK_SCOPED_TIMER_SECTION t2("allocate Ai, Ax");
+
             m_result.Ai.resize(accum_nz);
             if (!sparsityOnly) m_result.Ax.resize(accum_nz);
             m_result.nz = accum_nz;

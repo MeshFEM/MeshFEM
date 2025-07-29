@@ -491,11 +491,13 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(double val) { Ax.assign(scalarNNZ(), val); }
     void setZero() {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian::setZero");
         if (Ax.size() != scalarNNZ()) {
             // Since we're allocating the storage for this matrix, it looks like
             // the user is intending to run assembly on it.
             // Verify that this will be supported...
             assertSupportsAssembly();
+            BENCHMARK_SCOPED_TIMER_SECTION t2("Ax.assign");
             Ax.assign(scalarNNZ(), 0.0);
         }
         else setZeroParallel(data());
