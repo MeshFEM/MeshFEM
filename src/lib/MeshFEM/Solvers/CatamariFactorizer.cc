@@ -383,7 +383,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             else if (actualOrderingMethod == OrderingMethod::AMD) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("AMD ordering");
                 using ordering_index_type = int32_t;
-                ordering_index_type n = A_reduced->m;
+                const ordering_index_type n = A_reduced->m;
 
                 // AMD_2 is passed only the off-diagonal entries of the *full* matrix (i.e., both upper and lower triangles).
                 // Furthermore, it needs some additional "elbow room" in the
@@ -426,15 +426,101 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                     //        Degree, Wi, Control, Info);
                     amd_2(n, Pe.data(), Iw, Len, padded_input_matrix_size, Pe[n], Nv.data(), iperm, perm, Head, Elen,
                           Degree, Wi, Control, Info);
+
                 }
 
                 ordering.permutation.Resize(n);
                 tbb::parallel_for(tbb::blocked_range<ordering_index_type>(0, n), [&](const tbb::blocked_range<ordering_index_type> &r) {
                     for (ordering_index_type j = r.begin(); j < r.end(); ++j) {
+                        // Note that SuiteSparse and Catamari disagree on which
+                        // permutation they call the "inverse" one.
+                        // In Catamari, `permutation[j_orig]` gives the
+                        // column index in the permuted matrix where column
+                        // `j_orig` of the original matrix ends up.
                         ordering.inverse_permutation[j] =  perm[j];
                         ordering.permutation[j]         = iperm[j];
                     }
                 });
+
+#if 1
+                // Extract preliminary supernode information and assembly tree from
+                // the AMD output; this is needed to parallelize symbolic
+                // factorization in Catamari.
+                // (Note that the assembly tree created by AMD
+                // is generally different from the supernodal assembly tree
+                // consisting of fundamental supernodes).
+                {
+                    using catamari::Int;
+
+                    // Record which supernode contains column `j` of L.
+                    // Note that only the entries corresponding to the
+                    // "representative column" of each supernode are populated.
+                    // By this, we mean the root of the "subtree" within
+                    // each node of the assembly tree.
+                    // In terms of the AMD output, these are the indices for
+                    // which `Nv` is nonzero, and are the *last* column indices
+                    // of each supernode.
+                    VecX_T<Int> supernode_index(n);
+
+                    // Determine supernodes and sizes
+                    Int num_supernodes = (Nv.array() > 0).count();
+                    ordering.supernode_sizes.Resize(num_supernodes);
+                    for (Int s = 0, j_perm = 0; j_perm < Int(n); ++j_perm) { // Loop through columns of L
+                        Int size = Nv[ordering.inverse_permutation[j_perm]];
+                        if (size > 0) {
+                            supernode_index[j_perm] = s;
+                            ordering.supernode_sizes[s++] = size;
+                        }
+                    }
+
+                    OffsetScan(ordering.supernode_sizes, &ordering.supernode_offsets);
+
+                    // Convert the assembly tree from AMD's `Pe` array into `ordering.assembly_forest.parents`.
+                    // Note that, when `j` is the start of a supernode, `Pe[j]`
+                    // holds the parent index of column `j` where all indices
+                    // here are in the *original* matrix.
+                    ordering.assembly_forest.parents.Resize(num_supernodes);
+                    for (Int s = 0; s < num_supernodes; ++s) {
+                        // Note: the "representative column" is the *last* column of the supernode.
+                        Int representative_col = ordering.inverse_permutation[ordering.supernode_offsets[s + 1] - 1];
+                        assert(Nv[representative_col] > 0 && "Failed to find supernode's 'representative'/'root' column");
+                        Int parent_repcol_orig = Pe[representative_col];
+                        if (parent_repcol_orig < 0) { ordering.assembly_forest.parents[s] = -1; continue; }
+                        Int parent_representative_col = ordering.permutation[parent_repcol_orig];
+                        assert(Nv[ordering.inverse_permutation[parent_representative_col]] > 0 && "Pe did not return a representative col.");
+                        ordering.assembly_forest.parents[s] = supernode_index[parent_representative_col];
+                    }
+
+                    ordering.assembly_forest.FillFromParents();
+                }
+#endif
+#if 0
+                {
+                    std::cout << "Nv: " << Nv.head(20).transpose() << std::endl;
+                    std::cout << "Pe: " << Pe.head(20).transpose() << std::endl;
+
+                    // Pe[j] and Nv[j] hold data for the original column `j`.
+                    // We need arrays that are permuted to correspond to the
+                    // lower factor L.
+                    VecX_T<ordering_index_type> Pe_perm(n + 1), Nv_perm(n);
+                    for (ordering_index_type j = 0; j < n; ++j) {
+                        ordering_index_type j_orig = ordering.inverse_permutation[j];
+                        Pe_perm[j] = ordering.permutation[Pe[j_orig]];
+                        Nv_perm[j] = Nv[j_orig];
+                    }
+
+                    std::cout << "n: " << n << std::endl;
+                    int argmin;
+                    std::cout << "Nv.min(): " << Nv_perm.minCoeff(&argmin) << std::endl;
+                    std::cout << "Nv.max(): " << Nv_perm.maxCoeff() << std::endl;
+                    std::cout << "Nv.sum(): " << Nv_perm.sum() << std::endl;
+                    std::cout << "Permuted Nv: " << Nv_perm.segment(0, 40).transpose() << std::endl;
+                    std::cout << "Permuted Pe: " << Pe_perm.segment(0, 40).transpose() << std::endl;
+
+                    std::ofstream("Nv_perm.txt") << Nv_perm << std::endl;
+                    std::ofstream("Pe_perm.txt") << Pe_perm << std::endl;
+                }
+#endif
             }
             else throw std::runtime_error("Unknown orderingMethod");
         }

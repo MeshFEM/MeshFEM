@@ -187,6 +187,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
 #if MESHFEM_WITH_CATAMARI
         .value("Catamari",         CholeskyProvider::Catamari)
         .value("CatamariNesdis",   CholeskyProvider::CatamariNesdis)
+        .value("CatamariMetis",    CholeskyProvider::CatamariMetis)
         .value("CatamariAMD",      CholeskyProvider::CatamariAMD)
         .value("CatamariAdaptive", CholeskyProvider::CatamariAdaptive)
 #if CATAMARI_OPENMP

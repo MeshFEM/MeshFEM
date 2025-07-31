@@ -15,6 +15,7 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
             return std::make_unique<PardisoFactorizer>();
         case CholeskyProvider::Catamari:
         case CholeskyProvider::CatamariNesdis:
+        case CholeskyProvider::CatamariMetis:
         case CholeskyProvider::CatamariLegacy:
         case CholeskyProvider::CatamariAMD:
         case CholeskyProvider::CatamariAdaptive:
@@ -26,6 +27,8 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
                     c->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
                 else if ((provider == CholeskyProvider::CatamariNesdis) || (provider == CholeskyProvider::CatamariLegacy))
                     c->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
+                else if (provider == CholeskyProvider::CatamariMetis)
+                    c->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
                 else if (provider == CholeskyProvider::CatamariAMD)
                     c->orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
                 else if (provider == CholeskyProvider::CatamariAdaptive)
