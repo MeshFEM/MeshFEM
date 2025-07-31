@@ -4,6 +4,7 @@
 #if MESHFEM_WITH_CATAMARI
 
 #include "CholmodFactorizer.hh"
+#include "amd.h"
 
 #include <catamari/apply_sparse.hpp>
 #include <catamari/blas_matrix.hpp>
@@ -336,7 +337,6 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         {
             static_assert(sizeof(SuiteSparse_long) == sizeof(catamari::Int), "Mismatched integer type");
             ordering.inverse_permutation.Resize(A_reduced->m);
-            catamari::Buffer<SuiteSparse_long> CParent(A_reduced->m), CMember(A_reduced->m);
             auto cholmat = cholmod_sparse_view(*A_reduced);
             // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
             // (even though the Nested dissection algorithm should not be
@@ -367,41 +367,76 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 Eigen::Map<VecX_T<catamari::Int>>(ordering.inverse_permutation.Data(), A_reduced->m) = iperm_downcast.template cast<catamari::Int>();
 #else
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_nested_dissection");
+                catamari::Buffer<SuiteSparse_long> CParent(A_reduced->m), CMember(A_reduced->m);
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
                                             (SuiteSparse_long *) ordering.inverse_permutation.Data(),
                                             CParent.Data(), CMember.Data(), m_c.get());
+                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
 #endif
             }
             else if (actualOrderingMethod == OrderingMethod::Metis) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_metis");
                 cholmod_l_metis(&cholmat, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
                                 (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
+                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
             }
             else if (actualOrderingMethod == OrderingMethod::AMD) {
-#if 0 // Whether to downcast for ordering
-                if (!m_c_int) {
-                    m_c_int = std::make_unique<cholmod_common>();
-                    cholmod_start(m_c_int.get());
+                BENCHMARK_SCOPED_TIMER_SECTION t("AMD ordering");
+                using ordering_index_type = int32_t;
+                ordering_index_type n = A_reduced->m;
+
+                // AMD_2 is passed only the off-diagonal entries of the *full* matrix (i.e., both upper and lower triangles).
+                // Furthermore, it needs some additional "elbow room" in the
+                // the row index array (the `cholmod_amd` wrapper allocates around 50%).
+                const auto &A = m_catamariConverter->get();
+                ordering_index_type padded_input_matrix_size = (A.NumEntries() - n) * 1.5;
+
+                VecX_T<ordering_index_type> Pe(n + 1), Nv(n), workspace;
+                workspace.resize(7 * n + padded_input_matrix_size);
+
+                ordering_index_type *Degree = workspace.data(),
+                                    *Wi     = workspace.data() + n,
+                                    *Len    = workspace.data() + 2 * n,
+                                    *Elen   = workspace.data() + 3 * n,
+                                    *Head   = workspace.data() + 4 * n,
+                                    * perm  = workspace.data() + 5 * n,
+                                    *iperm  = workspace.data() + 6 * n,
+                                    *Iw     = workspace.data() + 7 * n; // length `padded_input_matrix_size`
+
+                tbb::parallel_for(tbb::blocked_range<ordering_index_type>(0, n), [&](const tbb::blocked_range<ordering_index_type> &r) {
+                    for (ordering_index_type j = r.begin(); j < r.end(); ++j) {
+                        auto col_start = A.RowEntryOffset(j);
+                        auto col_end   = A.RowEntryOffset(j + 1);
+                        Len[j] = ordering_index_type(col_end - col_start - 1); // diagonal is excluded
+                        Pe[j] = col_start - j; // diagonal is excluded
+                        ordering_index_type back = Pe[j];
+                        for (ordering_index_type ii = col_start; ii < col_end; ++ii) {
+                            ordering_index_type i = A.Entry(ii).column; // Catamari matrix is transposed!
+                            if (i != j) Iw[back++] = i;
+                        }
+                    }
+                });
+                Pe[n] = Pe[n - 1] + Len[n - 1];
+
+                {
+                    double *Control = nullptr; // Use AMD defaults.
+                    double Info [AMD_INFO];
+                    BENCHMARK_SCOPED_TIMER_SECTION t2("amd_2");
+                    // amd_l2(n, Pe.data(), Iw, Len, padded_input_matrix_size, Pe[n], Nv.data(), iperm, perm, Head, Elen,
+                    //        Degree, Wi, Control, Info);
+                    amd_2(n, Pe.data(), Iw, Len, padded_input_matrix_size, Pe[n], Nv.data(), iperm, perm, Head, Elen,
+                          Degree, Wi, Control, Info);
                 }
 
-                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_amd");
-                VecX_T<int> Ai_downcast, Ap_downcast, iperm_downcast;
-
-                Ai_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
-                Ap_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
-                auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
-                                                            Ai_downcast.data(), Ap_downcast.data());
-                iperm_downcast.resize(A_reduced->m);
-                cholmod_amd(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0, iperm_downcast.data(), m_c_int.get());
-                Eigen::Map<VecX_T<catamari::Int>>(ordering.inverse_permutation.Data(), A_reduced->m) = iperm_downcast.template cast<catamari::Int>();
-#else
-                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_amd");
-                cholmod_l_amd(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
-                              (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
-#endif
+                ordering.permutation.Resize(n);
+                tbb::parallel_for(tbb::blocked_range<ordering_index_type>(0, n), [&](const tbb::blocked_range<ordering_index_type> &r) {
+                    for (ordering_index_type j = r.begin(); j < r.end(); ++j) {
+                        ordering.inverse_permutation[j] =  perm[j];
+                        ordering.permutation[j]         = iperm[j];
+                    }
+                });
             }
             else throw std::runtime_error("Unknown orderingMethod");
-            quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
         }
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
 
