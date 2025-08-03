@@ -584,7 +584,11 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         }
 #endif
 
-        m_catamariConverter->freeCatamariMatrix();
+        {
+            BENCHMARK_SCOPED_TIMER_SECTION t("Cleanup");
+            ldl_block.reset();
+            m_catamariConverter->freeCatamariMatrix();
+        }
     }
     m_factorizationType = FactorizationType::Symbolic;
 }
