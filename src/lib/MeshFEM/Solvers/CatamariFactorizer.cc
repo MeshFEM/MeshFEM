@@ -1,4 +1,5 @@
 #include "CatamariFactorizer.hh"
+#include "MeshFEM/GlobalBenchmark.hh"
 #include <limits>
 
 #if MESHFEM_WITH_CATAMARI
@@ -308,6 +309,10 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
     // expanding entries in the (block) sparsity pattern into
     // `block_size` x `block_size` blocks of scalars in the block case.
     // (I.e., we leave the pattern in its compressed form.)
+    if (m_catamariConverter) {
+        BENCHMARK_SCOPED_TIMER_SECTION t2("CatamariConverter_reset");
+        m_catamariConverter.reset();
+    }
     m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, /* block_size = */ 1, m_legacy, m_entryForReducedEntry);
 
     m_ldlControl->supernodal_control.relaxation_control.block_size = m_blockSize;
@@ -561,6 +566,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         // Build a conversion plan to support direct injection of scalar entries
         // into the Cholesky factor. This must be done specially for non-unit
         // block sizes.
+        BENCHMARK_SCOPED_TIMER_SECTION t2("ConversionPlan");
         if (m_blockSize > 1) {
             assert(ldl_block);
             m_catamariConverter->conversionPlan = catamari_conversion_plan::constructScalarConversionPlan(m_catamariConverter->get(), mat, reducedRowForRow_block, m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
