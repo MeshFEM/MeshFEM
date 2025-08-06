@@ -235,7 +235,7 @@ def parse_custom_csv(folder_path, csv_filename):
 
 def runSYDParam(m, ProjectionStrategy, EigenvalueModification, 
                 ProjectionType, AutodiffSetting, SteplengthComputer,
-                max_iter=200, hessian_shift=1e-8, grad_tol=None, uvsave_path=None):
+                max_iter=200, hessian_shift=1e-12, grad_tol=None, uvsave_path=None):
     
     obj_history = []
     time_history = []
