@@ -11,6 +11,8 @@
 
 #include <MeshFEM/newton_optimizer/FeasibleStepLengthComputer.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/Parallelism.hh>
+#include <tbb/parallel_reduce.h>
 
 namespace flip_avoiding {
     //---------------------------------------------------------------------------
@@ -104,10 +106,10 @@ namespace flip_avoiding {
       }
     }
 
-    inline double get_min_pos_root_2D(const Eigen::MatrixXd& uv,
-                                      const Eigen::MatrixXi& F,
-                                      Eigen::MatrixXd& d,
-                                      int f)
+    template<class Derived1, class Derived2>
+    inline double get_min_pos_root_2D(const Eigen::MatrixBase<Derived1> &uv,
+                                      const Eigen::MatrixXi &F,
+                                      const Eigen::MatrixBase<Derived2> &d, int f)
     {
     /*
           Finding the smallest timestep t s.t a triangle get degenerated (<=> det = 0)
@@ -169,10 +171,10 @@ namespace flip_avoiding {
       return get_smallest_pos_quad_zero(a,b,c);
     }
 
-    inline double get_min_pos_root_3D(const Eigen::MatrixXd& uv,
-                                      const Eigen::MatrixXi& F,
-                                      Eigen::MatrixXd& direc,
-                                      int f)
+    template<class Derived1, class Derived2>
+    inline double get_min_pos_root_3D(const Eigen::MatrixBase<Derived1> &uv,
+                                      const Eigen::MatrixXi &F,
+                                      const Eigen::MatrixBase<Derived2> &d_, int f)
     {
       /*
           Searching for the roots of:
@@ -212,18 +214,18 @@ namespace flip_avoiding {
       const double& d_y = uv(v4,1);
       const double& d_z = uv(v4,2);
 
-      const double& a_dx = direc(v1,0);
-      const double& a_dy = direc(v1,1);
-      const double& a_dz = direc(v1,2);
-      const double& b_dx = direc(v2,0);
-      const double& b_dy = direc(v2,1);
-      const double& b_dz = direc(v2,2);
-      const double& c_dx = direc(v3,0);
-      const double& c_dy = direc(v3,1);
-      const double& c_dz = direc(v3,2);
-      const double& d_dx = direc(v4,0);
-      const double& d_dy = direc(v4,1);
-      const double& d_dz = direc(v4,2);
+      const double& a_dx = d_(v1,0);
+      const double& a_dy = d_(v1,1);
+      const double& a_dz = d_(v1,2);
+      const double& b_dx = d_(v2,0);
+      const double& b_dy = d_(v2,1);
+      const double& b_dz = d_(v2,2);
+      const double& c_dx = d_(v3,0);
+      const double& c_dy = d_(v3,1);
+      const double& c_dz = d_(v3,2);
+      const double& d_dx = d_(v4,0);
+      const double& d_dy = d_(v4,1);
+      const double& d_dz = d_(v4,2);
 
       // Find solution for: a*t^3 + b*t^2 + c*d +d = 0
       double a = a_dx*b_dy*c_dz - a_dx*b_dz*c_dy - a_dy*b_dx*c_dz + a_dy*b_dz*c_dx + a_dz*b_dx*c_dy - a_dz*b_dy*c_dx - a_dx*b_dy*d_dz + a_dx*b_dz*d_dy + a_dy*b_dx*d_dz - a_dy*b_dz*d_dx - a_dz*b_dx*d_dy + a_dz*b_dy*d_dx + a_dx*c_dy*d_dz - a_dx*c_dz*d_dy - a_dy*c_dx*d_dz + a_dy*c_dz*d_dx + a_dz*c_dx*d_dy - a_dz*c_dy*d_dx - b_dx*c_dy*d_dz + b_dx*c_dz*d_dy + b_dy*c_dx*d_dz - b_dy*c_dz*d_dx - b_dz*c_dx*d_dy + b_dz*c_dy*d_dx;
@@ -264,28 +266,37 @@ namespace flip_avoiding {
       }
     }
 
-    inline double compute_max_step_from_singularities(const Eigen::MatrixXd& uv,
-                                                      const Eigen::MatrixXi& F,
-                                                      Eigen::MatrixXd& d)
+    template<class Derived1, class Derived2>
+    inline double compute_max_step_from_singularities(const Eigen::MatrixBase<Derived1> &uv,
+                                                      const Eigen::MatrixXi &F,
+                                                      const Eigen::MatrixBase<Derived2> &d)
     {
       double max_step = INFINITY;
 
       // The if statement is outside the for loops to avoid branching/ease parallelizing
       if (uv.cols() == 2)
       {
-        for (int f = 0; f < F.rows(); f++)
-        {
-          double min_positive_root = get_min_pos_root_2D(uv,F,d,f);
-          max_step = std::min(max_step, min_positive_root);
-        }
+        max_step = tbb::parallel_reduce(tbb::blocked_range<int>(0, F.rows()), INFINITY,
+            [&](const tbb::blocked_range<int> &r, double local_max_step) {
+                for (int f = r.begin(); f < r.end(); f++) {
+                    double min_positive_root = get_min_pos_root_2D(uv,F,d,f);
+                    local_max_step = std::min(local_max_step, min_positive_root);
+                }
+                return local_max_step;
+            },
+            [](double a, double b) { return std::min(a, b); });
       }
       else
       { // volumetric deformation
-        for (int f = 0; f < F.rows(); f++)
-        {
-          double min_positive_root = get_min_pos_root_3D(uv,F,d,f);
-          max_step = std::min(max_step, min_positive_root);
-        }
+        max_step = tbb::parallel_reduce(tbb::blocked_range<int>(0, F.rows()), INFINITY,
+            [&](const tbb::blocked_range<int> &r, double local_max_step) {
+                for (int f = r.begin(); f < r.end(); f++) {
+                    double min_positive_root = get_min_pos_root_3D(uv,F,d,f);
+                    local_max_step = std::min(local_max_step, min_positive_root);
+                }
+                return local_max_step;
+            },
+            [](double a, double b) { return std::min(a, b); });
       }
       return max_step;
     }
