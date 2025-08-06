@@ -273,6 +273,7 @@ struct MESHFEM_EXPORT NewtonHessian {
         if (lrr > 0) os << V_s  << std::endl << V_d  << std::endl;
     }
 
+    template<bool ContiguousBlocks = false>
     static NewtonHessian load(const std::string &path) {
         std::ifstream is(path);
         if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);
@@ -283,7 +284,11 @@ struct MESHFEM_EXPORT NewtonHessian {
 
         NewtonHessian result;
 
-        if (nsv > 0) result.H_ss = BlockCSCHessianBase::constructFromBinaryStream(is);
+        if (nsv > 0) {
+            result.H_ss = BlockCSCHessianBase::constructFromBinaryStream(is);
+            if (ContiguousBlocks && !result.H_ss->hasContiguousBlocks()) result.H_ss = result.H_ss->cloneWithContiguousBlocks();
+            if (!ContiguousBlocks && result.H_ss->hasContiguousBlocks()) result.H_ss = result.H_ss->cloneWithNoncontiguousBlocks();
+        }
         if (ndv > 0) { result.H_sd = load_matrix_from_stream<Real>(is, nsv, ndv); result.H_dd = load_matrix_from_stream<Real>(is, ndv, ndv); }
         if (lrr > 0) { result.V_s  = load_matrix_from_stream<Real>(is, nsv, lrr); result.V_d  = load_matrix_from_stream<Real>(is, ndv, lrr); }
 

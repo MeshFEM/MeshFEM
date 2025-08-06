@@ -607,8 +607,11 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
     }
 
     virtual const OptimizationVarStructureBase   &vars() const = 0;
-
     virtual std::unique_ptr<BlockCSCHessianBase> clone() const = 0;
+
+    virtual bool hasContiguousBlocks() const = 0;
+    virtual std::unique_ptr<BlockCSCHessianBase> cloneWithNoncontiguousBlocks() const = 0;
+    virtual std::unique_ptr<BlockCSCHessianBase> cloneWithContiguousBlocks() const = 0;
 
     // Construct a uniform block size matrix by reading a serialized block
     // sparsity pattern from input stream `is` (using CSCMatrix::readBinaryFromStream)
@@ -1054,6 +1057,16 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     }
 
     std::unique_ptr<BlockCSCHessianBase> clone() const override;
+
+    bool hasContiguousBlocks() const override { return ContiguousBlocks; }
+    std::unique_ptr<BlockCSCHessianBase> cloneWithNoncontiguousBlocks() const override {
+        if constexpr (ContiguousBlocks) { return clone(); }
+        return cloneWithLayout<false>();
+    }
+    std::unique_ptr<BlockCSCHessianBase> cloneWithContiguousBlocks() const override {
+        if constexpr (!ContiguousBlocks) { return clone(); }
+        return cloneWithLayout<true>();
+    }
 
     template<template<class> class BlockToScalarPolicy2>
     auto cloneWithBTSPolicy() const {
