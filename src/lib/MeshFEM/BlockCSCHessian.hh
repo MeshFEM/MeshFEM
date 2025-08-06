@@ -15,8 +15,10 @@
 // the diagonal*; these diagonal blocks must exist in the sparsity pattern for
 // the Hessian ever to be positive definite.
 //
-// Using `ContiguousBlocks` appears to yield only about a 5% speedup to Hessian
-// assembly in solid elasticity benchmarks.
+// Note that when using `ContiguousBlocks`, the full diagonal blocks are stored
+// (though the strict lower triangle of these blocks may be left uninitialized).
+// This makes the data structure equivalent in the uniform block size case to
+// the standard BCSC format.
 //
 //  Author:  Julian Panetta (jpanetta), jpanetta@ucdavis.edu
 //  Company:  University of California, Davis
@@ -43,6 +45,10 @@ struct BlockToScalarUniformBlockSize {
     using _Index       = typename BlockCSCHTraits<Derived>::Index;
     using VarStructure = typename BlockCSCHTraits<Derived>::VarStructure;
     static constexpr bool SingleBlockDim = VarStructure::SingleBlockDim;
+    static constexpr bool ContiguousBlocks = BlockCSCHTraits<Derived>::ContiguousBlocks;
+    static constexpr bool StoreFullDiagonalBlocks = BlockCSCHTraits<Derived>::StoreFullDiagonalBlocks;
+    static constexpr _Index N = VarStructure::MaxBlockDim;
+
     static_assert(SingleBlockDim, "This policy is only valid for uniform block size matrices.");
 
     const Derived &derived() const { return static_cast<const Derived &>(*this); }
@@ -50,17 +56,20 @@ struct BlockToScalarUniformBlockSize {
 
     _Index scalarColStride(_Index bj) const {
         const auto &H = derived();
+        if constexpr (ContiguousBlocks) return N;
+
         _Index nentries = H.col_nnz(bj);
         assert(nentries > 0); // There must be at least a diagonal entry!
-
-        static constexpr _Index N = VarStructure::MaxBlockDim;
         return N * (nentries - 1) + 1;
     }
 
-    // WARNING: assumes all diagonal blocks are present!
     _Index scalarOffsetForColumn(_Index bj) const {
-        constexpr _Index N = VarStructure::MaxBlockDim;
-        return N * N * derived().Ap[bj] - bj * (N * (N - 1)) / 2;
+        if constexpr (StoreFullDiagonalBlocks)
+            return N * N * derived().Ap[bj];
+        else {
+            // WARNING: assumes all diagonal blocks are present!
+            return N * N * derived().Ap[bj] - bj * (N * (N - 1)) / 2;
+        }
     }
 
     _Index locForBlock(_Index bi, _Index bj) const {
@@ -70,8 +79,8 @@ struct BlockToScalarUniformBlockSize {
 
     _Index scalarOffsetWithinColumn(_Index bi, _Index bj) const {
         const auto &H = derived();
-        constexpr _Index N = VarStructure::MaxBlockDim;
-        return N * (H.findEntry(bi, bj) - H.Ap[bj]);
+        if constexpr (ContiguousBlocks) return (N * N) * (H.findEntry(bi, bj) - H.Ap[bj]);
+        else                            return      N  * (H.findEntry(bi, bj) - H.Ap[bj]);
     }
 
 protected:
@@ -95,6 +104,8 @@ struct BlockToScalarPolicyTypeOffsetsPerColumn {
     using _Index       = typename BlockCSCHTraits<Derived>::Index;
     using VarStructure = typename BlockCSCHTraits<Derived>::VarStructure;
     static constexpr bool SingleBlockDim = VarStructure::SingleBlockDim;
+    static constexpr bool ContiguousBlocks = BlockCSCHTraits<Derived>::ContiguousBlocks;
+    static constexpr bool StoreFullDiagonalBlocks = BlockCSCHTraits<Derived>::StoreFullDiagonalBlocks;
 
     const Derived &derived() const { return static_cast<const Derived &>(*this); }
           Derived &derived()       { return static_cast<      Derived &>(*this); }
@@ -103,6 +114,9 @@ struct BlockToScalarPolicyTypeOffsetsPerColumn {
     // Note that the strides for subsequent columns corresponding to `bj` will be
     // each one greater than the previous due to the upper-triangular diagonal block.
     _Index scalarColStride(_Index bj) const {
+        if constexpr (ContiguousBlocks) {
+            return -1; // ERROR: this depends on which block within column `bj` we're talking about!
+        }
         const auto &H = derived();
         _Index nentries = H.col_nnz(bj);
         assert(nentries > 0); // There must be at least a diagonal entry!
@@ -144,7 +158,13 @@ struct BlockToScalarPolicyTypeOffsetsPerColumn {
             first_of_type += nblocks;
             first_of_type_scalar_offset += nblocks * bdim;
         }
-        return first_of_type_scalar_offset + bdim * (binary_search(bi, H.Ai.data(), first_of_type, H.Ap[bj + 1]) - first_of_type);
+        _Index result = first_of_type_scalar_offset + bdim * (binary_search(bi, H.Ai.data(), first_of_type, H.Ap[bj + 1]) - first_of_type);
+        // `result` currently holds the scalar *row* offset of nonzero (bi, bj)
+        // from the beginning of column `bj`. When storing data contiguously,
+        // we need to multiply this by the width of each block (i.e., the column
+        // variable's block size)
+        if constexpr (ContiguousBlocks) result *= H.vars().blockSize(bj);
+        return result;
     }
 
 protected:
@@ -168,11 +188,13 @@ protected:
             _Index N = vars.blockSize(bj);
             for (_Index ii = Ap[bj]; ii < Ap[bj + 1]; ++ii) {
                 _Index bi = Ai[ii];
-                size_t ti = vars.blockType(bi);
+                size_t ti = vars.blockType(bi); // Acceleration opportunity: `ti` should increase monotonically
 
                 _Index M = vars.BlockDimensions[ti];
-                if (bi <  bj) size += M * N;
-                if (bi == bj) size += (N * (N + 1)) / 2; // Note: M == N!
+                if constexpr (!StoreFullDiagonalBlocks) {
+                    if (bi <  bj) size += M * N;
+                    if (bi == bj) size += (N * (N + 1)) / 2; // Note: M == N!
+                } else size += M * N;
 
                 if (ti < VarStructure::NumBlockTypes - 1)
                     ++m_numBlockEntriesOfType[bj][ti];
@@ -184,7 +206,7 @@ protected:
 
     // Offset into `Ax` at which the first scalar entry of each column is stored.
     std::vector<_Index> m_scalarOffsetForColumn;
-    // Number of block of each type in each column.
+    // Number of blocks of each type in each column.
     std::vector<std::array<_Index, VarStructure::NumBlockTypes - 1>> m_numBlockEntriesOfType;
 };
 
@@ -201,6 +223,8 @@ struct BlockToScalarPolicyLocLookup {
     using _Index       = typename BlockCSCHTraits<Derived>::Index;
     using VarStructure = typename BlockCSCHTraits<Derived>::VarStructure;
     static constexpr bool SingleBlockDim = VarStructure::SingleBlockDim;
+    static constexpr bool ContiguousBlocks = BlockCSCHTraits<Derived>::ContiguousBlocks;
+    static constexpr bool StoreFullDiagonalBlocks = BlockCSCHTraits<Derived>::StoreFullDiagonalBlocks;
 
     const Derived &derived() const { return static_cast<const Derived &>(*this); }
           Derived &derived()       { return static_cast<      Derived &>(*this); }
@@ -210,6 +234,10 @@ struct BlockToScalarPolicyLocLookup {
     }
 
     _Index scalarColStride(_Index bj) const {
+        if constexpr (ContiguousBlocks) {
+            return -1; // ERROR: this depends on which block within column `bj` we're talking about!
+        }
+
         const auto &H = derived();
         _Index lastBlock = H.Ap[bj + 1] - 1; // Last block location in block col
         return (m_scalarLocForBlockEntry[lastBlock] - m_scalarLocForBlockEntry[derived().Ap[bj]]) + 1;
@@ -242,8 +270,10 @@ protected:
                 _Index bi = Ai[ii];
                 _Index M = vars.blockSize(bi);
                 loc += M; // Next block row in the first scalar column of block colum bj
-                if (bi <  bj) col_scalar_nnz += M * N;
-                if (bi == bj) col_scalar_nnz += (N * (N + 1)) / 2; // Note: M == N!
+                if constexpr (!StoreFullDiagonalBlocks) {
+                    if (bi <  bj) col_scalar_nnz += M * N;
+                    if (bi == bj) col_scalar_nnz += (N * (N + 1)) / 2; // Note: M == N!
+                } else col_scalar_nnz += M * N;
             }
             // Advance to next block column
             loc = col_start + col_scalar_nnz;
@@ -266,14 +296,16 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
     using Index        = typename BT::Index;
 
     static constexpr bool ContiguousBlocks = BT::ContiguousBlocks;
+    static constexpr bool StoreFullDiagonalBlocks = BT::StoreFullDiagonalBlocks;
+    static_assert(!StoreFullDiagonalBlocks || ContiguousBlocks, "StoreFullDiagonalBlocks only supported with ContiguousBlocks.");
+
     static constexpr Index N = VarStructure::MaxBlockDim;
 
     ColumnScanner(const BCSCH &H, Index bj) :
         m_H(H), m_bj(bj), m_bloc(H.Ap[bj]), m_end(H.Ap[bj + 1])
     {
         m_colStart  = H.scalarOffsetForColumn(bj);
-        if constexpr (!ContiguousBlocks)
-            m_colStride = H.scalarColStride(bj);
+        if constexpr (!ContiguousBlocks) m_colStride = H.scalarColStride(bj);
         m_scalarLoc = m_colStart;
     }
 
@@ -305,21 +337,28 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
     static constexpr Index  colBlockSize() { return N; }
     static constexpr Index  rowBlockSize() { return N; }
     static constexpr Index     blockSize() { return N * N; }
-    static constexpr Index diagBlockSize() { return (N * (N + 1)) / 2; }
+    static constexpr Index diagBlockSize() { if constexpr (StoreFullDiagonalBlocks) { return N * N; } return (N * (N + 1)) / 2; }
 
     Index diagBlockScalarLoc() const { if constexpr (ContiguousBlocks) return m_H.scalarOffsetForColumn(m_bj + 1) - diagBlockSize(); else return m_colStart + m_colStride - 1; }
 
+    static constexpr bool SpecialDBkStride = !StoreFullDiagonalBlocks && ContiguousBlocks;
     Index colStride(size_t c [[maybe_unused]]) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
     Index blockStride()                        const { if constexpr (ContiguousBlocks) return    blockSize(); else return rowBlockSize();  } // Stride from upper-left corner of this block to the next.
-    Index diagBlockColStride(size_t c)         const { if constexpr (ContiguousBlocks) return          c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
+    Index diagBlockColStride(size_t c)         const { if constexpr (SpecialDBkStride) return          c + 1; else return colStride(c);    } // Stride within diagonal blocks is special in the contiguous + non-full-diag-block case.
 
+    // Intended for non-diagonal blocks
+    // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
     template<class Block>
     void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
         // Find offset in `Ax` of the block's upper-left corner.
         SuiteSparse_long loc = advanceToBlock(bi);
-        for (size_t c = 0; c < N; ++c) {
-            Eigen::Map<Eigen::Matrix<double, VarStructure::MaxBlockDim, 1>>(Ax + loc) += block.col(c);
-            loc += colStride(c);
+        if constexpr (ContiguousBlocks)
+            Eigen::Map<Eigen::Matrix<double, VarStructure::MaxBlockDim, VarStructure::MaxBlockDim>>(Ax + loc) += block;
+        else {
+            for (size_t c = 0; c < N; ++c) {
+                Eigen::Map<Eigen::Matrix<double, VarStructure::MaxBlockDim, 1>>(Ax + loc) += block.col(c);
+                loc += colStride(c);
+            }
         }
     }
 
@@ -346,16 +385,19 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
     using Index        = typename BT::Index;
 
     static constexpr bool ContiguousBlocks = BT::ContiguousBlocks;
+    static constexpr bool StoreFullDiagonalBlocks = BT::StoreFullDiagonalBlocks;
+    static_assert(!StoreFullDiagonalBlocks || ContiguousBlocks, "StoreFullDiagonalBlocks only supported with ContiguousBlocks.");
 
     ColumnScanner(const BCSCH &H, Index bj)
         : m_H(H), m_bj(bj), m_bloc(H.Ap[bj]), m_end(H.Ap[bj + 1]), m_blockType(0) {
         m_colBlockSize = H.vars().blockSize(bj);
+        if (m_bloc == m_end) return; // Empty column...
 
         // The first block in this column might not be of the first type...
         size_t curr = H.Ai[m_bloc];
         while (curr >= m_H.vars().blockOffsetForType(m_blockType + 1)) ++m_blockType;
 
-        m_colStride = H.scalarColStride(bj);
+        if constexpr (!ContiguousBlocks) m_colStride = H.scalarColStride(bj);
         m_scalarLoc = H.scalarOffsetForColumn(bj);
     }
 
@@ -392,7 +434,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
     Index  colBlockSize() const { return m_colBlockSize; }
     Index  rowBlockSize() const { return VarStructure::BlockDimensions[m_blockType]; }
     Index     blockSize() const { return colBlockSize() * rowBlockSize(); }
-    Index diagBlockSize() const { return (colBlockSize() * (colBlockSize() + 1)) / 2; }
+    Index diagBlockSize() const { if constexpr (StoreFullDiagonalBlocks) return colBlockSize() * colBlockSize(); else return (colBlockSize() * (colBlockSize() + 1)) / 2; }
 
     Index scalarLoc()  const { return m_scalarLoc; }
     Index  blockLoc()  const { return m_bloc; }
@@ -400,10 +442,20 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
 
     Index diagBlockScalarLoc() const { if constexpr (ContiguousBlocks) return m_H.scalarOffsetForColumn(m_bj + 1) - diagBlockSize(); else return m_H.scalarOffsetForColumn(m_bj) + m_colStride - 1; }
 
+    static constexpr bool SpecialDBkStride = !StoreFullDiagonalBlocks && ContiguousBlocks;
     Index colStride(size_t c [[maybe_unused]]) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
-    Index blockStride()                        const { if constexpr (ContiguousBlocks) return    blockSize(); else return  rowBlockSize(); } // Stride from upper-left corner of this block to the next.
-    Index diagBlockColStride(size_t c)         const { if constexpr (ContiguousBlocks) return          c + 1; else return m_colStride + c; } // Stride within diagonal blocks is special in the contiguous case.
+    Index blockStride()                        const { if constexpr (ContiguousBlocks) return    blockSize(); else return rowBlockSize();  } // Stride from upper-left corner of this block to the next.
+    Index diagBlockColStride(size_t c) const { // Stride within diagonal blocks from intra-block column `c` to the next.
+        if constexpr (ContiguousBlocks) {
+            if constexpr (StoreFullDiagonalBlocks)
+                return colBlockSize(); // Note: rowBlockSize() will be incorrect if the column scanner points to a block with different row size than the diagonal block's (which equals `colBlockSize()`)...
+            else return c + 1; // special
+        }
+        else return colStride(c); // In the non-contiguous case, diagonal block strides are no different from off-diagonal ones.
+    }
 
+    // Intended for non-diagonal blocks
+    // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
     template<class Block>
     void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
         // Find offset in `Ax` of the block's upper-left corner.
@@ -412,9 +464,13 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
 #else
         SuiteSparse_long loc = colScanner.findBlock(bi);
 #endif
-        for (size_t c = 0; c < block.cols(); ++c) {
-            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(Ax + loc, rowBlockSize()) += block.col(c);
-            loc += colStride(c);
+        if constexpr (ContiguousBlocks)
+            Eigen::Map<Eigen::Matrix<double, VarStructure::MaxBlockDim, VarStructure::MaxBlockDim>>(Ax + loc) += block;
+        else {
+            for (size_t c = 0; c < block.cols(); ++c) {
+                Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(Ax + loc, rowBlockSize()) += block.col(c);
+                loc += colStride(c);
+            }
         }
     }
 
@@ -447,6 +503,7 @@ struct detail::BlockCSCHTraits<BlockCSCHessian<_VarStructure, _ContiguousBlocks,
     using Real         = double;
     using IdxVector    = std::vector<Index>;
     static constexpr bool ContiguousBlocks = _ContiguousBlocks;
+    static constexpr bool StoreFullDiagonalBlocks = ContiguousBlocks;
 };
 
 struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
@@ -589,6 +646,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     using CSCMat = typename BlockCSCHessianBase::CSCMat;
     using VXd = Eigen::VectorXd;
     constexpr static bool ContiguousBlocks = _ContiguousBlocks;
+    constexpr static bool StoreFullDiagonalBlocks = _ContiguousBlocks;
 
     using SymmetryMode = typename CSCMat::SymmetryMode;
     using CSCMat::Ax; // Note: this may be empty for a sparsity-only matrix! Also, it holds scalar entries!
@@ -634,7 +692,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         return result;
     }
 
-    virtual bool missingRequiredDiagonalBlocks() const override { return VarStructure::SingleBlockDim && (numDiagonalBlocks() < size_t(n)); }
+    virtual bool missingRequiredDiagonalBlocks() const override { return VarStructure::SingleBlockDim && !StoreFullDiagonalBlocks && (numDiagonalBlocks() < size_t(n)); }
 
     virtual void assertSupportsAssembly() const override {
         // In the uniform-block-size case, we must have all diagonal blocks
@@ -644,7 +702,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     }
 
     virtual size_t scalarNNZ() const override {
-        if constexpr (VarStructure::SingleBlockDim) {
+        if constexpr (VarStructure::SingleBlockDim && !StoreFullDiagonalBlocks) {
             // Work around problem where `scalarOffsetForColumn` is broken when
             // diagonal blocks are missing... (not that we claim to fully
             // support this case)
@@ -668,8 +726,8 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
             _Index loc = cs.diagBlockScalarLoc();
             for (_Index c_j = 0; c_j < cs.colBlockSize(); ++c_j) {
                 f(j++, loc);
-                loc += cs.colStride(c_j) // Move to next scalar column...
-                       + 1;              // and down one to reach the diagonal
+                loc += cs.diagBlockColStride(c_j) // Move to next scalar column...
+                    +  1;                         // and down one to reach the diagonal
             }
         }
     }
@@ -685,12 +743,47 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.toScalar");
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("Only SymmetryMode::UPPER_TRIANGLE is supported");
 
+        // Copy scalar values over to `result` (if they exist)
+        auto copyValuesInto = [this, sparsityOnly](CSCMat &result) {
+            if (sparsityOnly || (Ax.size() == 0)) return;
+            if constexpr (!ContiguousBlocks) {
+                static_assert(!StoreFullDiagonalBlocks, "ContiguousBlocks + StoreFullDiagonalBlocks not supported");
+                result.Ax = Ax;
+            } else {
+                // There's a storage layout mismatch--values need shuffling.
+                result.Ax.resize(result.nnz());
+                for (_Index bj = 0; bj < n; ++bj) {
+                    auto [gvar_j, bsj] = m_vars.blockInfo(bj);
+                    _Index result_loc = result.Ap[gvar_j];
+                    _Index result_scalar_col_stride = result.Ap[gvar_j + 1] - result.Ap[gvar_j];
+                    for (auto cs = columnScanner(bj); !cs.atEnd(); ++cs) {
+                        _Index dst_loc = result_loc;
+                        _Index src_loc = cs.scalarLoc();
+                        if (Ai[cs.blockLoc()] != bj) {
+                            for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                                memcpy(result.Ax.data() + dst_loc, Ax.data() + src_loc, cs.rowBlockSize() * sizeof(_Real));
+                                assert(result_scalar_col_stride + _Index(c_j) == result.Ap[gvar_j + c_j + 1] - result.Ap[gvar_j + c_j]);
+                                dst_loc += result_scalar_col_stride + c_j;
+                                src_loc += cs.colStride(c_j);
+                            }
+                        }
+                        else {
+                            for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                                memcpy(result.Ax.data() + dst_loc, Ax.data() + src_loc, (c_j + 1) * sizeof(_Real));
+                                assert(result_scalar_col_stride + _Index(c_j) == result.Ap[gvar_j + c_j + 1] - result.Ap[gvar_j + c_j]);
+                                dst_loc += result_scalar_col_stride + c_j;
+                                src_loc += cs.diagBlockColStride(c_j);
+                            }
+                        }
+                        result_loc += cs.rowBlockSize();
+                    }
+                }
+            }
+        };
+
         if (uniformBlockSize()) {
             CSCMat result = this->template expandSparsityPattern<VarStructure::MaxBlockDim>();
-
-            // Copy scalar values over (if they exist)
-            if (!sparsityOnly) result.Ax = Ax;
-            return result;
+            copyValuesInto(result);
         }
 
         size_t n_scalar = numScalarCols();
@@ -737,8 +830,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
             }
         }
 
-        // Copy scalar values over (if they exist)
-        if (!sparsityOnly) result.Ax = Ax;
+        copyValuesInto(result);
 
         return result;
     }
@@ -773,6 +865,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
 
     // result[:] += H[:, bj_begin:bj_end] @ x[bj_begin:bj_end]
     void applyRawColumnRangeAccum(_Index bj_begin, _Index bj_end, const _Real *x, _Real *result) const {
+        // TODO: speed up `ContiguousBlocks && StoreFullDiagonalBlocks` case.
         // TODO: speed up the nonuniform case by blocking by type (doing type 0-type 0 block, then
         // type 0-type 1 block, etc.) so that variable dimensions are fixed within each block.
         // This could be done using recursive templates to iterate over the type pairs.
@@ -814,6 +907,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     }
 
     _Real evalQuadraticForm(Eigen::Ref<const VXd> x) const override {
+        // TODO: speed up `ContiguousBlocks && StoreFullDiagonalBlocks` case.
         if (size_t(x.rows()) != size_t(numScalarRows())) throw std::runtime_error("BlockCSCHessian::evalQuadraticForm: size mismatch; expected " + std::to_string(numScalarRows()) + " got " + std::to_string(x.rows()));
         if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE) throw std::runtime_error("evalQuadraticForm: only `UPPER_TRIANGLE` symmetry mode is implemented");
 
@@ -865,6 +959,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         // whose upper-left corner is at `locForBlock(bi, bj)`.
         _Index loc = this->locForBlock(bi, bj); // upper-left corner
         if constexpr (ContiguousBlocks) {
+            static_assert(StoreFullDiagonalBlocks, "Only StoreFullDiagonalBlocks case is supported");
             size_t bsi = m_vars.blockSize(bi);
             loc += bsi * c_j + c_i;
         }
@@ -888,9 +983,10 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
             // Diagonal case
             for (int c_j = 0; c_j < block.cols(); ++c_j) {
                 Eigen::Map<Eigen::Matrix<_Real, Eigen::Dynamic, 1>>(Ax.data() + loc, c_j + 1) += block.col(c_j).topRows(c_j + 1);
-                if constexpr (ContiguousBlocks)
+                if constexpr (ContiguousBlocks) {
+                    static_assert(StoreFullDiagonalBlocks, "Only StoreFullDiagonalBlocks case is supported");
                     loc += m_vars.blockSize(m_vars.blockContainingVar(vi));
-                else
+                } else
                     loc += this->scalarColStride(bj) + c_j;
             }
         }
@@ -916,6 +1012,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         const BlockCSCHessian &b = cast(b_base);
 
         auto addColumn = [&](_Index j) {
+            if (b.col_nnz(j) == 0) return;
             auto csB = b.columnScanner(j);
             size_t bsj = csB.colBlockSize();
 
@@ -957,6 +1054,89 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
     }
 
     std::unique_ptr<BlockCSCHessianBase> clone() const override;
+
+    template<template<class> class BlockToScalarPolicy2>
+    auto cloneWithBTSPolicy() const {
+        auto result = BlockCSCHessian<VarStructure, ContiguousBlocks, BlockToScalarPolicy2>::construct(m_vars);
+        result->mergeSparsityPattern(*this);
+        result->finalize();
+        if (Ax.size() != 0) result->Ax = Ax; // Copy values if they exist.
+        return result;
+    }
+
+    // Allow conversion between contiguous and non-contiguous block layouts.
+    template<bool ContiguousBlocks2>
+    auto cloneWithLayout() const {
+        std::unique_ptr<BlockCSCHessian<VarStructure, ContiguousBlocks2, BlockToScalarPolicy>> result;
+        if constexpr (ContiguousBlocks2 == ContiguousBlocks) { result = std::make_unique<BlockCSCHessian>(*this); }
+        else {
+            result = BlockCSCHessian<VarStructure, ContiguousBlocks2, BlockToScalarPolicy>::construct(m_vars);
+            result->mergeSparsityPattern(*this);
+            result->finalize();
+            if (Ax.size() == 0) return result; // Sparsity only; no values to copy.
+
+            if constexpr (ContiguousBlocks2) {
+                // Convert from non-contiguous to contiguous layout.
+                auto &rAx = result->Ax;
+                rAx.resize(result->scalarNNZ());
+
+                for (_Index bj = 0; bj < n; ++bj) {
+                    auto [gvar_j, bsj] = m_vars.blockInfo(bj);
+                    auto cs_src = columnScanner(bj);
+                    auto cs_dst = result->columnScanner(bj);
+                    for (; !cs_src.atEnd() && !cs_dst.atEnd(); ++cs_src, ++cs_dst) {
+                        assert(cs_src.colBlockSize() == cs_dst.colBlockSize() && "Column block sizes must match for conversion");
+                        assert(cs_src.rowBlockSize() == cs_dst.rowBlockSize() && "Row block sizes must match for conversion");
+                        assert(Ai[cs_src.blockLoc()] == result->Ai[cs_dst.blockLoc()] && "Row index mismatch in conversion");
+                        _Index src_loc = cs_src.scalarLoc();
+                        _Index dst_loc = cs_dst.scalarLoc();
+                        if (Ai[cs_src.blockLoc()] != bj) {
+                            for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                                memcpy(rAx.data() + dst_loc, Ax.data() + src_loc, cs_src.rowBlockSize() * sizeof(_Real));
+                                dst_loc += cs_dst.colStride(c_j);
+                                src_loc += cs_src.colStride(c_j);
+                            }
+                        }
+                        else {
+                            for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                                memcpy(rAx.data() + dst_loc, Ax.data() + src_loc, (c_j + 1) * sizeof(_Real));
+                                dst_loc += cs_dst.diagBlockColStride(c_j);
+                                src_loc += cs_src.diagBlockColStride(c_j);
+                            }
+                        }
+                    }
+                }
+            }
+            else {
+                // Convert from contiguous to non-contiguous layout.
+                // Currently we're lazy here and leverage the fact that the
+                // non-contiguous data array is identical to the scalar CSC data.
+                // (If this conversion is needed in production code, it could be accelerated).
+                result->Ax = toScalar().Ax;
+            }
+        }
+
+        return result;
+    }
+
+    void zeroOutLowerTriangleOfDiagonalBlocks() {
+        // In the case of `ContiguousBlocks`, space is allocated to store the
+        // strict lower triangle of each diagonal block despite those values
+        // never being referenced. These values can contain garbage that
+        // affects unit tests based on comparing all entries in `Ax`.
+        // This method clears this garbage so that the unit tests can run successfully.
+        // It should not be needed in production code.
+        if (symmetry_mode != SymmetryMode::UPPER_TRIANGLE)
+            throw std::runtime_error("zeroOutLowerTriangleOfDiagonalBlocks: only `UPPER_TRIANGLE` symmetry mode is implemented");
+        if constexpr (StoreFullDiagonalBlocks) {
+            static_assert(ContiguousBlocks, "StoreFullDiagonalBlocks only supported for ContiguousBlocks");
+            for (_Index bj = 0; bj < n; ++bj) {
+                auto cs = columnScanner(bj);
+                if (cs.colBlockSize() == 1) continue; // No lower triangle to clear
+                Eigen::Map<Eigen::MatrixXd>(Ax.data() + cs.diagBlockScalarLoc(), cs.colBlockSize(), cs.colBlockSize()).triangularView<Eigen::StrictlyLower>().setZero();
+            }
+        }
+    }
 
     using ColumnScanner = detail::ColumnScanner<BlockCSCHessian>;
     ColumnScanner columnScanner(_Index bj) const {
