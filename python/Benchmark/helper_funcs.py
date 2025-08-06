@@ -10,7 +10,7 @@ sys.path.append('../')
 import subprocess
 import MeshFEM
 import mesh, mesh_energy, energy
-import parametrization, py_newton_optimizer, benchmark
+import parametrization, py_newton_optimizer, benchmark, flip_avoiding_step_length
 import tinyad_parametrization
 import numpy as np
 import copy, time
@@ -136,7 +136,7 @@ def delete_txt_files(folder_path):
         except Exception as e:
             print(f"Failed to delete {file_path}: {e}")
 
-def processUVTXTs(source_path, to_path, txt_file_prefix_str):
+def processUVTXTs(source_path, to_path, txt_file_prefix_str, index_offset=0):
     """
     Processes txt files in a given folder, converting them to raveled NumPy arrays
     and saving them as compressed .npz files. Deletes the original txt files after
@@ -170,7 +170,7 @@ def processUVTXTs(source_path, to_path, txt_file_prefix_str):
             raveled_data = data.ravel()
             
             # Construct the .npz file name
-            file_index = txt_file.split('_')[-1].split('.')[0]  # Extract i from "uv_Eigen_Iter_i.txt"
+            file_index = txt_file.split('_')[-1].split('.')[0] + index_offset  # Extract i from "uv_Eigen_Iter_i.txt"
             npz_file_name = f"uv_ravel_iter_{file_index}.npz"
             npz_path = os.path.join(to_path, npz_file_name)
             
@@ -194,7 +194,10 @@ def processUVTXTs(source_path, to_path, txt_file_prefix_str):
         print(f"Mismatch in file counts: {len(txt_files)} txt files vs {len(npz_files)} npz files.")
         return False
 
-def parse_custom_csv(folder_path, csv_filename):
+def parse_custom_csv(folder_path, csv_filename):  
+    """
+    For processing Roi's Composite Majorization's stats recording csv file
+    """
     csv_path = os.path.join(folder_path, csv_filename)
 
     # Initialize storage
@@ -230,7 +233,8 @@ def parse_custom_csv(folder_path, csv_filename):
 
     return table_data, summary_stats
 
-def runSYDParam(m, ProjectionStrategy, EigenvalueModification, ProjectionType, AutodiffSetting, 
+def runSYDParam(m, ProjectionStrategy, EigenvalueModification, 
+                ProjectionType, AutodiffSetting, SteplengthComputer,
                 max_iter=200, hessian_shift=1e-8, grad_tol=None, uvsave_path=None):
     
     obj_history = []
@@ -276,18 +280,18 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification, ProjectionType, A
     elif EigenvalueModification == 'Abs': symmdiri_energy.useAbsProjection = True
     else: raise NameError(f"[runSYDParam] MeshFEM Solver Configuration: Eigenvalue Modification {EigenvalueModification} is not implemented.")
 
-    # if hessian_proj_option == 'AutoDiff':  symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
-    # elif hessian_proj_option == 'AutoDiffAbs':
-    #     symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)
-    #     symmdiri_energy.useAbsProjection = True
-    # elif hessian_proj_option == 'AdaptiveAbs':
-    #     symmdiri_energy = energy.SymmetricDirichlet(2)
-    #     symmdiri_energy.useAbsProjection = True
-    # else:  symmdiri_energy = energy.SymmetricDirichlet(2)
-
     # Construct `SymmetricDirichlet` parametrization energy and problem
     param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
+
+    # Step Length Computer
+    if SteplengthComputer == 'FlipAvoid':
+        prob.initialFeasibleStepLengthComputer = flip_avoiding_step_length.FlipAvoidingStepLength(m.elements())
+        prob.initialFeasibleStepLengthComputer.backoffFactor = 0.8    # in accordance to Composite Majorization
+    elif SteplengthComputer == 'NoFlipAvoid':
+        pass
+    else:  raise NameError(f"[runSYDParam] MeshFEM Solver Configuration: Steplength Computer {SteplengthComputer} is not implemented.")
+
     if uvsave_path is None:  prob.setCustomIterationCallback(customCallback)
     else:
         if not os.path.exists(uvsave_path):
@@ -295,7 +299,6 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification, ProjectionType, A
         prob.setCustomIterationCallback(customSaveUVCallback)
     prob.setCustomLineSearchBeganCallback(customSaveStepDCallback)
 
-    # Configuration User Options pt.2
     # Projection Type
     if ProjectionType == 'FBased':  param.useXBasedProjection = False
     elif ProjectionType == 'XBased': param.useXBasedProjection = True
@@ -307,7 +310,6 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification, ProjectionType, A
     opt.options.niter = max_iter
     if grad_tol is not None: opt.options.gradTol = grad_tol  # default is 2e-8
 
-    # Configure User Options pt.3
     # Projection Strategy
     if ProjectionStrategy == 'Adaptive':
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
@@ -318,19 +320,6 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification, ProjectionType, A
     elif ProjectionStrategy == 'Never':
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionNever()
     else:  raise NameError(f"[runSYDParam] MeshFEM Solver Configuration: Projection Strategy {ProjectionStrategy} is not implemented.")
-
-    # if hessian_proj_option in ['Adaptive', 'AutoDiff', 'AutoDiffAbs', 'AdaptiveAbs']:
-    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive()
-    #     opt.options.hessianProjectionController.numConsecutiveIndefiniteStepsBeforeEnable = 0
-    #     opt.options.hessianProjectionController.numProjectionStepsBeforeDisable = 2
-    # elif hessian_proj_option == 'Always':
-    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
-    # elif hessian_proj_option == 'Never':
-    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionNever()
-    # elif hessian_proj_option == 'xbasedAlways':
-    #     opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()
-    #     param.useXBasedProjection = True
-    # else:  raise RuntimeError("[Error] Usage of hessian_proj_option: Adaptive, Always, Never, xbasedAlways")
     
     # Run Optimization
     benchmark.reset()
@@ -483,7 +472,7 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
         return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
 
 def runCompMajor(model_name, model_path, uvsave_path=None):
-    exe_binary_str = "../../../CompMajor/build/CompMajor_bin"
+    exe_binary_str = "../../../CompMajor/build/CompMajor_bin"   # relative path of user xinzhuo on Julian's Linux Server
     model_out_name = model_name + "_out.obj"
     # create TEMP_FILE_PATH if it doesn't exists
     UV_FILE_PATH = "CompMajor_TEMP_UV"
@@ -516,7 +505,9 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         np.save(os.path.join(uvsave_path, grad_norm_filename), table_data["gradient_norm"])
         # Process UV TXTs
         txt_prefix = model_out_name + "_Iter_"
-        if not processUVTXTs(UV_FILE_PATH, uvsave_path, txt_prefix):  raise RuntimeError(f"[Error] In Process CompMajor UV txts in {UV_FILE_PATH}.")
+        if not processUVTXTs(UV_FILE_PATH, uvsave_path, txt_prefix, index_offset=1):  
+            # CompMajor's UV Saving starts from 1 (not saving the tutte initialized mesh)
+            raise RuntimeError(f"[Error] In Process CompMajor UV txts in {UV_FILE_PATH}.")
         delete_txt_files(UV_FILE_PATH)
         print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
         return 

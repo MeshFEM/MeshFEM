@@ -81,7 +81,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         else:
             # get solver options str f"MeshFEM{n}"
             name_tuple = SolverOptionEnum.optionNames(hessian_proj_option)
-            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3])
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], name_tuple[4])
             
             symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
             numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
@@ -145,7 +145,7 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option):
     elif hessian_proj_option == 'CompMajor':  helper_funcs.runCompMajor(model_name, model_path, uvsave_path=folder_dir)
     else:                                
         name_tuple = SolverOptionEnum.optionNames(hessian_proj_option)
-        helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], uvsave_path=folder_dir)
+        helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], name_tuple[4], uvsave_path=folder_dir)
     print(f"[File] Model: {model_name}. Hessian option: {hessian_proj_option} Saved UVs of all iterations in {folder_dir}.")
 
 def main():
