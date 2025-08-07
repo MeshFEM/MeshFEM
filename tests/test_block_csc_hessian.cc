@@ -40,8 +40,9 @@ auto assembleTestMatrices() {
         }
     }
 
-    auto blockHsp = assembler.template blockSparsityPattern(numElements, [&elements](size_t ei) { return elements.row(ei); });
-    auto blockHsp_subset = assembler.template blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei); });
+
+    auto blockHsp        = assembler.template blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp_subset = assembler.template blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
 
     return std::make_pair(std::move(blockHsp), std::move(blockHsp_subset));
 }
@@ -110,6 +111,13 @@ void runTest() {
                 bii += rand() % 3; // advance by a random number of blocks to simulate access pattern of Hessian assembly
             }
         }
+    }
+
+    // Validate `dataOffsetsForScalarCSCDataOffsets`
+    if (ContiguousBlocks) {
+        auto iremap = blockHsp.dataOffsetsForScalarCSCDataOffsets(scalarHsp);
+        for (size_t loc = 0; loc < scalarHsp.nnz(); ++loc)
+            REQUIRE(blockHsp.Ax[iremap[loc]] == scalarHsp.Ax[loc]);
     }
 
     // Verify addNZ and toScalar behavior

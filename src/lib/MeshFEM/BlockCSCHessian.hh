@@ -349,7 +349,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
     // Intended for non-diagonal blocks
     // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
     template<class Block>
-    void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
+    void advanceToAndAddBlock(double *Ax, size_t bi, const Block &block) {
         // Find offset in `Ax` of the block's upper-left corner.
         SuiteSparse_long loc = advanceToBlock(bi);
         if constexpr (ContiguousBlocks)
@@ -457,7 +457,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
     // Intended for non-diagonal blocks
     // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
     template<class Block>
-    void advanceToAndAddBlock(double *Ax, size_t bi, Block &&block) {
+    void advanceToAndAddBlock(double *Ax, size_t bi, const Block &block) {
         // Find offset in `Ax` of the block's upper-left corner.
 #if 1
         SuiteSparse_long loc = advanceToBlock(bi);
@@ -465,7 +465,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
         SuiteSparse_long loc = colScanner.findBlock(bi);
 #endif
         if constexpr (ContiguousBlocks)
-            Eigen::Map<Eigen::Matrix<double, VarStructure::MaxBlockDim, VarStructure::MaxBlockDim>>(Ax + loc) += block;
+            Eigen::Map<Eigen::MatrixXd>(Ax + loc, block.rows(), block.cols()) += block;
         else {
             for (size_t c = 0; c < block.cols(); ++c) {
                 Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 1>>(Ax + loc, rowBlockSize()) += block.col(c);
@@ -501,13 +501,13 @@ struct detail::BlockCSCHTraits<BlockCSCHessian<_VarStructure, _ContiguousBlocks,
     using VarStructure = _VarStructure;
     using Index        = SuiteSparse_long;
     using Real         = double;
-    using IdxVector    = std::vector<Index>;
     static constexpr bool ContiguousBlocks = _ContiguousBlocks;
     static constexpr bool StoreFullDiagonalBlocks = ContiguousBlocks;
 };
 
 struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
     using CSCMat = SuiteSparseMatrix;
+    using _Index = SuiteSparse_long;
 
     using CSCMat::CSCMat;
 
@@ -548,7 +548,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
     // Set each nonzero entry to a particular value, preserving the sparsity pattern.
     void fill(double val) { Ax.assign(scalarNNZ(), val); }
     void setZero() {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian::setZero");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSCHessian.setZero");
         if (Ax.size() != scalarNNZ()) {
             // Since we're allocating the storage for this matrix, it looks like
             // the user is intending to run assembly on it.
@@ -565,6 +565,15 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
 
     virtual SuiteSparseMatrix toScalar(bool sparsityOnly = false) const = 0;
     static std::unique_ptr<BlockCSCHessianBase> fromScalar(const SuiteSparseMatrix &m);
+
+    // When `ContiguousBlocks` is true, the `BlockCSCHessian` values array
+    // differs from the corresponding values array of `scalarHsp` (which must
+    // have been obtained via `toScalar`).
+    // This method constructs a table for looking up values
+    // in this block matrix that correspond to a certain offset in the scalar
+    // matrix's values array. An empty return value indicates that no reindexing
+    // is necessary.
+    virtual VecX_T<_Index> dataOffsetsForScalarCSCDataOffsets(const CSCMatrix &scalarHsp) const = 0;
 
     Eigen::VectorXd apply(const Eigen::VectorXd &x) const {
         if (size_t(x.size()) != numScalarCols())
@@ -645,7 +654,6 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
 {
     using _Index = SuiteSparse_long;
     using _Real = double;
-    using IdxVector = std::vector<_Index>;
     using CSCMat = typename BlockCSCHessianBase::CSCMat;
     using VXd = Eigen::VectorXd;
     constexpr static bool ContiguousBlocks = _ContiguousBlocks;
@@ -755,7 +763,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
             } else {
                 // There's a storage layout mismatch--values need shuffling.
                 result.Ax.resize(result.nnz());
-                for (_Index bj = 0; bj < n; ++bj) {
+                parallel_for_range(n, [&](_Index bj) {
                     auto [gvar_j, bsj] = m_vars.blockInfo(bj);
                     _Index result_loc = result.Ap[gvar_j];
                     _Index result_scalar_col_stride = result.Ap[gvar_j + 1] - result.Ap[gvar_j];
@@ -780,7 +788,7 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
                         }
                         result_loc += cs.rowBlockSize();
                     }
-                }
+                });
             }
         };
 
@@ -834,6 +842,50 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
         }
 
         copyValuesInto(result);
+
+        return result;
+    }
+
+    // When `ContiguousBlocks` is true, the `BlockCSCHessian` values array
+    // differs from the corresponding values array of `scalarHsp` (which must
+    // have been obtained via `toScalar`).
+    // This method constructs a table for looking up values
+    // in this block matrix that correspond to a certain offset in the scalar
+    // matrix's values array. An empty return value indicates that no reindexing
+    // is necessary.
+    VecX_T<_Index> dataOffsetsForScalarCSCDataOffsets(const CSCMatrix &scalarHsp) const override {
+        if constexpr (!ContiguousBlocks) {
+            // No reindexing is necessary.
+            return VecX_T<_Index>();
+        }
+
+        VecX_T<_Index> result(scalarHsp.nnz());
+        parallel_for_range(n, [&](_Index bj) {
+            auto [gvar_j, bsj] = m_vars.blockInfo(bj);
+            _Index result_loc = scalarHsp.Ap[gvar_j];
+            _Index result_scalar_col_stride = scalarHsp.Ap[gvar_j + 1] - scalarHsp.Ap[gvar_j];
+            for (auto cs = columnScanner(bj); !cs.atEnd(); ++cs) {
+                _Index dst_loc = result_loc;
+                _Index src_loc = cs.scalarLoc();
+                if (Ai[cs.blockLoc()] != bj) { // Upper triangle
+                    for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                        for (size_t c_i = 0; c_i < size_t(cs.rowBlockSize()); ++c_i)
+                            result[dst_loc + c_i] = src_loc + c_i;
+                        dst_loc += result_scalar_col_stride + c_j;
+                        src_loc += cs.colStride(c_j);
+                    }
+                }
+                else {
+                    for (size_t c_j = 0; c_j < bsj; ++c_j) {
+                        for (size_t c_i = 0; c_i <= c_j; ++c_i)
+                            result[dst_loc + c_i] = src_loc + c_i;
+                        dst_loc += result_scalar_col_stride + c_j;
+                        src_loc += cs.diagBlockColStride(c_j);
+                    }
+                }
+                result_loc += cs.rowBlockSize();
+            }
+        });
 
         return result;
     }

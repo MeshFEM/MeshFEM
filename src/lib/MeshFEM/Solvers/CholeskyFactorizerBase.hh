@@ -100,7 +100,7 @@ struct CholeskyFactorizerBase {
 
     ////////////////////////////////////////////////////////////////////////////
     // Factorization routines taking a `BlockCSCHessian` instead of
-    // `SuiteSparseMatrix`. The default implementation of thes is to
+    // `SuiteSparseMatrix`. The default implementation of these is to
     // convert to a `SuiteSparseMatrix` and call the routines above.
     // However, if the subclass can exploit block structure (like
     // BlockCatamari), then it overrides these methods.
@@ -112,8 +112,11 @@ struct CholeskyFactorizerBase {
         if (mat.isScalar())
             factorizeSymbolic((const SuiteSparseMatrix &)(mat), pinnedVars);
         else {
-            m_scalarHessian = mat.toScalar();
+            m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
+            m_dataOffsetForScalarHessianLoc = mat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
             factorizeSymbolic(m_scalarHessian, pinnedVars);
+
+            // TODO: fuse row/col removal with `m_dataOffsetForScalarHessianLoc`...
         }
     }
 
@@ -121,7 +124,8 @@ struct CholeskyFactorizerBase {
         if (mat.isScalar())
             factorizeSymbolic((const SuiteSparseMatrix &)(mat));
         else {
-            m_scalarHessian = mat.toScalar();
+            m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
+            m_dataOffsetForScalarHessianLoc = mat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
             factorizeSymbolic(m_scalarHessian);
         }
     }
@@ -146,8 +150,25 @@ struct CholeskyFactorizerBase {
         if (mat.isScalar())
             f((const SuiteSparseMatrix &)(mat));
         else {
-            DataSwapper swapper(m_scalarHessian, mat);
-            f(m_scalarHessian);
+            if (m_dataOffsetForScalarHessianLoc.size() == 0) {
+                DataSwapper swapper(m_scalarHessian, mat);
+                f(m_scalarHessian);
+            }
+            else {
+                BENCHMARK_START_TIMER_SECTION("ShuffleValuesToScalarLayout");
+                // Shuffle the data...
+                m_scalarHessian.Ax.resize(m_scalarHessian.nnz());
+                if (m_scalarHessian.Ax.size() != size_t(m_dataOffsetForScalarHessianLoc.size()))
+                    throw std::runtime_error("Data offsets for scalar CSC data do not match the size of Ax");
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, m_scalarHessian.nnz()),
+                    [&](const tbb::blocked_range<size_t> &r) {
+                        for (size_t i = r.begin(); i < r.end(); ++i)
+                            m_scalarHessian.Ax[i] = mat.Ax[m_dataOffsetForScalarHessianLoc[i]];
+                    });
+                BENCHMARK_STOP_TIMER_SECTION("ShuffleValuesToScalarLayout");
+
+                f(m_scalarHessian);
+            }
         }
     }
 
@@ -340,9 +361,9 @@ struct CholeskyFactorizerBase {
     void recordMatrices(const std::string &directory_path) { m_matrix_dump_path = directory_path; }
     void stopRecordingMatrices() { m_matrix_dump_path.clear(); }
     bool recordingMatrices() const { return !m_matrix_dump_path.empty(); }
-    static std::string symbolicMatrixFileName(size_t i) { return "/symbolic_mat_" + m_matrixIdString(i) + ".bin"; }
-    static std::string  numericMatrixFileName(size_t i) { return "/numeric_mat_"  + m_matrixIdString(i) + ".bin"; }
-    static std::string     pinnedVarsFileName(size_t i) { return "/pinned_vars_"  + m_matrixIdString(i) + ".txt"; }
+    static std::string symbolicMatrixFileName(size_t i) { return "symbolic_mat_" + m_matrixIdString(i) + ".bin"; }
+    static std::string  numericMatrixFileName(size_t i) { return "numeric_mat_"  + m_matrixIdString(i) + ".bin"; }
+    static std::string     pinnedVarsFileName(size_t i) { return "pinned_vars_"  + m_matrixIdString(i) + ".txt"; }
 
     virtual void writeSolveTimers() const { /* Only some subclasses record timers */ }
 
@@ -382,6 +403,7 @@ protected:
 
     mutable VXd m_solveScratch;
     mutable SuiteSparseMatrix m_scalarHessian;
+    VecX_T<SuiteSparse_long> m_dataOffsetForScalarHessianLoc; // When the block Hessian has been assembled with ContiguousBlocks, we need to shuffle the data to agree with m_scalarHessian.
 
     std::string m_matrix_dump_path;
     size_t m_matrixId = 0;

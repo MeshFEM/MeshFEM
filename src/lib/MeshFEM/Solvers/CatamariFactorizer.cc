@@ -222,7 +222,7 @@ void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const
         m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
     }
     else {
-        m_scalarHessian = mat.toScalar();
+        m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
         m_blockSize = 1;
         m_factorizeSymbolic(m_scalarHessian, pinnedVars);
     }
@@ -265,7 +265,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         for (size_t bi : pinnedBlockVars) {
             if (numComponentsPinned[bi] != m_blockSize) {
                 std::cout << "WARNING: Partially-pinned block variables not yet implemented; falling back to scalar factorization" << std::endl;
-                m_scalarHessian = ((const BlockCSCHessianBase &)(mat)).toScalar();
+                m_scalarHessian = ((const BlockCSCHessianBase &)(mat)).toScalar(/* sparsityOnly = */ true);
                 m_blockSize = 1;
                 return m_factorizeSymbolic(m_scalarHessian, pinnedVars);
             }
