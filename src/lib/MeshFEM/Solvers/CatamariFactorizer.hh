@@ -42,9 +42,18 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     size_t m_reduced() const override;
     size_t n_reduced() const override;
 
-    using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
-    using CholeskyFactorizerBase::factorizeNumeric;
-    using CholeskyFactorizerBase::factorizeNumericWithShift;
+    void factorizeNumeric(const BlockCSCHessianBase &mat, bool isInTryCatch=false) override {
+        if (recordingMatrices()) mat.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+        factorizeNumeric((const SuiteSparseMatrix &)(mat), isInTryCatch);
+    }
+    void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override {
+        if (recordingMatrices()) A.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+        factorizeNumericWithShift((const SuiteSparseMatrix &)(A), sigma, B, isInTryCatch);
+    }
+    void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) override {
+        if (recordingMatrices()) A.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+        factorizeNumericWithShift((const SuiteSparseMatrix &)(A), sigma, isInTryCatch);
+    }
 
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override;
     void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;

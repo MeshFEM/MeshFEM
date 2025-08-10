@@ -493,7 +493,8 @@ template<class Derived> using BlockToScalarPolicyLocLookup            = detail::
 template<class Derived> using BlockToScalarPolicyTypeOffsetsPerColumn = detail::BlockToScalarWithConditionalFastPath<Derived, detail::BlockToScalarPolicyTypeOffsetsPerColumn>;
 template<class Derived> using BlockToScalarPolicyDefault              = BlockToScalarPolicyTypeOffsetsPerColumn<Derived>;
 
-template<class VarStructure, bool ContiguousBlocks = false, template<class> class BlockToScalarPolicy = BlockToScalarPolicyDefault>
+static constexpr bool ContiguousBlocksDefault = true;
+template<class VarStructure, bool ContiguousBlocks = ContiguousBlocksDefault, template<class> class BlockToScalarPolicy = BlockToScalarPolicyDefault>
 struct BlockCSCHessian;
 
 template<class _VarStructure, bool _ContiguousBlocks, template<class> class BlockToScalarPolicy>
@@ -1112,11 +1113,11 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
 
     bool hasContiguousBlocks() const override { return ContiguousBlocks; }
     std::unique_ptr<BlockCSCHessianBase> cloneWithNoncontiguousBlocks() const override {
-        if constexpr (ContiguousBlocks) { return clone(); }
+        if constexpr (!ContiguousBlocks) { return clone(); }
         return cloneWithLayout<false>();
     }
     std::unique_ptr<BlockCSCHessianBase> cloneWithContiguousBlocks() const override {
-        if constexpr (!ContiguousBlocks) { return clone(); }
+        if constexpr (ContiguousBlocks) { return clone(); }
         return cloneWithLayout<true>();
     }
 

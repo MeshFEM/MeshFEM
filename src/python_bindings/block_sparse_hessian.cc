@@ -59,6 +59,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("isScalar",         &BlockCSCHessianBase::isScalar)
         .def("uniformBlockSize", &BlockCSCHessianBase::uniformBlockSize)
         .def("blockSizeGCD",     &BlockCSCHessianBase::blockSizeGCD)
+        .def("hasContiguousBlocks", &BlockCSCHessianBase::hasContiguousBlocks, "Whether the blocks are stored contiguously in memory")
 
         .def("setIdentity", &BlockCSCHessianBase::setIdentity, py::arg("preserveSparsity"))
 

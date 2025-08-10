@@ -350,7 +350,7 @@ void NewtonHessian::applyRaw(const double *x_ptr, double *result_ptr) const {
 
     Eigen::Map<const Eigen::VectorXd> x(x_ptr, vs.numVars());
     Eigen::Map<Eigen::VectorXd> result(result_ptr, vs.numVars());
-    H_ss->applyRaw(vs.sparseVars(x).data(), vs.sparseVars(result).data());
+    H_ss->applyRawParallel(vs.sparseVars(x).data(), vs.sparseVars(result).data());
 
     const size_t ndv = vs.numDenseVars();
     const size_t nsv = vs.numSparseVars();

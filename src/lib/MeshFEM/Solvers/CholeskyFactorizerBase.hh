@@ -176,6 +176,8 @@ struct CholeskyFactorizerBase {
         guardedFactorizationCall(mat, [&](const SuiteSparseMatrix &A) { factorizeNumeric(A, isInTryCatch); });
     }
     virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) {
+        // TODO: use m_dataOffsetForScalarHessianLoc to shuffle the values of `B` where necessary...
+        if (m_dataOffsetForScalarHessianLoc.size() > 0) throw std::runtime_error("ContiguousBlock B matrix not yet supported in CholeskyFactorizerBase::factorizeNumericWithShift");
         guardedFactorizationCall(A, [&](const SuiteSparseMatrix &A_) { factorizeNumericWithShift(A_, sigma, B, isInTryCatch); });
     }
     virtual void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) {

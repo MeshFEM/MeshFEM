@@ -23,6 +23,7 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
             {
                 bool legacy = provider == CholeskyProvider::CatamariLegacy;
                 auto c = std::make_unique<CatamariFactorizer>(legacy);
+                // c->setUseLeftLooking(true);
                 if (provider == CholeskyProvider::Catamari)
                     c->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
                 else if ((provider == CholeskyProvider::CatamariNesdis) || (provider == CholeskyProvider::CatamariLegacy))

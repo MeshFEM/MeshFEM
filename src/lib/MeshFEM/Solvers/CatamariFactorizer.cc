@@ -23,7 +23,7 @@
 
 #include "CatamariConversionPlan.hh"
 
-// The largest block size for which we'll instantiate a BlockCatamari solver.
+// The largest block size for which to instantiate a BlockCatamari solver.
 #define MAX_INSTANTIATED_BLOCK_SIZE 3
 
 template<size_t MaxBlockSize = MAX_INSTANTIATED_BLOCK_SIZE>
@@ -223,6 +223,7 @@ void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const
     }
     else {
         m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
+        m_dataOffsetForScalarHessianLoc = mat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
         m_blockSize = 1;
         m_factorizeSymbolic(m_scalarHessian, pinnedVars);
     }
@@ -265,7 +266,9 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         for (size_t bi : pinnedBlockVars) {
             if (numComponentsPinned[bi] != m_blockSize) {
                 std::cout << "WARNING: Partially-pinned block variables not yet implemented; falling back to scalar factorization" << std::endl;
-                m_scalarHessian = ((const BlockCSCHessianBase &)(mat)).toScalar(/* sparsityOnly = */ true);
+                const BlockCSCHessianBase &bmat = static_cast<const BlockCSCHessianBase &>(mat);
+                m_scalarHessian = bmat.toScalar(/* sparsityOnly = */ true);
+                m_dataOffsetForScalarHessianLoc = bmat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
                 m_blockSize = 1;
                 return m_factorizeSymbolic(m_scalarHessian, pinnedVars);
             }
@@ -563,16 +566,20 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
     }
 
     if (!m_legacy) {
-        // Build a conversion plan to support direct injection of scalar entries
+        // Build a conversion plan to support direct injection of values
         // into the Cholesky factor. This must be done specially for non-unit
         // block sizes.
         BENCHMARK_SCOPED_TIMER_SECTION t2("ConversionPlan");
         if (m_blockSize > 1) {
             assert(ldl_block);
-            m_catamariConverter->conversionPlan = catamari_conversion_plan::constructScalarConversionPlan(m_catamariConverter->get(), mat, reducedRowForRow_block, m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
+            const BlockCSCHessianBase &bmat = static_cast<const BlockCSCHessianBase &>(mat);
+            if (bmat.hasContiguousBlocks())
+                m_catamariConverter->conversionPlan = catamari_conversion_plan::constructBlockConversionPlan(m_catamariConverter->get(), m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
+            else
+                m_catamariConverter->conversionPlan = catamari_conversion_plan::constructScalarConversionPlan(m_catamariConverter->get(), mat, reducedRowForRow_block, m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
             // auto cp_compare = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
         }
-        else m_catamariConverter->conversionPlan = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *m_ldl, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, m_entryForReducedEntry);
+        else m_catamariConverter->conversionPlan = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *m_ldl, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, m_entryForReducedEntry, m_dataOffsetForScalarHessianLoc);
 
 #if 0
         // Validation
@@ -619,10 +626,11 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     auto num_fact_start = std::chrono::high_resolution_clock::now();
 
     catamari::SparseLDLResult<double> result;
+    // TODO: account for m_dataOffsetForScalarHessianLoc in legacy mode.
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
     else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
-    if constexpr (true) {
+    if constexpr (false) {
         static bool first = true;
         if (first) {
             using catamari::Int;

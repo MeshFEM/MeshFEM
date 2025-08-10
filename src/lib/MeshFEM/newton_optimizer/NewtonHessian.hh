@@ -273,7 +273,7 @@ struct MESHFEM_EXPORT NewtonHessian {
         if (lrr > 0) os << V_s  << std::endl << V_d  << std::endl;
     }
 
-    template<bool ContiguousBlocks = false>
+    template<bool ContiguousBlocks = ContiguousBlocksDefault>
     static NewtonHessian load(const std::string &path) {
         std::ifstream is(path);
         if (!is.is_open()) throw std::runtime_error("Failed to open input file " + path);

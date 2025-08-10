@@ -94,6 +94,8 @@ std::unique_ptr<BlockCSCHessianBase> BlockCSCHessianBase::constructFromBinaryStr
     if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>, false>::construct(OptimizationVarStructure<3>(numBlocks));
     if (!result) throw std::runtime_error("constructFromBinaryStream: uninstantiated block size");
     result->readBinaryFromStream(is);
+
+    if (ContiguousBlocksDefault) return result->cloneWithContiguousBlocks();
     return result;
 }
 
