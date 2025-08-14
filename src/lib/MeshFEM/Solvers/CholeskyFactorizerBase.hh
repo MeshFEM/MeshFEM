@@ -107,7 +107,7 @@ struct CholeskyFactorizerBase {
     ////////////////////////////////////////////////////////////////////////////
     // For factorizers that do not expect a BlockCSCHessian, we convert/expand to a SuiteSparseMatrix.
     virtual void factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
-        m_recordSymbolic(mat, pinnedVars);
+        recordSymbolic(mat, pinnedVars);
 
         if (mat.isScalar())
             factorizeSymbolic((const SuiteSparseMatrix &)(mat), pinnedVars);
@@ -387,7 +387,8 @@ protected:
 
     size_t m_generateMatrixId() const { if (m_recordOnlyMostRecentMatrix) return m_matrixId; else return const_cast<size_t &>(m_matrixId)++; }
 
-    void m_recordSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+public:
+    void recordSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) const {
         if (recordingMatrices()) {
             size_t id = m_generateMatrixId();
             mat.dumpBinaryToFile(m_matrix_dump_path + "/" + symbolicMatrixFileName(id, symbolic_mat_name_suffix));
@@ -397,6 +398,7 @@ protected:
         }
     }
 
+protected:
     FactorizationType m_factorizationType = FactorizationType::None;
 
     // Functionality for efficient solves under variable pins

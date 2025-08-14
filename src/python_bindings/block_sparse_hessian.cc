@@ -142,6 +142,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
     using NHF = NewtonHessianFactorization;
     py::class_<NHF, BSF>(m, "NewtonHessianFactorization")
+        .def("recordFinalSymbolicMatrix", &NHF::recordFinalSymbolicMatrix)
         ;
 
     // Bind a the `SparsityLRU` class in a way that works with
