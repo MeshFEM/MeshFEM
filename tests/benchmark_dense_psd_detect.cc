@@ -8,7 +8,6 @@
 //  Company:  University of California, Davis
 //  Created:  05/19/2025 16:37:32
 *///////////////////////////////////////////////////////////////////////////////
-#include <catamari.hpp>
 #include <Eigen/Dense>
 #include <MeshFEM/Utilities/DensePSDDetect.hh>
 #include <MeshFEM/Parallelism.hh>

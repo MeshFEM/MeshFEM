@@ -16,6 +16,7 @@
 #define SPSDSYSTEM_HH
 
 #include "make_cholesky_factorizer.hh"
+#include "CholmodFactorizer.hh"
 
 #ifndef DefaultLUFactorizer
 struct DefaultLUFactorizer {

@@ -8,6 +8,10 @@ namespace py = pybind11;
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/SPSDSystem.hh>
 
+#if MESHFEM_WITH_CATAMARI
+#include <MeshFEM/Solvers/CatamariFactorizer.hh>
+#endif
+
 PYBIND11_MODULE(sparse_matrices, m) {
     m.doc() = "Sparse Representations and Solvers";
 
@@ -183,6 +187,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
 #if MESHFEM_WITH_CATAMARI
         .value("Catamari",         CholeskyProvider::Catamari)
         .value("CatamariNesdis",   CholeskyProvider::CatamariNesdis)
+        .value("CatamariMetis",    CholeskyProvider::CatamariMetis)
         .value("CatamariAMD",      CholeskyProvider::CatamariAMD)
         .value("CatamariAdaptive", CholeskyProvider::CatamariAdaptive)
 #if CATAMARI_OPENMP
@@ -219,13 +224,25 @@ PYBIND11_MODULE(sparse_matrices, m) {
                     c.factorize(mat, pinnedVars, isInTryCatch); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>(), py::arg("isInTryCatch") = false)
         .def("clearFactors", &CFB::clearFactors)
         .def("checkPosDef",  &CFB::checkPosDef)
-        .def("getFactorNNZ", &CFB::getFactorNNZ)
+        .def("getFactorNNZ",    &CFB::getFactorNNZ)
+        .def("getFlopEstimate", &CFB::getFlopEstimate)
         .def("hasFactorization", [](const CFB &c, CFB::FactorizationType type) { return c.hasFactorization(type); }, py::arg("type"))
         .def("solve", [](const CFB &c, Eigen::VectorXd &rhs) { return c.solve(rhs); }, py::arg("rhs"))
         .def("provider", &CFB::provider)
         .def("recordMatrices", &CFB::recordMatrices, py::arg("directory"))
         .def("stopRecordingMatrices", &CFB::stopRecordingMatrices)
+        .def("writeSolveTimers", &CFB::writeSolveTimers)
         ;
+
+#if MESHFEM_WITH_CATAMARI
+    using CatF = CatamariFactorizer;
+    py::class_<CatF, CFB> pyCatF(detail_module, "CatamariFactorizer");
+    pyCatF.def("getUseLeftLooking", &CatF::getUseLeftLooking)
+          .def("setUseLeftLooking", &CatF::setUseLeftLooking, py::arg("useLeftLooking"))
+          .def("getUseBlockAccel", &CatF::getUseBlockAccel)
+          .def("setUseBlockAccel", &CatF::setUseBlockAccel, py::arg("useBlockAccel"))
+          ;
+#endif
 
     m.def("CholeskyFactorizer", [](CholeskyProvider p) { return make_cholesky_factorizer(p); }, py::arg("provider") = get_default_cholesky_provider());
 }

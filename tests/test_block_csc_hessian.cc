@@ -4,9 +4,8 @@
 // after MeshFEM.
 #include <catch2/catch.hpp>
 
-// TODO: contiguous blocks setting?
 template<template<class Derived> class Policy, size_t... BlockDimensions>
-void runTest() {
+auto assembleTestMatrices() {
     static constexpr size_t ElementSize = 4;
 
     SystemAssembler<BlockDimensions...> assembler(ElementSize + 3 * ((rand() % 20) + 0 * BlockDimensions)...);
@@ -41,43 +40,87 @@ void runTest() {
         }
     }
 
-    auto blockHsp_ptr = assembler.template blockSparsityPattern(numElements,
-            [&elements](size_t ei) { return elements.row(ei); });
-    auto &blockHsp = *blockHsp_ptr;
 
+    auto blockHsp        = assembler.template blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp_subset = assembler.template blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+
+    return std::make_pair(std::move(blockHsp), std::move(blockHsp_subset));
+}
+
+template<bool ContiguousBlocks, template<class Derived> class Policy, size_t... BlockDimensions>
+void runTest() {
+    using VS = OptimizationVarStructure<BlockDimensions...>;
+    auto testMatrices = assembleTestMatrices<Policy, BlockDimensions...>();
+
+    testMatrices.first->Ax.resize(testMatrices.first->scalarNNZ());
+    testMatrices.first->data().setRandom();
+
+    std::unique_ptr<BlockCSCHessian<VS, ContiguousBlocks, Policy>> blockHsp_ptr    = testMatrices.first ->template cloneWithBTSPolicy<Policy>()->template cloneWithLayout<ContiguousBlocks>();
+    std::unique_ptr<BlockCSCHessian<VS, ContiguousBlocks, Policy>> blockHsp_subset = testMatrices.second->template cloneWithBTSPolicy<Policy>()->template cloneWithLayout<ContiguousBlocks>();
+
+    auto &blockHsp = *blockHsp_ptr;
     auto scalarHsp = blockHsp.toScalar();
 
-    for (SuiteSparse_long bj = 0; bj < numBlockVars; ++bj) {
-        SuiteSparse_long scalarCol = assembler.varStructure().offsetForBlock(bj);
+    // std::cout << "scalarHsp.data(): " << scalarHsp.data().transpose() << std::endl;
+    // std::cout << "blockHsp.data(): " << blockHsp.data().transpose() << std::endl;
+    // std::cout << "blockHsp.Ap(): " << Eigen::Map<VecX_T<SuiteSparse_long>>(blockHsp.Ap.data(), blockHsp.Ap.size()).transpose() << std::endl;
+    // std::cout << "blockHsp.Ai(): " << Eigen::Map<VecX_T<SuiteSparse_long>>(blockHsp.Ai.data(), blockHsp.Ai.size()).transpose() << std::endl;
+    REQUIRE(scalarHsp.trace() == blockHsp.trace());
 
-        // Validate scalar column offsets
-        REQUIRE(blockHsp.scalarOffsetForColumn(bj) == scalarHsp.Ap[scalarCol]);
+    blockHsp.zeroOutLowerTriangleOfDiagonalBlocks();
 
-        // Validate scalar strides
-        REQUIRE(blockHsp.scalarColStride(bj) == scalarHsp.Ap[scalarCol + 1] - scalarHsp.Ap[scalarCol]);
+    // Test conversions between alternate storage layouts.
+    auto shuffled = blockHsp.template cloneWithLayout<!ContiguousBlocks>();
+    if (ContiguousBlocks) {
+        REQUIRE(scalarHsp.trace() == shuffled->trace());
+        REQUIRE((scalarHsp.data() - shuffled->data()).norm() == 0.0);
+        REQUIRE((testMatrices.first->data() - shuffled->data()).norm() == 0.0);
+    }
+    auto unshuffled = shuffled->template cloneWithLayout< ContiguousBlocks>();
+    unshuffled->zeroOutLowerTriangleOfDiagonalBlocks();
+    REQUIRE((blockHsp.data() - unshuffled->data()).norm() == 0.0);
 
-        // Validate scalar location lookups
-        for (SuiteSparse_long bii = blockHsp.Ap[bj]; bii < blockHsp.Ap[bj + 1]; ++bii) {
-            SuiteSparse_long bi = blockHsp.Ai[bii];
-            SuiteSparse_long scalarRow = assembler.varStructure().offsetForBlock(bi);
-            REQUIRE(blockHsp.locForBlock(bi, bj) == scalarHsp.findEntry(scalarRow, scalarCol));
-        }
+    // For instantiations whose data layout matches the scalar layout,
+    // verify agreement between the block and scalar offset calculations.
+    if (!ContiguousBlocks || VS::MaxBlockDim == 1) {
+        for (SuiteSparse_long bj = 0; bj < blockHsp.n; ++bj) {
+            SuiteSparse_long scalarCol = blockHsp.vars().offsetForBlock(bj);
 
-        // Validate the column scanner
-        auto scanner = blockHsp.columnScanner(bj);
-        REQUIRE(scanner.diagBlockScalarLoc() == scalarHsp.findDiagEntry(scalarCol));
+            // Validate scalar column offsets
+            REQUIRE(blockHsp.scalarOffsetForColumn(bj) == scalarHsp.Ap[scalarCol]);
 
-        for (SuiteSparse_long bii = blockHsp.Ap[bj]; bii < blockHsp.Ap[bj + 1]; /* advanced inside */) {
-            SuiteSparse_long bi = blockHsp.Ai[bii];
-            SuiteSparse_long scalarRow = assembler.varStructure().offsetForBlock(bi);
-            REQUIRE(scanner.advanceToBlock(bi) == scalarHsp.findEntry(scalarRow, scalarCol));
-            bii += rand() % 3; // advance by a random number of blocks to simulate access pattern of Hessian assembly
+            // Validate scalar strides
+            if (!ContiguousBlocks) // Scalar column strides are not defined for contiguous blocks
+                REQUIRE(blockHsp.scalarColStride(bj) == scalarHsp.Ap[scalarCol + 1] - scalarHsp.Ap[scalarCol]);
+
+            // Validate scalar location lookups
+            for (SuiteSparse_long bii = blockHsp.Ap[bj]; bii < blockHsp.Ap[bj + 1]; ++bii) {
+                SuiteSparse_long bi = blockHsp.Ai[bii];
+                SuiteSparse_long scalarRow = blockHsp.vars().offsetForBlock(bi);
+                REQUIRE(blockHsp.locForBlock(bi, bj) == scalarHsp.findEntry(scalarRow, scalarCol));
+            }
+
+            // Validate the column scanner
+            auto scanner = blockHsp.columnScanner(bj);
+            REQUIRE(scanner.diagBlockScalarLoc() == scalarHsp.findDiagEntry(scalarCol));
+
+            for (SuiteSparse_long bii = blockHsp.Ap[bj]; bii < blockHsp.Ap[bj + 1]; /* advanced inside */) {
+                SuiteSparse_long bi = blockHsp.Ai[bii];
+                SuiteSparse_long scalarRow = blockHsp.vars().offsetForBlock(bi);
+                REQUIRE(scanner.advanceToBlock(bi) == scalarHsp.findEntry(scalarRow, scalarCol));
+                bii += rand() % 3; // advance by a random number of blocks to simulate access pattern of Hessian assembly
+            }
         }
     }
 
-    // Verify addNZ and toScalar behavior (in the noncontiguous-blocks case)
-    // TODO: also verify in the contiguous-blocks case if/when we implement a
-    // toScalar method that permutes the `Ax` array appropriately)
+    // Validate `dataOffsetsForScalarCSCDataOffsets`
+    if (ContiguousBlocks) {
+        auto iremap = blockHsp.dataOffsetsForScalarCSCDataOffsets(scalarHsp);
+        for (size_t loc = 0; loc < scalarHsp.nnz(); ++loc)
+            REQUIRE(blockHsp.Ax[iremap[loc]] == scalarHsp.Ax[loc]);
+    }
+
+    // Verify addNZ and toScalar behavior
     SuiteSparseMatrix scalarH = scalarHsp;
     scalarH.Ax.resize(scalarH.nz);
     scalarH.data().setRandom();
@@ -86,8 +129,7 @@ void runTest() {
     for (const auto &t : scalarH)
         blockH->addNZScalar(t.i, t.j, t.value());
 
-    REQUIRE((scalarH.data() - blockH->data()).norm() == 0.0);
-
+    REQUIRE((scalarH.data() - blockH->toScalar().data()).norm() == 0.0);
     REQUIRE(scalarH.trace() == blockH->trace());
 
     {
@@ -99,8 +141,7 @@ void runTest() {
 
     // Validate `addWithSubSparsityFast`
     {
-        NewtonHessian H_subset(assembler.template blockSparsityPattern(numElements - numElements / 2,
-                [&elements](size_t ei) { return elements.row(ei); }));
+        NewtonHessian H_subset(std::move(blockHsp_subset));
         H_subset.insertSparsityPatternDiagonalBlocksIfNeeded();
         H_subset.H_ss->setZero(); // allocate value storage
         H_subset.H_ss->data().setRandom();
@@ -149,24 +190,33 @@ void runTest() {
     }
 }
 
-template<template<class Derived> class Policy>
+#include <MeshFEM/BlockCSCHessianDynCastWorkaround.hh>
+
+template<bool ContiguousBlocks, template<class Derived> class Policy>
 void runTests() {
-    runTest<Policy, 3>();
-    runTest<Policy, 2>();
-    runTest<Policy, 1>();
-    // runTest<Policy, 3, 1, 1>();
-    // runTest<Policy, 4>();
-    // runTest<Policy, 3, 3>();
-    // runTest<Policy, 3, 2>();
-    // runTest<Policy, 3, 2, 4>();
-    // runTest<Policy, 1, 1, 3, 1>();
-    // runTest<Policy, 1, 2, 3, 2, 1>();
-    // runTest<Policy, 8, 1, 5, 2, 1, 3, 1, 2, 1, 10, 1, 1>();
+    runTest<ContiguousBlocks, Policy, 1, 2>();
+    runTest<ContiguousBlocks, Policy, 3>();
+    runTest<ContiguousBlocks, Policy, 2>();
+    runTest<ContiguousBlocks, Policy, 1>();
+    runTest<ContiguousBlocks, Policy, 3, 1, 1>();
+
+    runTest<ContiguousBlocks, Policy, 3, 1>();
+    runTest<ContiguousBlocks, Policy, 1, 3>();
+    runTest<ContiguousBlocks, Policy, 3, 2>();
+    runTest<ContiguousBlocks, Policy, 1, 8, 5, 2, 1, 3, 1, 2, 1, 10, 1, 1>();
+}
+
+template<template<class Derived> class Policy>
+void runTestsForPolicy() {
+    runTests<false, Policy>();
+    runTests< true, Policy>();
 }
 
 TEST_CASE("block sparse hessian indexing", "[block_sparse_hessian]" ) {
     set_max_num_tbb_threads(2);
-    runTests<BlockToScalarPolicyTypeOffsetsPerColumn>();
-    runTests<BlockToScalarPolicyLocLookup>();
+    for (size_t i = 0; i < 10; ++i) {
+        runTestsForPolicy<BlockToScalarPolicyTypeOffsetsPerColumn>();
+        runTestsForPolicy<BlockToScalarPolicyLocLookup>();
+    }
     unset_max_num_tbb_threads();
 }

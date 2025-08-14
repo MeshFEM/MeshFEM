@@ -20,7 +20,8 @@
 #define DENSEPSDDETECT_HH
 
 #if MESHFEM_WITH_CATAMARI
-#include <catamari.hpp>
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <catamari/dense_factorizations.hpp>
 #endif
 
 #if 0 // The Lapack version seems slower for small matrices than Eigen...
@@ -123,7 +124,7 @@ bool isPSDCholesky(const Eigen::MatrixBase<Derived> &A, double tol = 1e-8) {
 
     A_lower.diagonal().array() += tol;
 
-#if 1 // MESHFEM_WITH_CATAMARI
+#if MESHFEM_WITH_CATAMARI
     catamari::BlasMatrixView<double> matrix;
     matrix.data = A_lower.data();
     matrix.height = A_lower.rows();

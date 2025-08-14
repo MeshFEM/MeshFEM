@@ -11,6 +11,8 @@
 #include "MeshFEM/Parallelism.hh"
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
+#include <MeshFEM/Solvers/CholmodFactorizer.hh>
+#include <MeshFEM/Solvers/CatamariFactorizer.hh>
 
 void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads, size_t repeats) {
     set_max_num_tbb_threads(tbb_threads);

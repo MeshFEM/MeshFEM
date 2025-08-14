@@ -59,6 +59,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("isScalar",         &BlockCSCHessianBase::isScalar)
         .def("uniformBlockSize", &BlockCSCHessianBase::uniformBlockSize)
         .def("blockSizeGCD",     &BlockCSCHessianBase::blockSizeGCD)
+        .def("hasContiguousBlocks", &BlockCSCHessianBase::hasContiguousBlocks, "Whether the blocks are stored contiguously in memory")
 
         .def("setIdentity", &BlockCSCHessianBase::setIdentity, py::arg("preserveSparsity"))
 
@@ -151,6 +152,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def(py::init([](const BlockCSCHessianBase &S_static) {
                 return SLRU(S_static); }), py::arg("S_static"))
         .def("update", [](SLRU &self, const BlockCSCHessianBase &S_dynamic) { return self.update(S_dynamic); }, py::arg("S_dynamic"), "Update the LRU cache based on the entries a dynamic sparsity pattern")
+        .def("increaseAgeOfOldEntries", [](SLRU &self, int threshold) { return self.increaseAgeOfOldEntries(threshold); }, py::arg("threshold") = 0, "Increment the age of all entries in the cache that are older than the given threshold")
         .def_readwrite("entryCacheBudgetRatio", &SLRU::entryCacheBudgetRatio, "Number of extra entries allowed in the cache as a fraction of the current full sparsity pattern size")
         .def_readwrite("expirationAge", &SLRU::expirationAge, "Entries order than this are removed from the cache upon a rebuild even if we stay within budget (e.g., when new entries appear)")
         .def_readwrite("hardExpirationAge", &SLRU::hardExpirationAge, "If an entry exceeds this age, a rebuild is triggered, causing all old entries to be removed")

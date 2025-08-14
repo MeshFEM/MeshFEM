@@ -12,6 +12,7 @@
 #define MULTIOBJECTIVEPROBLEM_HH
 
 #include "NewtonProblem.hh"
+#include "FeasibleStepLengthComputer.hh"
 #include <MeshFEM/SystemAssembler.hh>
 #include <MeshFEM/SparsityLRU.hh>
 #include <memory>
@@ -214,7 +215,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // (e.g., if all objective terms are known to be positive, then
     //  backtracking is necessary if a single term already exceeds the current
     //  objective value).
-    virtual Real customFeasibleStepLength(const VXd &/* vars */, const VXd &/* step */, Real initialAlpha = 1.0, Real /* currentObjectiveValue */ = std::numeric_limits<Real>::max()) const { return initialAlpha; }
+    virtual Real feasibleStepLength(const VXd &/* vars */, const VXd &/* step */, Real initialAlpha = 1.0, Real /* currentObjectiveValue */ = std::numeric_limits<Real>::max()) const { return initialAlpha; }
 
     ////////////////////////////////////////////////////////////////////////////
     // Convenience methods
@@ -439,12 +440,23 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 
     void setCustomIterationCallback(const CallbackFunction &cb) { m_customCallback = cb; }
 
+    // The user can attach a FeasibleStepLengthComputer that determines an
+    // initial upper bound for the feasible step length before each term is
+    // queryed for its own feasible step length. An example use case is in
+    // injective parameterization, where we seek a step that prevents elements
+    // from inverting.
+    std::shared_ptr<FeasibleStepLengthComputer> initialFeasibleStepLengthComputer;
+
     // Allow subclasses to impose an upper bound on the step size (e.g., to
     // enforce interpenetration-free steps).
     virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.customFeasibleStepLength");
         Real stepLength = 1.0;
+        if (initialFeasibleStepLengthComputer)
+            stepLength = std::min(stepLength, initialFeasibleStepLengthComputer->eval(vars, step));
+
         for (const auto &term : m_terms)
-            stepLength = std::min(term->customFeasibleStepLength(vars, step, stepLength), stepLength); // Note that the `min` here shouldn't be necessary because the term should never grow the step length. But we keep it just in case...
+            stepLength = std::min(term->feasibleStepLength(vars, step, stepLength), stepLength); // Note that the `min` here shouldn't be necessary because the term should never grow the step length. But we keep it just in case...
         return stepLength;
     }
 
@@ -545,7 +557,13 @@ private:
 
                 if (m_sparsityLRU) {
                     changed = m_sparsityLRU->update(*(nonstaticPart.H_ss));
-                    changed |= force; // Ensure the static part rebuild takes effect.
+                    // {
+                    //     static int num_updates = 0;
+                    //     if (changed && !force) {
+                    //         ++num_updates;
+                    //         std::cout << "Update " << num_updates << ": SparsityLRU updated with " << (*m_sparsityLRU)->nz << " nonzeros." << std::endl;
+                    //     }
+                    // }
                     if (changed) {
                         if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...
                         m_hessianSparsity.H_ss->Ap = (*m_sparsityLRU)->Ap;
@@ -562,9 +580,13 @@ private:
             m_hessianSparsity.finalize();
         }
         else if (m_sparsityLRU) {
+            // int before_increase_max_age = *std::max_element(m_sparsityLRU->entryAges().begin(), m_sparsityLRU->entryAges().end());
+
             // Still notify the cache of the sparsity pattern update in case
             // it triggers a refactorization due to entry expiration.
             if (m_sparsityLRU->increaseAgeOfOldEntries()) {
+                // std::cout << "increaseAgeOfOldEntries triggered sparsity update" << std::endl;
+                // std::cout << "SparsityLRU: max age before update: " << before_increase_max_age << std::endl;
                 if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...
                 m_hessianSparsity.H_ss->Ap = (*m_sparsityLRU)->Ap;
                 m_hessianSparsity.H_ss->Ai = (*m_sparsityLRU)->Ai;

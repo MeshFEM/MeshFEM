@@ -8,6 +8,8 @@ BlockCSCHessianBase::~BlockCSCHessianBase() = default;
 
 void BlockCSCHessianBase::dumpBinaryToStream(std::ostream &os) const {
     if (!uniformBlockSize()) throw std::runtime_error("dumpBinaryToStream: non-uniform block size not supported");
+    if (hasContiguousBlocks()) return cloneWithNoncontiguousBlocks()->dumpBinaryToStream(os); // For historical reasons, the output format is always the noncontiguous block format.
+
     size_t blockSize = minBlockSize();
     size_t numBlocks = vars().numBlocks();
     os.write(reinterpret_cast<const char *>(&blockSize), sizeof(blockSize));
@@ -92,6 +94,8 @@ std::unique_ptr<BlockCSCHessianBase> BlockCSCHessianBase::constructFromBinaryStr
     if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>, false>::construct(OptimizationVarStructure<3>(numBlocks));
     if (!result) throw std::runtime_error("constructFromBinaryStream: uninstantiated block size");
     result->readBinaryFromStream(is);
+
+    if (ContiguousBlocksDefault) return result->cloneWithContiguousBlocks();
     return result;
 }
 

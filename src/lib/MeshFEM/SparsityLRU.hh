@@ -32,7 +32,7 @@ struct SparsityLRU {
     using Index = typename SpMat::index_type;
 
     SparsityLRU(const SpMat &S_static)
-        : m_S(S_static, /* sparsityOnly = */ true), m_entryAge(S_static.Ai.size(), STATIC_ENTRY_AGE) { }
+        : m_S(S_static, /* sparsityOnly = */ true), m_entryAge(S_static.Ai.size(), STATIC_ENTRY_AGE), m_numStaticEntries(S_static.Ai.size()) { }
 
     template<typename Predicate>
     void pruneEntries(const Predicate &shouldRemove) {
@@ -67,10 +67,14 @@ struct SparsityLRU {
     // but nothing actually changes (i.e., the dynamic part is the
     // same as the last time), we still want to increment the ages of
     // all the old pattern entries in case they should expire.
+    // This method does not check for budget excedance since
+    // it assumes that any old entries already stored in the cache
+    // fit within the budget.
     //
     // Specifically, only the entries that are older than `threshold` are aged.
     //
-    // Returns `true` if any entries were expired.
+    // Returns `true` if any entries were expired, in which case the
+    // expired entries have been pruned.
     bool increaseAgeOfOldEntries(int threshold = 0) {
         if (m_maxAge > threshold) {
             // std::cout << "SparsityLRU: increaseAgeOfOldEntries called with over-threshold maxAge = " << m_maxAge << std::endl;
@@ -85,8 +89,8 @@ struct SparsityLRU {
                 }
             }
             assert(maxAge == m_maxAge + 1);
-            if (maxAge >= hardExpirationAge) {
-                std::cout << "SparsityLRU: hard expiration triggered prune from `increaseAgeOfOldEntries`" << std::endl;
+            bool hardExpirationTriggered = maxAge >= hardExpirationAge;
+            if (hardExpirationTriggered) {
                 pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
                 m_maxAge = maxAgeBelowExpiration;
                 return true;
@@ -100,8 +104,8 @@ struct SparsityLRU {
     // A return value of 0 means no new entries were added, and the cached
     // sparsity pattern can be reused.
     // A special value of `EXPIRED` indicates that the cache was
-    // invalidated despite the absence of new entries because all of its
-    // extra entries expired.
+    // invalidated despite the absence of new entries because some of its
+    // retained entries expired.
     Index update(const SpMat &S_dynamic) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("SparsityLRU.update");
 
@@ -109,11 +113,11 @@ struct SparsityLRU {
         if ((S_dynamic.m != m_S.m) || (S_dynamic.n != m_S.n)) throw std::runtime_error("SparsityLRU: S_dynamic size mismatch");
         if (S_dynamic.symmetry_mode != m_S.symmetry_mode) throw std::runtime_error("Symmetry mode mismatch");
 
-        // Fast path: if the dynamic sparsity pattern is empty, we can
-        // just increment the ages of all non-static entries in the cache.
-        if (S_dynamic.nz == 0) {
-            return increaseAgeOfOldEntries(STATIC_ENTRY_AGE);
-        }
+        // Fast path: if the dynamic sparsity pattern is empty, **and if the budget is not exceeded**,
+        // we can just increment the ages of all non-static
+        // entries in the cache and prune upon hard expiration.
+        if ((S_dynamic.nz == 0) && (m_entryAge.size() <= entryCacheBudgetRatio * m_numStaticEntries))
+            return increaseAgeOfOldEntries(STATIC_ENTRY_AGE) ? EXPIRED : 0;
 
         int maxAge = STATIC_ENTRY_AGE;
         int maxAgeBelowExpiration = STATIC_ENTRY_AGE;
@@ -131,13 +135,14 @@ struct SparsityLRU {
 
             // Handle entries that don't appear in `S_dynamic`
             // (increase their age and mark them as old)
-            auto entryInSOnly = [&ii_S, &maxAge, &maxAgeBelowExpiration, j, this]() {
+            auto entryInSOnly = [&ii_S, &maxAge, &maxAgeBelowExpiration, &totalCurrentEntries, j, this]() {
                 if (m_entryAge[ii_S] != STATIC_ENTRY_AGE) {
                     maxAge = std::max(maxAge, ++m_entryAge[ii_S]);
                     if (m_entryAge[ii_S] < expirationAge)
                         maxAgeBelowExpiration = std::max(maxAgeBelowExpiration, m_entryAge[ii_S]);
                     m_oldEntryLocations.emplace_back(j, ii_S);
                 }
+                else ++totalCurrentEntries;
                 ++ii_S;
             };
 
@@ -168,15 +173,17 @@ struct SparsityLRU {
         // if (maxAge > 0)
         //     std::cout << "Positive maxAge: " << maxAge << std::endl;
 
-        // Semi-fast path: reuse (potentially pruned) cache if no new entries were added
+        // Semi-fast path: reuse (potentially pruned) cache if no new entries were added **and if the budget is not exceeded.**
         if (totalNewEntries == 0) {
             if (maxAge >= hardExpirationAge) {
+                // std::cout << "HARD EXPIRATION!" << std::endl;
                 pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
                 m_maxAge = maxAgeBelowExpiration;
                 return EXPIRED;
             }
             m_maxAge = maxAge;
-            return 0;
+            if (m_oldEntryLocations.size() <= totalCurrentEntries * entryCacheBudgetRatio)
+                return 0;
         }
 
         // Doing a full rebuild because new entries were added!
@@ -199,7 +206,10 @@ struct SparsityLRU {
                 // First, sort the entries non-descending by age.
                 std::sort(m_oldEntryLocations.begin(), m_oldEntryLocations.end(),
                           [this](const EntryLoc &a, const EntryLoc &b) { return m_entryAge[a.ii] < m_entryAge[b.ii]; });
+                totalNewEntries = EXPIRED;
             }
+
+            // std::cout << "Number of old entries: " << numOldEntries << ", budget: " << budget << std::endl;
 
             for (Index i = 0; i < numOldEntries; ++i) {
                 const EntryLoc &loc = m_oldEntryLocations[i];
@@ -208,7 +218,6 @@ struct SparsityLRU {
                 if (m_entryAge[loc.ii] >= expirationAge)
                     --colSizes[loc.j];
             }
-
         }, /* sparsityOnly = */ true);
 
         // Fill in the new cache and associated entry ages by doing
@@ -240,7 +249,7 @@ struct SparsityLRU {
             };
 
             while ((ii_S < ii_S_end) && (ii_D < ii_D_end)) {
-                if (m_S.Ai[ii_S] == S_dynamic.Ai[ii_D]) {
+                if (m_S.Ai[ii_S] == S_dynamic.Ai[ii_D]) { // Entry in both S and D
                     builder.insert(m_S.Ai[ii_S], j);
                     recordAge(std::min(0, m_entryAge[ii_S])); // Make sure negative ages (e.g., STATIC_ENTRY_AGE) are retained!
                     ++ii_S; ++ii_D;
@@ -267,11 +276,19 @@ struct SparsityLRU {
         m_S = std::move(S_new);
         m_entryAge = std::move(new_ages);
 
+#ifndef NDEBUG
+        {
+            // Validation
+            int static_age_count = 0;
+            for (int age : m_entryAge) static_age_count += (age == STATIC_ENTRY_AGE);
+            assert(static_age_count == m_numStaticEntries);
+        }
+#endif
+
         if (*std::max_element(m_entryAge.begin(), m_entryAge.end()) != m_maxAge)
             throw std::runtime_error("SparsityLRU: max age mismatch after update");
 
-        // if (m_maxAge > 0)
-        //     std::cout << "Positive m_maxAge: " << m_maxAge << std::endl;
+        // std::cout << "New m_maxAge: " << m_maxAge << std::endl;
 
         return totalNewEntries;
     }
@@ -281,13 +298,12 @@ struct SparsityLRU {
     const SpMat &operator*() const { return m_S; }
     const SpMat *operator->() const { return &m_S; }
 
-    // Maximum number of old entries to retain the the cache each time it is
-    // rebuilt due to new entries appearing.
+    // Maximum number of old entries to retain in the cache
     double entryCacheBudgetRatio = 0.01;
 
     // Entries older than this are removed regardless of whether the budget is exceeded.
-    int expirationAge = 25;
-    int hardExpirationAge = 50; // Entries older than this trigger a rebuild.
+    int expirationAge = 100;
+    int hardExpirationAge = 200; // Entries older than this trigger a rebuild.
 
 private:
     SpMat m_S;
@@ -298,6 +314,7 @@ private:
     };
 
     int m_maxAge = STATIC_ENTRY_AGE;
+    int m_numStaticEntries = 0;
 
     std::vector<EntryLoc> m_oldEntryLocations; // kept as a member variable to reduce memory allocations.
 };

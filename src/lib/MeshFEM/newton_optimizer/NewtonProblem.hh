@@ -166,10 +166,12 @@ struct MESHFEM_EXPORT NewtonProblem {
             else                     return vars[idx] <= val;
             throw std::runtime_error("Unknown bound type");
         }
+
         void apply(VXd &vars) const {
             if ((type == Type::LOWER) && (vars[idx] < val)) vars[idx] = val;
             if ((type == Type::UPPER) && (vars[idx] > val)) vars[idx] = val;
         }
+
         Real feasibleStepLength(const VXd &vars, const VXd &step) const {
             Real alpha = std::numeric_limits<Real>::max();
             if      (type == Type::LOWER) { if (step[idx] < 0) alpha = (val - vars[idx]) / step[idx]; }
@@ -270,7 +272,11 @@ struct MESHFEM_EXPORT NewtonProblem {
     // Note: if `H + hessianShift I` is indefinite, then the
     // Hessian modification `H + sigma M` *replaces* this shift rather than
     // adding to it.
+    // When `useRelativeHessianShift` is true, then the shift used is
+    // `hessianShift * H.diagonal().mean()` (i.e., the shift is relative to the
+    // average eigenvalue of H).
     Real hessianShift = 0.0;
+    bool useRelativeHessianShift = true;
 
     Real lastFactorizationShiftMagnitude() const { return m_lastFactorizationShiftMagnitude; }
     void setLastFactorizationShiftMagnitude(Real val) { m_lastFactorizationShiftMagnitude = val; }

@@ -87,6 +87,8 @@ add_library(MeshFEM SHARED
         util.h
         utils.hh
         VonMises.hh
+
+        Solvers/make_cholesky_factorizer.cc
         Solvers/CatamariFactorizer.cc
         Solvers/PardisoFactorizer.cc
 

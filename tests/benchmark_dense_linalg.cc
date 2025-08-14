@@ -8,7 +8,8 @@
 //  Created:  01/28/2025 13:02:01
 *///////////////////////////////////////////////////////////////////////////////
 #include "MeshFEM/Parallelism.hh"
-#include <catamari.hpp>
+#include <MeshFEM/GlobalBenchmark.hh>
+#include <catamari/dense_factorizations.hpp>
 #include <tbb/tbb.h>
 
 int main(int argc, const char *argv[]) {

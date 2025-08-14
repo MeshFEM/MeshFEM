@@ -119,14 +119,15 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return summation_parallel([this](size_t ei) { return elementEnergy(ei); }, mesh().numElements());
     }
 
-    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha, Real /* currentObjectiveValue */) const override {
+    virtual Real feasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha, Real /* currentObjectiveValue */) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.feasibleStepLength");
         Real alpha = initialAlpha;
 
         while (true) {
             Real steppedEnergy = energyAtDefoVars(vars + alpha * step);
             if (std::isfinite(steppedEnergy)) break;
             alpha *= 0.5;
-            std::cout << "backtracking in ElasticSolid::customFeasibleStepLength" << std::endl;
+            std::cout << "backtracking in ElasticSolid::feasibleStepLength" << std::endl;
         }
 
         return alpha;
@@ -137,17 +138,18 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return SE::energy(getEnergyDensity(ei), extractNodePositions(ei, m_x), mesh().elementData(ei));
     }
 
-    Real elementEnergyAtPositions(size_t ei, const MXNd &x) const { return SE::energy(getEnergyDensity(ei), extractNodePositions(ei, x), mesh().elementData(ei)); }
+    template<class Derived>
+    Real elementEnergyAtPositions(size_t ei, const Eigen::MatrixBase<Derived> &x) const { return SE::energy(getEnergyDensity(ei), extractNodePositions(ei, x), mesh().elementData(ei)); }
 
     template <class Derived>
     Real energyAtPositions(const Eigen::MatrixBase<Derived> &x) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.energyAtPositions");
         return summation_parallel([this, &x](size_t ei) { return elementEnergyAtPositions(ei, x); }, mesh().numElements());
     }
 
     Real energyAtDefoVars(const VXd &vars) const {
         if (vars.size() != int(numNodes() * N)) throw std::runtime_error("energyAtDefoVars: invalid vars size");
-        Eigen::Map<const MXNd> x(vars.data(), numNodes(), N);
-        return summation_parallel([this, &x](size_t ei) { return elementEnergyAtPositions(ei, x); }, mesh().numElements());
+        return energyAtPositions(Eigen::Map<const MXNd>(vars.data(), numNodes(), N));
     }
 
     // Gradient of a single element's energy with respect to its nodes' deformed positions..
@@ -160,7 +162,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return SE::gradient(getEnergyDensity(ei), extractNodePositions(ei, x), mesh().elementData(ei));
     }
 
-    const SystemAssembler<N> &assembler() const override { return dynamic_cast<const SystemAssembler<N> &>(*this->m_assembler); }
+    const SystemAssembler<N> &assembler() const override { return static_cast<const SystemAssembler<N> &>(*this->m_assembler); }
 
     // Gradient of the full object's energy with respect to all deformation variables.
     virtual void accumulateGradient(Real weight, VXd &g, bool /* updatedParametrization */ = false, VariableMask vmask = VariableMask::Defo) const override {

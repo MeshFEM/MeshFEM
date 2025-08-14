@@ -35,6 +35,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
          .def("notifyDefiniteness",  &HessianProjectionController::notifyDefiniteness,  py::arg("isIndefinite"))
          .def("notifyStep",          &HessianProjectionController::notifyStep,          py::arg("step"))
          .def("notifyDirectionalDerivative", &HessianProjectionController::notifyDirectionalDerivative, py::arg("directionalDerivative"))
+         .def("reset", &HessianProjectionController::reset, "Reset the controller to its initial state (e.g., automatically called at the start of each Newton optimization).")
         ;
 
     bindController<HessianProjectionNever,    HessianProjectionController>(m, "HessianProjectionNever"   );
@@ -135,7 +136,11 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("feasibleStepLength",     py::overload_cast<const Eigen::VectorXd &>(&NewtonProblem::feasibleStepLength, py::const_))
         .def("characteristicDistance", &NewtonProblem::characteristicDistance, py::arg("d"))
 
-        .def_readwrite("hessianShift", &NewtonProblem::hessianShift)
+        .def("customFeasibleStepLength", &NewtonProblem::customFeasibleStepLength, py::arg("vars"), py::arg("step"))
+        .def("lineSearchTerminated",     &NewtonProblem::lineSearchTerminated, "Notify the problem that a line search has terminated (e.g., called from NewtonOptimizer::optimize).")
+
+        .def_readwrite("hessianShift",            &NewtonProblem::hessianShift)
+        .def_readwrite("useRelativeHessianShift", &NewtonProblem::useRelativeHessianShift)
 
         .def_property_readonly("hessianWasProjected",             &NewtonProblem::hessianWasProjected,             "Whether a projected Hessian was requested in the last call to `hessian()`")
         .def_property_readonly("lastFactorizationShiftMagnitude", &NewtonProblem::lastFactorizationShiftMagnitude, "The last `tau` parameter that was used to make the Hessian positive definite during newton_step")
@@ -195,6 +200,12 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readonly("increaseLimiter", &NOT::increaseLimiter, py::return_value_policy::reference_internal)
         ;
 
+    py::class_<FeasibleStepLengthComputer, std::shared_ptr<FeasibleStepLengthComputer>>(m, "FeasibleStepLengthComputer")
+        .def("eval", &FeasibleStepLengthComputer::eval, py::arg("vars"), py::arg("step"),
+             "Evaluate the feasible step length for the given variables and step. "
+             "Returns a positive value if the step is feasible, or a negative value if it is not.")
+        ;
+
     py::class_<NewtonMultiobjectiveProblem, NewtonProblem, std::shared_ptr<NewtonMultiobjectiveProblem>>(m, "NewtonMultiobjectiveProblem")
         .def(py::init<std::shared_ptr<NVB>, std::vector<std::shared_ptr<NOT>>>(), py::arg("vars"), py::arg("terms"))
         .def("numTerms",   &NewtonMultiobjectiveProblem::numTerms)
@@ -214,6 +225,10 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
 
         .def("termObjectives", &NewtonMultiobjectiveProblem::termObjectives)
         .def("termGradients",  &NewtonMultiobjectiveProblem::termGradients)
+
+        .def_readwrite("initialFeasibleStepLengthComputer",
+                &NewtonMultiobjectiveProblem::initialFeasibleStepLengthComputer,
+                "A user-defined functor that computes an initial upper bound for the feasible step length before each term is queried for its own feasible step length. An example use case is in injective parameterization, where we seek a step that prevents elements from inverting.")
 
         .def("setCustomIterationCallback",
                 [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction<NewtonProblem> &pcb) {
@@ -243,7 +258,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("get_problem", py::overload_cast<>(&NewtonOptimizer::get_problem), py::return_value_policy::reference_internal)
 
         .def("update_factorizations", [](NewtonOptimizer &opt) { opt.update_factorizations(); })
-        .def_property_readonly("hessian_factorization", [](NewtonOptimizer &opt) { return opt.hessianFactorization(); }, py::return_value_policy::reference_internal)
+        .def_property_readonly("hessian_factorization", [](NewtonOptimizer &opt) -> NewtonHessianFactorization & { return opt.hessianFactorization(); }, py::return_value_policy::reference_internal)
 
         .def_readwrite("options", &NewtonOptimizer::options)
         ;

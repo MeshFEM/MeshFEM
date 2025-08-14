@@ -21,6 +21,14 @@ Real NewtonHessianFactorization::tauScale() const { return (m_options.hessianSca
 void NewtonHessianFactorization::updateSymbolicFactorization() {
     if (!m_solver) return; // Solver hasn't been created yet; nothing to update.
 
+    {
+        // Record the number of calls to updateSparsityPattern; this is needed
+        // for reconstructing the correct cached entry ages (i.e., the number of times
+        // SparsityLRU::increaseAgeOfOldEntries has been called between pattern updates)
+        // when analyzing recorded matrices.
+        static int count = 0;
+        m_solver->symbolic_mat_name_suffix = "_from_update_" + std::to_string(count++);
+    }
     m_problem->updateSparsityPattern();
 
     bool needsUpdate = (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID);
@@ -83,6 +91,7 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     // If `m_updateSparseFactorization` forces a Hessian reevaluation, then
     // `H_hn` will be updated in-place!
     // (This is what we want for the subsequent dense factorization steps.)
+    // std::cout << "NewtonHessianFactorization update hProjCtr.shouldUseProjection(): " << hProjCtr.shouldUseProjection() << std::endl;
     const NewtonHessian &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
 
     H_nh.validate(); // Make sure everything in H_nh is of the expected size.
@@ -120,6 +129,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
     // Euclidean distance in the parameter space. For instance,
     // the mass matrix is a good choice.
     Real tau = 0;
+    m_shift = 0.0;
 
     auto &s = solver();
     s.setSuppressWarnings(!m_options.verboseNonPosDef);
@@ -149,6 +159,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
             if (tau != 0) {
                 if (m_options.useIdentityMetric || !(m_problem->providesMetric())) {
                     s.factorizeNumericWithShift(getH(), tau * currentTauScale);
+                    m_shift = tau * currentTauScale;
                 }
                 else {
                     if (!M) {
@@ -164,7 +175,13 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
             else {
                 if (m_problem->hessianShift == 0)
                     s.factorizeNumeric(getH());
-                else s.factorizeNumericWithShift(getH(), m_problem->hessianShift);
+                else {
+                    Real shift = m_problem->hessianShift;
+                    if (m_problem->useRelativeHessianShift)
+                        shift *= (getH().trace() / m_problem->numVars());
+                    s.factorizeNumericWithShift(getH(), shift);
+                    m_shift = shift;
+                }
             }
 
             if (!s.checkPosDef()) throw std::runtime_error("System matrix is not positive definite"); // Needed in case CHOLMOD decides on an LDL factorization...
@@ -178,6 +195,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
                 // returns `true`, then we need to recompute the Hessian with
                 // projection before trying shifts.
                 if (m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ true)) {
+                    // std::cout << "Indefinite Hessian; hessian projection controller requested a reevaluation of the Hessian with projection.\n";
                     m_problem->invalidateCachedHessian();
                     m_problem->hessian(true).validate(); // Updates the Hessian obtained by `getH` in-place.
                     continue; // No shifts at this time; we've just enabled projection
@@ -340,7 +358,7 @@ void NewtonHessian::applyRaw(const double *x_ptr, double *result_ptr) const {
 
     Eigen::Map<const Eigen::VectorXd> x(x_ptr, vs.numVars());
     Eigen::Map<Eigen::VectorXd> result(result_ptr, vs.numVars());
-    H_ss->applyRaw(vs.sparseVars(x).data(), vs.sparseVars(result).data());
+    H_ss->applyRawParallel(vs.sparseVars(x).data(), vs.sparseVars(result).data());
 
     const size_t ndv = vs.numDenseVars();
     const size_t nsv = vs.numSparseVars();
@@ -404,4 +422,20 @@ void BorderedSparseFactorization::solve(const Eigen::VectorXd &b, Eigen::VectorX
 
     m_sparseDenseStructure.sparseVars(x) = x_s;
     m_sparseDenseStructure.denseVars(x)  = y.head(ndv);
+}
+
+void NewtonHessianFactorization::solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const {
+    BorderedSparseFactorization::solve(b, x);
+
+    if (m_shift > 0) {
+        // Attempt to use Neumann series to correct for the shift applied during factorization...
+        size_t numCorrections = 0;
+        Eigen::VectorXd x_orig = x;
+        Eigen::VectorXd x_tilde;
+        for (size_t i = 0; i < numCorrections; ++i) {
+            x.swap(x_tilde);
+            BorderedSparseFactorization::solve(x_tilde, x);
+            x = x_orig + m_shift * x;
+        }
+    }
 }

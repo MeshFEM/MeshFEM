@@ -29,22 +29,19 @@ template<class Derived>
 void setZeroParallel(const Eigen::MatrixBase<Derived> &result) {
     static tbb::affinity_partitioner ap;
     Eigen::MatrixBase<Derived> &out = const_cast<Eigen::MatrixBase<Derived> &>(result);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, result.rows()),
-                      [&out](const tbb::blocked_range<size_t> &r) {
-            out.middleRows(r.begin(), r.size()).setZero();
+    size_t size = result.size();
+    typename Derived::Scalar *data = out.derived().data();
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, size, 10000),
+                      [data](const tbb::blocked_range<size_t> &r) {
+            std::fill(data + r.begin(), data + r.end(), 0);
         }, ap);
 }
 
 template<class Derived>
 void setZeroParallel(const Eigen::MatrixBase<Derived> &result, size_t rows, size_t cols) {
     Eigen::MatrixBase<Derived> &out = const_cast<Eigen::MatrixBase<Derived> &>(result);
-
-    static tbb::affinity_partitioner ap;
     out.derived().resize(rows, cols);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, rows),
-                      [&out](const tbb::blocked_range<size_t> &r) {
-            out.middleRows(r.begin(), r.size()).setZero();
-        }, ap);
+    setZeroParallel(out);
 }
 
 template<class Derived>
