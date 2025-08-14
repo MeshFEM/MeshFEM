@@ -19,7 +19,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     using MXdRowMajor = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
     using MXi = Eigen::MatrixXi;
 
-    IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obsts = ObstaclesCollection());
+    IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obsts = ObstaclesCollection(), _Real dhat = 0);
 
     virtual void varsUpdated() override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.varsUpdated");
@@ -54,7 +54,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     void setBarrierStiffness(Real k) { m_k = k; }
     Real getBarrierStiffness() const { return m_k; }
 
-    void set_dhat(Real dhat) { m_ipcWrapper->dhat = dhat; }
+    void set_dhat(Real dhat) { m_ipcWrapper->dhat = dhat; m_ipcWrapper->resetCandidateCache(); m_buildCollisionConstraints();  }
     Real get_dhat() const { return m_ipcWrapper->dhat; }
 
     void set_ccdTol(Real ccdTol) { m_ipcWrapper->ccdTol = ccdTol; }

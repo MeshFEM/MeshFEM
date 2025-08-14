@@ -5,7 +5,7 @@
 #if MESHFEM_WITH_IPC_TOOLKIT
 
 template<typename _Real>
-IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obsts)
+IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obsts, _Real dhat)
     : NewtonObjectiveTerm(vars), m_k(1.0e6)
 {
     m_combinedCollisionMesh = std::make_unique<CombinedCollisionMesh<Real>>(cm, obsts);
@@ -15,8 +15,12 @@ IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, 
     m_ipcWrapper = make_ipc_wrapper(*m_combinedCollisionMesh, m_collisionVertexPositions);
 
     if (!m_ipcWrapper) throw std::runtime_error("Unsupported dimension " + std::to_string(m_N));
-    m_ipcWrapper->dhat = m_combinedCollisionMesh->getBboxDiagonal() * 1e-3;//std::pow(m_combinedCollisionMesh.bboxDiagonal,2)*1e-4 / 2.0 ;
-    
+
+    if (dhat == 0.0) // Use a default value unless the user prescribes one.
+        dhat = m_combinedCollisionMesh->getBboxDiagonal() * 1e-3;//std::pow(m_combinedCollisionMesh.bboxDiagonal,2)*1e-4 / 2.0 ;
+
+    m_ipcWrapper->dhat = dhat;
+
     m_buildCollisionConstraints();
 
     if (!obsts.size()) setAdaptiveTimestep(false);
