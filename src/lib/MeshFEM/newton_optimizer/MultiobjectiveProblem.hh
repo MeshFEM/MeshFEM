@@ -557,7 +557,13 @@ private:
 
                 if (m_sparsityLRU) {
                     changed = m_sparsityLRU->update(*(nonstaticPart.H_ss));
-                    changed |= force; // Ensure the static part rebuild takes effect.
+                    // {
+                    //     static int num_updates = 0;
+                    //     if (changed && !force) {
+                    //         ++num_updates;
+                    //         std::cout << "Update " << num_updates << ": SparsityLRU updated with " << (*m_sparsityLRU)->nz << " nonzeros." << std::endl;
+                    //     }
+                    // }
                     if (changed) {
                         if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...
                         m_hessianSparsity.H_ss->Ap = (*m_sparsityLRU)->Ap;
@@ -574,9 +580,13 @@ private:
             m_hessianSparsity.finalize();
         }
         else if (m_sparsityLRU) {
+            // int before_increase_max_age = *std::max_element(m_sparsityLRU->entryAges().begin(), m_sparsityLRU->entryAges().end());
+
             // Still notify the cache of the sparsity pattern update in case
             // it triggers a refactorization due to entry expiration.
             if (m_sparsityLRU->increaseAgeOfOldEntries()) {
+                // std::cout << "increaseAgeOfOldEntries triggered sparsity update" << std::endl;
+                // std::cout << "SparsityLRU: max age before update: " << before_increase_max_age << std::endl;
                 if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...
                 m_hessianSparsity.H_ss->Ap = (*m_sparsityLRU)->Ap;
                 m_hessianSparsity.H_ss->Ai = (*m_sparsityLRU)->Ai;

@@ -367,6 +367,10 @@ struct CholeskyFactorizerBase {
     static std::string  numericMatrixFileName(size_t i) { return "numeric_mat_"  + m_matrixIdString(i) + ".bin"; }
     static std::string     pinnedVarsFileName(size_t i) { return "pinned_vars_"  + m_matrixIdString(i) + ".txt"; }
 
+    static std::string symbolicMatrixFileName(size_t i, const std::string &suffix) { return "symbolic_mat_" + m_matrixIdString(i) + suffix + ".bin"; }
+
+    std::string symbolic_mat_name_suffix = "";
+
     virtual void writeSolveTimers() const { /* Only some subclasses record timers */ }
 
 protected:
@@ -386,7 +390,7 @@ protected:
     void m_recordSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
         if (recordingMatrices()) {
             size_t id = m_generateMatrixId();
-            mat.dumpBinaryToFile(m_matrix_dump_path + "/" + symbolicMatrixFileName(id));
+            mat.dumpBinaryToFile(m_matrix_dump_path + "/" + symbolicMatrixFileName(id, symbolic_mat_name_suffix));
 
             std::ofstream varsFile(m_matrix_dump_path + "/" + pinnedVarsFileName(id));
             for (size_t v : pinnedVars) varsFile << v << std::endl;

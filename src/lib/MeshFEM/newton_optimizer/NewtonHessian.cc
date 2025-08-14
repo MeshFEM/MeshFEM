@@ -21,6 +21,14 @@ Real NewtonHessianFactorization::tauScale() const { return (m_options.hessianSca
 void NewtonHessianFactorization::updateSymbolicFactorization() {
     if (!m_solver) return; // Solver hasn't been created yet; nothing to update.
 
+    {
+        // Record the number of calls to updateSparsityPattern; this is needed
+        // for reconstructing the correct cached entry ages (i.e., the number of times
+        // SparsityLRU::increaseAgeOfOldEntries has been called between pattern updates)
+        // when analyzing recorded matrices.
+        static int count = 0;
+        m_solver->symbolic_mat_name_suffix = "_from_update_" + std::to_string(count++);
+    }
     m_problem->updateSparsityPattern();
 
     bool needsUpdate = (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID);

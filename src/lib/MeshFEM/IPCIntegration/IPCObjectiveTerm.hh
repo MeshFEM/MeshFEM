@@ -154,7 +154,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
     // is rebuilt. Note that even if a rebuild is triggered,
     // the symbolic factorization is not necessarily updated
     // because `SparsityLRU` also caches old entries.
-    size_t sparsityPatternUpdateThreshold = 10;
+    size_t sparsityPatternUpdateThreshold = 0;
 
 protected:
     void m_buildCollisionConstraints();
