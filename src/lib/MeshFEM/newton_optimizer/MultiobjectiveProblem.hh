@@ -552,11 +552,11 @@ private:
             }
         }
 
-        static size_t updates_since_change = 0;
+        // static size_t updates_since_change = 0;
 
         if (changed) {
-            std::cout << "m_updateSparsityPattern calls since last change: " << updates_since_change << std::endl;
-            updates_since_change = 0;
+            // std::cout << "m_updateSparsityPattern calls since last change: " << updates_since_change << std::endl;
+            // updates_since_change = 0;
             if (staticOnly) m_hessianSparsity = std::move(m_hessianSparsityStaticPart);
             else {
                 if (!m_sparsityLRU && m_hessianSparsityStaticPart.H_ss && (m_hessianSparsityStaticPart.H_ss->nnz() > 0)) {
@@ -594,7 +594,7 @@ private:
             m_hessianSparsity.finalize();
         }
         else if (m_sparsityLRU) {
-            ++updates_since_change;
+            // ++updates_since_change;
             // int before_increase_max_age = *std::max_element(m_sparsityLRU->entryAges().begin(), m_sparsityLRU->entryAges().end());
 
             // Still notify the cache of the sparsity pattern update in case
