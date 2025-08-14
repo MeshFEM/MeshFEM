@@ -478,6 +478,15 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
         return result;
     }
 
+    SparsityLRU *sparsityLRUPtr() const {
+        if (!m_sparsityLRU) {
+            // The SparsityLRU gets constructed on the first sparsity pattern
+            // build; do that now.
+            m_updateSparsityPattern();
+        }
+        return m_sparsityLRU.get();
+    }
+
     VXd dirichletSensitivityTerm(const VXd &dJ_dx, const VXd &adjoint_state) const { throw std::runtime_error("Unimplemented"); }
 
     virtual ~NewtonMultiobjectiveProblem();
@@ -503,6 +512,7 @@ private:
 
     using SUF = NewtonObjectiveTermBase::SparsityUpdateFrequency;
     bool m_updateSparsityPattern() const override {
+        // std::cout << "m_updateSparsityPattern called" << std::endl;
         BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.m_updateSparsityPattern");
         NewtonHessian dynamicSparsity;
         const bool force = m_fullSparsityRebuildNeeded;
@@ -542,7 +552,11 @@ private:
             }
         }
 
+        static size_t updates_since_change = 0;
+
         if (changed) {
+            std::cout << "m_updateSparsityPattern calls since last change: " << updates_since_change << std::endl;
+            updates_since_change = 0;
             if (staticOnly) m_hessianSparsity = std::move(m_hessianSparsityStaticPart);
             else {
                 if (!m_sparsityLRU && m_hessianSparsityStaticPart.H_ss && (m_hessianSparsityStaticPart.H_ss->nnz() > 0)) {
@@ -580,6 +594,7 @@ private:
             m_hessianSparsity.finalize();
         }
         else if (m_sparsityLRU) {
+            ++updates_since_change;
             // int before_increase_max_age = *std::max_element(m_sparsityLRU->entryAges().begin(), m_sparsityLRU->entryAges().end());
 
             // Still notify the cache of the sparsity pattern update in case

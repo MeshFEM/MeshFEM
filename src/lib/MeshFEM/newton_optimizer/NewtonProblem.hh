@@ -55,6 +55,7 @@ struct MESHFEM_EXPORT NewtonProblem {
     // For efficiency, it must have the same sparsity pattern as the Hessian.
     // (This matrix is added to indefinite Hessians to produce a positive definite modified Hessian.)
     const SuiteSparseMatrix &metric() const {
+        std::cout << "constructing metric matrix" << std::endl;
         if (m_useIdentityMetric) {
             if (!m_identityMetric) {
                 m_identityMetric = std::make_unique<SuiteSparseMatrix>(hessianSparsityPattern().toScalar());
@@ -87,10 +88,15 @@ struct MESHFEM_EXPORT NewtonProblem {
     NewtonHessian hessianSparsityPattern(bool needsUpdate = true) const { if (needsUpdate) updateSparsityPattern(); return m_getHessianSparsityPattern(); }
 
     void updateSparsityPattern() const {
-        if (!m_updateSparsityPattern()) return; // No change
+        if (!m_updateSparsityPattern()) {
+            if (!m_cachedHessian)
+                m_cachedHessian = std::make_unique<NewtonHessian>(m_getHessianSparsityPattern()); // Update sparsity pattern for the Hessian cache here to avoid a redundant call to `hessianSparsityPattern(needsUpdate = true)` from `hessian`
+            return; // No change
+        }
 
         m_cachedHessianUpToDate = false;
-        m_cachedHessian.reset(); m_cachedMetric.reset(); // Cached matrices must be thrown out so they're reconstructed from scratch with the correct sparsity pattern!
+        m_cachedHessian = std::make_unique<NewtonHessian>(m_getHessianSparsityPattern()); // Update sparsity pattern for the Hessian cache here to avoid a redundant call to `hessianSparsityPattern(needsUpdate = true)` from `hessian`
+        m_cachedMetric.reset(); // Cached matrices must be thrown out so they're reconstructed from scratch with the correct sparsity pattern!
         ++m_sparsityPatternID;
     }
 

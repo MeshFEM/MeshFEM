@@ -449,6 +449,13 @@ struct MESHFEM_EXPORT NewtonHessianFactorization final : public BorderedSparseFa
     using BorderedSparseFactorization::solver;
     CholeskyFactorizerBase &solver();
 
+    // When recording matrices to reproduce a sequence of sparsity patterns used
+    // in factorization, it helps to dump the final sparsity pattern (along with
+    // its corresponding update count) so that we know how many calls to
+    // `m_updateSparsityPattern` were made after the last symbolic factorization
+    // update was triggered. This method can be used to force this final dump.
+    void recordFinalSymbolicMatrix() const;
+
     virtual ~NewtonHessianFactorization();
 private:
     friend struct NewtonOptimizer;

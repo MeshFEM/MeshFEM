@@ -19,7 +19,7 @@ BorderedSparseFactorization::BorderedSparseFactorization(const NewtonHessian &H,
 Real NewtonHessianFactorization::tauScale() const { return (m_options.hessianScaledBeta ? m_cachedHessianL2Norm.get(*m_problem) : 1.0) / m_problem->metricL2Norm(); }
 
 void NewtonHessianFactorization::updateSymbolicFactorization() {
-    if (!m_solver) return; // Solver hasn't been created yet; nothing to update.
+    auto &s = solver();
 
     {
         // Record the number of calls to updateSparsityPattern; this is needed
@@ -27,7 +27,7 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
         // SparsityLRU::increaseAgeOfOldEntries has been called between pattern updates)
         // when analyzing recorded matrices.
         static int count = 0;
-        m_solver->symbolic_mat_name_suffix = "_from_update_" + std::to_string(count++);
+        s.symbolic_mat_name_suffix = "_from_update_" + std::to_string(count++);
     }
     m_problem->updateSparsityPattern();
 
@@ -35,23 +35,24 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
     if (!needsUpdate) {
         // Even if the sparsity pattern ID is the same, the fixed variables might have changed.
         m_setFixedVars(m_problem->fixedVars()); // Can't happ
-        const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !m_solver->fixesSameVarsAsSortedUnique(sparseFixedVars());
+        const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !s.fixesSameVarsAsSortedUnique(sparseFixedVars());
         needsUpdate |= fixedVarsChanged;
     }
 
-    if (!needsUpdate && m_solver->wantsSymbolicFactorizationRecompute()) {
+    if (!needsUpdate && s.wantsSymbolicFactorizationRecompute()) {
         std::cout << "Solver triggered a symbolic factorization recomputation!" << std::endl;
         needsUpdate = true;
     }
-    needsUpdate |= m_solver->wantsSymbolicFactorizationRecompute();
+    needsUpdate |= s.wantsSymbolicFactorizationRecompute();
 
     if (needsUpdate) {
+        std::cout << "symbolic factorization update " << s.symbolic_mat_name_suffix << std::endl;
         NewtonHessian Hsp = m_problem->hessianSparsityPattern(/*needsUpdate = */ false);
         m_sparseDenseStructure = Hsp.varStructure().sparseDenseStructure();
         m_setFixedVars(m_problem->fixedVars()); // Note, this must happen after m_sparseDenseStructure has been initialized!
 
         // std::cout << "Symbolic factorization of sparsity pattern with " << Hsp.H_ss->scalarNNZ() << " nonzeros" << std::endl;
-        m_solver->factorizeSymbolic(*(Hsp.H_ss), sparseFixedVars());
+        s.factorizeSymbolic(*(Hsp.H_ss), sparseFixedVars());
         m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
         m_lowRankRank = Hsp.low_rank_rank();
     }
@@ -63,10 +64,14 @@ CholeskyFactorizerBase &NewtonHessianFactorization::solver() {
     if (!m_solver || (m_solver->provider() != m_options.factorizer)) {
         m_solver = make_cholesky_factorizer(m_options.factorizer);
         m_solver->recordMatrices(m_options.matrixRecordDir); // enable recording if the user specified a directory
-        updateSymbolicFactorization();
     }
 
     return *m_solver;
+}
+
+void NewtonHessianFactorization::recordFinalSymbolicMatrix() const {
+    NewtonHessian Hsp = m_problem->hessianSparsityPattern(/*needsUpdate = */ false);
+    solver().recordSymbolic(*(Hsp.H_ss), sparseFixedVars());
 }
 
 NewtonHessianFactorization::~NewtonHessianFactorization() { }

@@ -210,7 +210,7 @@ size_t CatamariFactorizer::m_reduced() const { assertFactorization(Factorization
 size_t CatamariFactorizer::n_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
 
 void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
-    m_recordSymbolic(mat, pinnedVars);
+    recordSymbolic(mat, pinnedVars);
     // We only support uniform block sizes, and only up to
     // `MAX_INSTANTIATED_BLOCK_SIZE`; all others get converted to an ordinary scalar matrix.
     // TODO: convert to GCD block size instead? Do we have a use case for this?

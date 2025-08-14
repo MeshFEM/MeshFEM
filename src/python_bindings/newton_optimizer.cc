@@ -121,7 +121,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("objective",              &NewtonProblem::objective)
         .def("gradient",               &NewtonProblem::gradient, py::arg("freshIterate") = false)
         .def("hessian",                &NewtonProblem::hessian,  py::arg("projectionMask") = false)
-        .def("hessianSparsityPattern", &NewtonProblem::hessianSparsityPattern)
+        .def("hessianSparsityPattern", &NewtonProblem::hessianSparsityPattern, py::arg("needsUpdate") = true)
         .def("metric",                 &NewtonProblem::metric)
         .def("fixedVars",              &NewtonProblem::fixedVars)
         .def("addFixedVariables",      &NewtonProblem::addFixedVariables)
@@ -222,6 +222,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def("term",       [](NewtonMultiobjectiveProblem &prob,                size_t i) -> NOT & { return prob.term(i);    }, py::return_value_policy::reference_internal)
         .def("term",       [](NewtonMultiobjectiveProblem &prob, const std::string &name) -> NOT & { return prob.term(name); }, py::return_value_policy::reference_internal)
         .def_property_readonly("terms", &NewtonMultiobjectiveProblem::getTerms)
+        .def_property_readonly("sparsityLRU", &NewtonMultiobjectiveProblem::sparsityLRUPtr)
 
         .def("termObjectives", &NewtonMultiobjectiveProblem::termObjectives)
         .def("termGradients",  &NewtonMultiobjectiveProblem::termGradients)
