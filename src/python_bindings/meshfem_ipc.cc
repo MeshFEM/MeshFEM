@@ -61,10 +61,10 @@ void bind(py::module &m, py::module &detail_module) {
         .def_readwrite("sparsityPatternUpdateThreshold", &IPCO::sparsityPatternUpdateThreshold)
         ;
 
-    m.def("IPCObjectiveTerm", [](std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obstacles, double dhat) { return std::make_shared<IPCO>(vars, cm, obstacles); }, py::arg("vars"), py::arg("collisionMesh"), py::arg("obstacles") = ObstaclesCollection(), py::arg("dhat") = 0.0, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>());
+    m.def("IPCObjectiveTerm", [](std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obstacles, double dhat) { return std::make_shared<IPCO>(vars, cm, obstacles, dhat); }, py::arg("vars"), py::arg("collisionMesh"), py::arg("obstacles") = ObstaclesCollection(), py::arg("dhat") = 0.0, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>());
 
     // Convenience method for constructing from an ElasticObject
-    m.def("IPCObjectiveTerm", [](std::shared_ptr<EO> eo, const ObstaclesCollection &obstacles, double dhat) { return std::make_shared<IPCO>(eo, eo->getCollisionMesh(), obstacles); }, py::arg("eo"), py::arg("obstacles") = ObstaclesCollection(), py::arg("dhat") = 0.0, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>());
+    m.def("IPCObjectiveTerm", [](std::shared_ptr<EO> eo, const ObstaclesCollection &obstacles, double dhat) { return std::make_shared<IPCO>(eo, eo->getCollisionMesh(), obstacles, dhat); }, py::arg("eo"), py::arg("obstacles") = ObstaclesCollection(), py::arg("dhat") = 0.0, py::call_guard<py::scoped_ostream_redirect, py::scoped_estream_redirect>());
 
     using MXd = Eigen::MatrixXd;
     using MXi = Eigen::MatrixXi;
