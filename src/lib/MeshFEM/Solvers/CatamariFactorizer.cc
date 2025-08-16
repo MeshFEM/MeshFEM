@@ -210,7 +210,7 @@ size_t CatamariFactorizer::m_reduced() const { assertFactorization(Factorization
 size_t CatamariFactorizer::n_reduced() const { assertFactorization(FactorizationType::Symbolic); return m_ldl->NumRows(); }
 
 void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
-    recordSymbolic(mat, pinnedVars);
+    g_matrixRecorder.recordSymbolic(mat, pinnedVars);
     // We only support uniform block sizes, and only up to
     // `MAX_INSTANTIATED_BLOCK_SIZE`; all others get converted to an ordinary scalar matrix.
     // TODO: convert to GCD block size instead? Do we have a use case for this?
@@ -630,6 +630,8 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
     else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
+    double num_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - num_fact_start).count();
+
     if constexpr (false) {
         static bool first = true;
         if (first) {
@@ -666,16 +668,18 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     }
 #endif
 
-    double num_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - num_fact_start).count();
-    if (orderingMethod == OrderingMethod::Adaptive)
-        adaptiveOrdering.recordNumeric(num_fact_duration);
-
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
         throw std::runtime_error(std::to_string(result.num_successful_pivots) + "/" +
                                  std::to_string(n_reduced()) + "  pivots successful in Catamari numeric factorization (non-positive definite?)");
     }
     m_factorizationType = FactorizationType::Numeric;
+
+    // Only record the time of successful numeric factorizations
+    // (since the failures generally happen much more quickly and could
+    // throw off averaging/bias the ordering selection heuristic)
+    if (orderingMethod == OrderingMethod::Adaptive)
+        adaptiveOrdering.recordNumeric(num_fact_duration);
 }
 
 size_t CatamariFactorizer::getFactorNNZ() const {
@@ -765,7 +769,13 @@ void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool 
     v.data = bx;
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
+
+    auto solve_start = std::chrono::high_resolution_clock::now();
     m_ldl->Solve(&v, alreadyPermuted);
+    double solve_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - solve_start).count();
+
+    if (orderingMethod == OrderingMethod::Adaptive)
+        adaptiveOrdering.recordSolve(solve_duration);
 }
 
 void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const {

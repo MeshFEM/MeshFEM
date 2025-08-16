@@ -21,14 +21,8 @@ Real NewtonHessianFactorization::tauScale() const { return (m_options.hessianSca
 void NewtonHessianFactorization::updateSymbolicFactorization() {
     auto &s = solver();
 
-    {
-        // Record the number of calls to updateSparsityPattern; this is needed
-        // for reconstructing the correct cached entry ages (i.e., the number of times
-        // SparsityLRU::increaseAgeOfOldEntries has been called between pattern updates)
-        // when analyzing recorded matrices.
-        static int count = 0;
-        s.symbolic_mat_name_suffix = "_from_update_" + std::to_string(count++);
-    }
+    g_matrixRecorder.countSparsityUpdateCall();
+
     m_problem->updateSparsityPattern();
 
     bool needsUpdate = (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID);
@@ -61,17 +55,15 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
 }
 
 CholeskyFactorizerBase &NewtonHessianFactorization::solver() {
-    if (!m_solver || (m_solver->provider() != m_options.factorizer)) {
+    if (!m_solver || (m_solver->provider() != m_options.factorizer))
         m_solver = make_cholesky_factorizer(m_options.factorizer);
-        m_solver->recordMatrices(m_options.matrixRecordDir); // enable recording if the user specified a directory
-    }
 
     return *m_solver;
 }
 
 void NewtonHessianFactorization::recordFinalSymbolicMatrix() const {
     NewtonHessian Hsp = m_problem->hessianSparsityPattern(/*needsUpdate = */ false);
-    solver().recordSymbolic(*(Hsp.H_ss), sparseFixedVars());
+    g_matrixRecorder.recordSymbolic(*(Hsp.H_ss), sparseFixedVars());
 }
 
 NewtonHessianFactorization::~NewtonHessianFactorization() { }

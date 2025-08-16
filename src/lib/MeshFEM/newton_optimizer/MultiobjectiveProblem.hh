@@ -15,6 +15,7 @@
 #include "FeasibleStepLengthComputer.hh"
 #include <MeshFEM/SystemAssembler.hh>
 #include <MeshFEM/SparsityLRU.hh>
+#include <MeshFEM/Solvers/MatrixRecorder.hh>
 #include <memory>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -560,6 +561,8 @@ private:
             if (staticOnly) m_hessianSparsity = std::move(m_hessianSparsityStaticPart);
             else {
                 if (!m_sparsityLRU && m_hessianSparsityStaticPart.H_ss && (m_hessianSparsityStaticPart.H_ss->nnz() > 0)) {
+                    std::cout << "Recording static sparsity pattern with " << m_hessianSparsityStaticPart.H_ss->nnz() << " nonzeros." << std::endl;
+                    g_matrixRecorder.recordStaticSparsity(*m_hessianSparsityStaticPart.H_ss);
                     m_sparsityLRU = std::make_unique<SparsityLRU>(*(m_hessianSparsityStaticPart.H_ss));
                     m_hessianSparsity = std::move(m_hessianSparsityStaticPart.H_ss);
                 }

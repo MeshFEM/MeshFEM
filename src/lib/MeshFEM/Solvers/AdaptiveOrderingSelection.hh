@@ -39,7 +39,7 @@ struct AdaptiveOrderingSelection {
         }
 
         bool trigger = m_shouldSwitchMethod(method_switch_threshold_hard) &&
-                       (numericFactorizationsInWindow() > num_factorizations_before_permitting_hard_switch);
+                       (numeric_facts_per_symbolic_fact_in_window.back() > num_factorizations_before_permitting_hard_switch);
         return trigger;
     }
 
@@ -65,21 +65,39 @@ struct AdaptiveOrderingSelection {
         numeric_facts_per_symbolic_fact_in_window.back()++;
     }
 
+    void recordSolve(double time) {
+        if (currentMethodSymbolicCounts() == 0)                throw std::logic_error("No symbolic factorization for this method yet!");
+        if (solves_per_symbolic_fact_in_window.empty()) throw std::logic_error("Symbolic factorization info record missing.");
+
+        factorization_times_for_method[current_method].solve.add(time);
+        solves_per_symbolic_fact_in_window.back()++;
+    }
+
     void recordSymbolic(double time) {
         factorization_times_for_method[current_method].symbolic.add(time);
 
         numeric_facts_per_symbolic_fact_in_window.push_back(0);
         if (numeric_facts_per_symbolic_fact_in_window.size() > window_size)
             numeric_facts_per_symbolic_fact_in_window.pop_front();
+
+        solves_per_symbolic_fact_in_window.push_back(0);
+        if (solves_per_symbolic_fact_in_window.size() > window_size)
+            solves_per_symbolic_fact_in_window.pop_front();
     }
 
     size_t symbolicFactorizationsInWindow() const {
+        assert(numeric_facts_per_symbolic_fact_in_window.size() == solves_per_symbolic_fact_in_window.size());
         return numeric_facts_per_symbolic_fact_in_window.size();
     }
 
     size_t numericFactorizationsInWindow() const {
         return std::accumulate(numeric_facts_per_symbolic_fact_in_window.begin(),
                                numeric_facts_per_symbolic_fact_in_window.end(), 0);
+    }
+
+    size_t solvesInWindow() const {
+        return std::accumulate(solves_per_symbolic_fact_in_window.begin(),
+                               solves_per_symbolic_fact_in_window.end(), 0);
     }
 
     // How long would it take for each method to do the factorizations recorded
@@ -89,6 +107,7 @@ struct AdaptiveOrderingSelection {
         if (method > 1) throw std::runtime_error("Invalid method index");
         double avg_sym = factorization_times_for_method[0].symbolic.average(); // primary
         double avg_num = factorization_times_for_method[0]. numeric.average(); // primary
+        double avg_sol = factorization_times_for_method[0].   solve.average(); // primary
 
         if (method == 1) {
             // The alternate method may not have timings recorded yet.
@@ -96,10 +115,12 @@ struct AdaptiveOrderingSelection {
             // to the primary method timings.
             avg_sym = factorization_times_for_method[1].symbolic.average(/* default = */ OrderingChoices::alternate_method_sym_time_multiplier_estimate * avg_sym); // alternate
             avg_num = factorization_times_for_method[1]. numeric.average(/* default = */ OrderingChoices::alternate_method_num_time_multiplier_estimate * avg_num); // alternate
+            avg_sol = factorization_times_for_method[1].   solve.average(/* default = */ OrderingChoices::alternate_method_num_time_multiplier_estimate * avg_num); // alternate -- TODO: determine separate solve time multiplier estimate?
         }
 
         return avg_sym * symbolicFactorizationsInWindow()
-             + avg_num *  numericFactorizationsInWindow();
+             + avg_num *  numericFactorizationsInWindow()
+             + avg_sol *                 solvesInWindow();
     }
 
     std::string factorizationTimingDescription() const {
@@ -114,20 +135,23 @@ struct AdaptiveOrderingSelection {
             << "  symbolicFactorizationsInWindow: " << symbolicFactorizationsInWindow()
             <<             "  Symbolic times (0): " << factorization_times_for_method[0].symbolic.average(-1) << "s"
             <<              "  Numeric times (0): " << factorization_times_for_method[0]. numeric.average(-1) << "s"
+            <<              "    Solve times (0): " << factorization_times_for_method[0].   solve.average(-1) << "s"
             <<             "  Symbolic times (1): " << factorization_times_for_method[1].symbolic.average(-1) << "s"
-            <<              "  Numeric times (1): " << factorization_times_for_method[1]. numeric.average(-1) << "s";
+            <<              "  Numeric times (1): " << factorization_times_for_method[1]. numeric.average(-1) << "s"
+            <<              "    Solve times (1): " << factorization_times_for_method[1].   solve.average(-1) << "s";
         return oss.str();
     }
 
     size_t totalSymbolicFactorizations() const { return factorization_times_for_method[0].symbolic.count + factorization_times_for_method[1].symbolic.count; }
-    size_t totalNumericFactorizations()  const { return factorization_times_for_method[0]. numeric.count + factorization_times_for_method[1]. numeric.count; }
+    size_t  totalNumericFactorizations() const { return factorization_times_for_method[0]. numeric.count + factorization_times_for_method[1]. numeric.count; }
+    size_t                 totalSolves() const { return factorization_times_for_method[0].   solve.count + factorization_times_for_method[1].   solve.count; }
 
     // Heuristic parameters
     size_t window_size = 5;      // how many of the most recent symbolic factorizations (and their associated numeric factorizations) to consider
     size_t warmup_sym_count = 2; // number of symbolic factorizations to do with the primary method before activating heuristics.
 
     double method_switch_threshold_soft = 1.05; // Speedup factor above which to switch to the other strategy for the next symbolic refactorization
-    double method_switch_threshold_hard = 1.10; // Speedup factor above which to switch to the other strategy for the next symbolic refactorization
+    double method_switch_threshold_hard = 1.10; // Speedup factor above which to force a switch to the other strategy.
     // Since a symbolic factorization should be avoided when possible,
     // we force ourselves to live with a suboptimal ordering for a while
     // before triggering a switch back to the primary method.
@@ -139,24 +163,32 @@ struct AdaptiveOrderingSelection {
 
     // Over the last `window_size` symbolic factorizations,
     // how many numeric factorizations were done using them?
-    std::deque<size_t> numeric_facts_per_symbolic_fact_in_window;
+    std::deque<size_t> numeric_facts_per_symbolic_fact_in_window, solves_per_symbolic_fact_in_window;
 
     struct FactorizationTime {
         double total = 0;
         size_t count = 0;
+        double average_ema = 0;
+        static constexpr double ema_alpha = 0.2; // Exponential moving average interpolation factor
 
         void add(double time) {
+            if (count == 0)
+                average_ema = time; // Initialize the EMA with the first time
+            else
+                average_ema = (1 - ema_alpha) * average_ema + ema_alpha * time;
             total += time;
             ++count;
         }
         bool known() const { return count > 0; }
 
-        double average(double default_val = 0) const { return count == 0 ? default_val : total / count; }
+        // This is now an exponential moving average rather than a simple unweighted average!
+        double average(double default_val = 0) const { return count == 0 ? default_val : average_ema; }
     };
 
     struct FactorizationTimes {
         FactorizationTime symbolic;
         FactorizationTime numeric;
+        FactorizationTime solve;
     };
 
     // 0: primary method, 1: alternate method

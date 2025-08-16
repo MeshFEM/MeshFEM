@@ -43,15 +43,15 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     size_t n_reduced() const override;
 
     void factorizeNumeric(const BlockCSCHessianBase &mat, bool isInTryCatch=false) override {
-        if (recordingMatrices()) mat.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+        g_matrixRecorder.recordNumeric(mat);
         factorizeNumeric((const SuiteSparseMatrix &)(mat), isInTryCatch);
     }
     void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override {
-        if (recordingMatrices()) A.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+        g_matrixRecorder.recordNumeric(A);
         factorizeNumericWithShift((const SuiteSparseMatrix &)(A), sigma, B, isInTryCatch);
     }
     void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) override {
-        if (recordingMatrices()) A.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
+        g_matrixRecorder.recordNumeric(A);
         factorizeNumericWithShift((const SuiteSparseMatrix &)(A), sigma, isInTryCatch);
     }
 
@@ -122,7 +122,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         static constexpr double alternate_method_sym_time_multiplier_estimate = 0.1; // but is 10x faster for symbolic factorization.
     };
 
-    AdaptiveOrderingSelection<OrderingChoices> adaptiveOrdering;
+    mutable AdaptiveOrderingSelection<OrderingChoices> adaptiveOrdering; // mutable so that solve timings can be recorded
 
     void setUseLeftLooking(bool use_left);
     bool getUseLeftLooking() const;

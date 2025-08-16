@@ -13,6 +13,7 @@
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 #include <MeshFEM/Solvers/CholmodFactorizer.hh>
 #include <MeshFEM/Solvers/CatamariFactorizer.hh>
+#include <MeshFEM/Solvers/MatrixRecorder.hh>
 
 void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads, size_t repeats) {
     set_max_num_tbb_threads(tbb_threads);
@@ -56,12 +57,12 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     Eigen::VectorXd x_gt, b;
 
     for (int counter = 0; ; counter++) {
-        std::string symPath = directory + "/" + CholeskyFactorizerBase::symbolicMatrixFileName(counter);
+        std::string symPath = directory + "/" + MatrixRecorder::symbolicMatrixFileName(counter);
         std::ifstream symFile(symPath);
         if (symFile.good()) {
             // std::cout << symPath << std::endl;
             std::vector<size_t> pinnedVars;
-            std::ifstream pinnedVarFile(directory + "/" + CholeskyFactorizerBase::pinnedVarsFileName(counter));
+            std::ifstream pinnedVarFile(directory + "/" + MatrixRecorder::pinnedVarsFileName(counter));
             if (pinnedVarFile.good()) {
                 size_t pinnedVar;
                 while (pinnedVarFile >> pinnedVar) {
@@ -79,7 +80,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             continue;
         }
 
-        std::string numPath = directory + "/" + CholeskyFactorizerBase::numericMatrixFileName(counter);
+        std::string numPath = directory + "/" + MatrixRecorder::numericMatrixFileName(counter);
         std::ifstream numFile(numPath);
         if (numFile.good()) {
             // std::cout << numPath << std::endl;
