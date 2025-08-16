@@ -5,6 +5,7 @@
 #include <MeshFEM/ParallelVectorOps.hh>
 #include <Eigen/src/Core/Matrix.h>
 
+#include <MeshFEM/Solvers/MatrixRecorder.hh>
 #include "NewtonHessian.hh"
 
 // Solve the Newton system `H d = -g`, modifying H to be pos. def. if it is indefinite.

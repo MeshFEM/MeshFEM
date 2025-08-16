@@ -85,7 +85,6 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("armijo_c1",                     &NewtonOptimizerOptions::armijo_c1)
         .def_readwrite("backtrack_shrink_factor",       &NewtonOptimizerOptions::backtrack_shrink_factor)
         .def_readwrite("factorizer",                    &NewtonOptimizerOptions::factorizer)
-        .def_readwrite("matrixRecordDir",               &NewtonOptimizerOptions::matrixRecordDir)
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
                                                      py::return_value_policy::reference_internal)

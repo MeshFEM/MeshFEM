@@ -33,7 +33,6 @@ struct NewtonOptimizerOptionsBase {
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
     int  verboseWorkingSet = 0;                // Whether to report changes to the working set (>0) and the contents of nonempty working sets upon termination (>1).
     CholeskyProvider factorizer = get_default_cholesky_provider();
-    std::string matrixRecordDir;               // If nonempty, all Hessian sparsity patterns and values encountered during the optimization will be recorded to this directory.
 };
 
 // The part of the optimizer interface that is not trivially copyable.

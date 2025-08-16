@@ -7,6 +7,7 @@ namespace py = pybind11;
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/SPSDSystem.hh>
+#include <MeshFEM/Solvers/MatrixRecorder.hh>
 
 #if MESHFEM_WITH_CATAMARI
 #include <MeshFEM/Solvers/CatamariFactorizer.hh>
@@ -229,8 +230,6 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("hasFactorization", [](const CFB &c, CFB::FactorizationType type) { return c.hasFactorization(type); }, py::arg("type"))
         .def("solve", [](const CFB &c, Eigen::VectorXd &rhs) { return c.solve(rhs); }, py::arg("rhs"))
         .def("provider", &CFB::provider)
-        .def("recordMatrices", &CFB::recordMatrices, py::arg("directory"))
-        .def("stopRecordingMatrices", &CFB::stopRecordingMatrices)
         .def("writeSolveTimers", &CFB::writeSolveTimers)
         ;
 
@@ -245,4 +244,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
 #endif
 
     m.def("CholeskyFactorizer", [](CholeskyProvider p) { return make_cholesky_factorizer(p); }, py::arg("provider") = get_default_cholesky_provider());
+
+    m.def("recordMatrices", [](const std::string &directory, bool symbolic, bool numeric) { return g_matrixRecorder.recordMatrices(directory, symbolic, numeric); }, py::arg("directory"), py::arg("symbolic") = true, py::arg("numeric") = true,
+          "Start recording matrices to the given directory. Recording of symbolic or numeric matrices can optionally be disabled.");
+    m.def("stopRecordingMatrices", []() { g_matrixRecorder.stopRecordingMatrices(); });
 }

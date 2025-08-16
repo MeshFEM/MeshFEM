@@ -91,6 +91,7 @@ add_library(MeshFEM SHARED
         Solvers/make_cholesky_factorizer.cc
         Solvers/CatamariFactorizer.cc
         Solvers/PardisoFactorizer.cc
+        Solvers/MatrixRecorder.cc
 
         algorithms/get_element_components.hh
         algorithms/remove_if_index.hh
