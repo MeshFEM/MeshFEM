@@ -539,7 +539,7 @@ private:
                 // we're forcing a rebuild or if the term has already flagged a
                 // change. Otherwise, we ask the term to detect a change
                 // wrt. the currently incorporated version of its sparsity pattern.
-                if (force || t.sparsityPatternChanged || t.detectSparsityPatternChange(m_hessianSparsityForSemistaticTerms[i])) {
+                if (force || t.sparsityPatternChanged || t.detectSparsityPatternChange(m_hessianSparsityForSemistaticTerms[i]) || g_matrixRecorder.recordingDynamicSparsity()) {
                     // std::cout << "Building semistatic term sparsity pattern" << std::endl;
                     m_hessianSparsityForSemistaticTerms[i] = t.hessianSparsityPattern();
                     changed = true;
@@ -553,6 +553,13 @@ private:
             }
         }
 
+        if (g_matrixRecorder.recordingDynamicSparsity()) {
+            NewtonHessian nonstaticPart = dynamicSparsity;
+            for (const auto &t : m_hessianSparsityForSemistaticTerms)
+                nonstaticPart.mergeSparsityPattern(t);
+            g_matrixRecorder.recordDynamicSparsity(nonstaticPart.H_ss.get());
+        }
+
         // static size_t updates_since_change = 0;
 
         if (changed) {
@@ -561,7 +568,6 @@ private:
             if (staticOnly) m_hessianSparsity = std::move(m_hessianSparsityStaticPart);
             else {
                 if (!m_sparsityLRU && m_hessianSparsityStaticPart.H_ss && (m_hessianSparsityStaticPart.H_ss->nnz() > 0)) {
-                    std::cout << "Recording static sparsity pattern with " << m_hessianSparsityStaticPart.H_ss->nnz() << " nonzeros." << std::endl;
                     g_matrixRecorder.recordStaticSparsity(*m_hessianSparsityStaticPart.H_ss);
                     m_sparsityLRU = std::make_unique<SparsityLRU>(*(m_hessianSparsityStaticPart.H_ss));
                     m_hessianSparsity = std::move(m_hessianSparsityStaticPart.H_ss);

@@ -536,6 +536,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
         this->Ai = std::move(result.Ai);
         this->Ap = std::move(result.Ap);
         this->nz = result.nz;
+        if (this->Ap.size() == 0) this->Ap.assign((n + 1), 0); // Ensure empty results still have a valid Ap array.
     }
 
     virtual void finalize() = 0;

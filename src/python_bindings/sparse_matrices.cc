@@ -248,4 +248,5 @@ PYBIND11_MODULE(sparse_matrices, m) {
     m.def("recordMatrices", [](const std::string &directory, bool symbolic, bool numeric) { return g_matrixRecorder.recordMatrices(directory, symbolic, numeric); }, py::arg("directory"), py::arg("symbolic") = true, py::arg("numeric") = true,
           "Start recording matrices to the given directory. Recording of symbolic or numeric matrices can optionally be disabled.");
     m.def("stopRecordingMatrices", []() { g_matrixRecorder.stopRecordingMatrices(); });
+    m.def("resetRecorderIDs", []() { g_matrixRecorder.resetIDs(); });
 }

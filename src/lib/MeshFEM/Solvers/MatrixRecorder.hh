@@ -19,12 +19,13 @@
 
 struct MatrixRecorder {
     // If `path` is nonempty, record the matrices passed to symbolic and numeric factorization routines.
-    void recordMatrices(const std::string &directory_path, bool symbolic = true, bool numeric = true) {
+    void recordMatrices(const std::string &directory_path, bool symbolic = true, bool numeric = true, bool dynamic = true) { // TODO: disable dynamic by default
         if (directory_path.empty()) throw std::runtime_error("MatrixRecorder: Must pass a nonempty path");
         if (symbolic + numeric == 0) throw std::runtime_error("MatrixRecorder: Must record at least one type of matrix (symbolic or numeric)");
         m_matrix_dump_path = directory_path;
         m_recordingNumeric = numeric;
         m_recordingSymbolic = symbolic;
+        m_recordingDynamicSparsity = dynamic;
         resetIDs();
     }
 
@@ -39,20 +40,27 @@ struct MatrixRecorder {
     void resetIDs() {
         m_matrixId = 0;
         m_numSparsityUpdateCalls = 0;
+        m_dynamicSparsityCounter = 0;
     }
 
     void recordNumeric(const BlockCSCHessianBase &mat) {
-        if (!recordingMatrices() || (m_recordingNumeric == false)) return;
+        if (!recordingMatrices() || !m_recordingNumeric) return;
         mat.dumpBinaryToFile(m_matrix_dump_path + "/" + numericMatrixFileName(m_generateMatrixId()));
     }
 
     void recordStaticSparsity(const BlockCSCHessianBase &mat) {
-        if (!recordingMatrices() || (m_recordingSymbolic == false)) return;
+        if (!recordingMatrices() || !m_recordingSymbolic) return;
         mat.dumpBinaryToFile(m_matrix_dump_path + "/static_sparsity_pattern.bin");
     }
 
+    void recordDynamicSparsity(const BlockCSCHessianBase *mat) {
+        if (!recordingMatrices() || !m_recordingSymbolic || !m_recordingDynamicSparsity) return;
+        if (mat == nullptr) { ++m_dynamicSparsityCounter; return; } // Skip (but count) empty matrices.
+        mat->dumpBinaryToFile(m_matrix_dump_path + "/dynamic_sparsity_pattern_" + m_matrixIdString(m_dynamicSparsityCounter++) + ".bin");
+    }
+
     void recordSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
-        if (!recordingMatrices() || (m_recordingSymbolic == false)) return;
+        if (!recordingMatrices() || !m_recordingSymbolic) return;
 
         size_t id = m_generateMatrixId();
         mat.dumpBinaryToFile(m_matrix_dump_path + "/" + symbolicMatrixFileName(id, "_from_update_" + std::to_string(int(m_numSparsityUpdateCalls) - 1)));
@@ -66,6 +74,8 @@ struct MatrixRecorder {
     // SparsityLRU::increaseAgeOfOldEntries has been called between pattern updates)
     // when analyzing recorded matrices.
     void countSparsityUpdateCall() { ++m_numSparsityUpdateCalls; }
+
+    bool recordingDynamicSparsity() const { return m_recordingDynamicSparsity; }
 
 protected:
     // An increasing identifier used to sequence each matrix written
@@ -83,8 +93,9 @@ protected:
 
     std::string m_matrix_dump_path;
 
-    bool m_recordingNumeric = false, m_recordingSymbolic = false;
+    bool m_recordingNumeric = false, m_recordingSymbolic = false, m_recordingDynamicSparsity;
     size_t m_matrixId = 0;
+    size_t m_dynamicSparsityCounter = 0;
     size_t m_numSparsityUpdateCalls = 0; // Used to track the number of times the sparsity pattern has been updated.
 
     // If true, when recording the matrices, we overwrite the existing recorded matrices rather than writing fresh ones.
