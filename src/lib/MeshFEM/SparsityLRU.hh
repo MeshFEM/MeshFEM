@@ -179,7 +179,7 @@ struct SparsityLRU {
             if (maxAge >= hardExpirationAge) {
                 pruneEntries([this](Index i) { return m_entryAge[i] >= expirationAge; });
                 m_maxAge = maxAgeBelowExpiration;
-                std::cout << "update: hard expiration triggered, maxAge = " << maxAge << std::endl;
+                std::cout << "update: hard expiration triggered, maxAge = " << m_maxAge << std::endl;
                 return EXPIRED;
             }
             m_maxAge = maxAge;
