@@ -744,7 +744,13 @@ void CatamariFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys
 
         {
             BENCHMARK_SCOPED_TIMER_SECTION solveTimer("Catamari Solve");
+
+            auto solve_start = std::chrono::high_resolution_clock::now();
             m_ldl->Solve(&v_perm, /* alreadyPermuted = */ true);
+            double solve_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - solve_start).count();
+
+            if (orderingMethod == OrderingMethod::Adaptive)
+                adaptiveOrdering.recordSolve(solve_duration);
         }
 
         catamari::BlasMatrixView<double> v_x = v_perm;

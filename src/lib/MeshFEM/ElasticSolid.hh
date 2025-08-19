@@ -212,7 +212,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
             Eigen::Matrix<Real, numElementLocalVars - N, numElementLocalVars - N> H_red = m_translationOrthogonalComplementBasis.transpose() * tmp;
 
             Eigen::SelfAdjointEigenSolver<decltype(H_red)> Hes(H_red);
-            if (Hes.eigenvalues()[0] < -1e-8) {
+            if (Hes.eigenvalues()[0] < -1e-10 * (H_red.trace() / H_red.rows())) {
                 auto Q = (m_translationOrthogonalComplementBasis * Hes.eigenvectors()).eval();
                 result = Q * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Q.transpose();
             }
@@ -327,7 +327,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.accumulateHessian");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.accumulateHessian" + std::string(projectionMask ? " (projected)" : ""));
         assembler().assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
             return elementHessian(ei, !projectionMask, weight);
         });

@@ -116,13 +116,13 @@ PSDResult isPSDGershgorin(const Eigen::MatrixBase<Derived> &A, double tol = 1e-8
 }
 
 template<bool HasLower = false, class Derived>
-bool isPSDCholesky(const Eigen::MatrixBase<Derived> &A, double tol = 1e-8) {
+bool isPSDCholesky(const Eigen::MatrixBase<Derived> &A, double tol = 1e-10) {
     std::decay_t<decltype(A.eval())> A_lower;
     if constexpr (HasLower)
         A_lower = A.eval();
     else A_lower = A.transpose().eval();
 
-    A_lower.diagonal().array() += tol;
+    A_lower.diagonal().array() += (A_lower.trace() / A_lower.rows()) * tol;
 
 #if MESHFEM_WITH_CATAMARI
     catamari::BlasMatrixView<double> matrix;
@@ -138,11 +138,11 @@ bool isPSDCholesky(const Eigen::MatrixBase<Derived> &A, double tol = 1e-8) {
 }
 
 template<class Derived>
-bool isPSDEigenDecomp(const Eigen::MatrixBase<Derived> &A, double tol = 1e-8) {
+bool isPSDEigenDecomp(const Eigen::MatrixBase<Derived> &A, double tol = 1e-10) {
     auto A_full = A.eval();
     A_full.template triangularView<Eigen::Lower>() = A_full.transpose();
     Eigen::SelfAdjointEigenSolver<decltype(A_full)> Hes(A_full);
-    return Hes.eigenvalues()[0] > -tol;
+    return Hes.eigenvalues()[0] > -tol * (A_full.trace() / A_full.rows());
 }
 
 #endif /* end of include guard: DENSEPSDDETECT_HH */
