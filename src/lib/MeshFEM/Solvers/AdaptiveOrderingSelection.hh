@@ -66,7 +66,7 @@ struct AdaptiveOrderingSelection {
     }
 
     void recordSolve(double time) {
-        if (currentMethodSymbolicCounts() == 0)                throw std::logic_error("No symbolic factorization for this method yet!");
+        if (currentMethodSymbolicCounts() == 0)         throw std::logic_error("No symbolic factorization for this method yet!");
         if (solves_per_symbolic_fact_in_window.empty()) throw std::logic_error("Symbolic factorization info record missing.");
 
         factorization_times_for_method[current_method].solve.add(time);
