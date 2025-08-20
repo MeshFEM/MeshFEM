@@ -19,7 +19,7 @@
 
 struct MatrixRecorder {
     // If `path` is nonempty, record the matrices passed to symbolic and numeric factorization routines.
-    void recordMatrices(const std::string &directory_path, bool symbolic = true, bool numeric = true, bool dynamic = true) { // TODO: disable dynamic by default
+    void recordMatrices(const std::string &directory_path, bool symbolic = true, bool numeric = true, bool dynamic = false) {
         if (directory_path.empty()) throw std::runtime_error("MatrixRecorder: Must pass a nonempty path");
         if (symbolic + numeric == 0) throw std::runtime_error("MatrixRecorder: Must record at least one type of matrix (symbolic or numeric)");
         m_matrix_dump_path = directory_path;

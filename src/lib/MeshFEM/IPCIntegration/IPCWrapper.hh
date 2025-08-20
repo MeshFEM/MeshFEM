@@ -4,6 +4,7 @@
 #include <memory>
 #include "CollisionMesh.hh"
 #include "Obstacle.hh"
+#include <MeshFEM/GlobalBenchmark.hh>
 
 using ObstaclesCollection = std::vector<std::shared_ptr<Obstacle>>;
 
@@ -85,20 +86,24 @@ struct CombinedCollisionMesh {
 
     // Get the position of the collision mesh vertices from the simulation
     // `vars` and the passed obstacle vertex positions `obstVars`.
-    MXd extractPositions(const Eigen::Ref<const VXd> &vars, const MXd &obstPositions) {
+    MXd extractPositions(const Eigen::Ref<const VXd> &vars, const MXd &obstPositions) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("CombinedCollisionMesh.extractPositions");
         if (size_t(vars.size()) != N * fullModelBlockVars)          throw std::runtime_error("Unexpected vars size.");
         if (size_t(obstPositions.rows()) != numObstaclesVertices()) throw std::runtime_error("Unexpected obstacle vertex positions size.");
         const size_t nccv = numCombinedCollisionVertices();
         MXd result(nccv, N);
-        result << m_primaryCM.extractVectorField(vars),
-                  obstPositions;
+
+        auto primaryCMPositions = result.topRows(m_primaryCM.numCollisionVertices());
+        m_primaryCM.extractVectorFieldToDst(vars, primaryCMPositions);
+        result.bottomRows(numObstaclesVertices()) = obstPositions;
+
         return result;
     }
 
-    MXd vertexPositionsForVars(const VXd &vars) { return extractPositions(vars, m_obstaclesVertices); }
+    MXd vertexPositionsForVars(const VXd &vars) const { return extractPositions(vars, m_obstaclesVertices); }
 
     // PolyFEM includes the obstacle vertex positions at the end of the vars vector.
-    MXd vertexPositionsForPolyfemVars(const VXd &vars) {
+    MXd vertexPositionsForPolyfemVars(const VXd &vars) const {
         if (size_t(vars.size()) != N * numCombinedNodes()) throw std::runtime_error("Unexpected PolyFEM vars size.");
         return extractPositions(vars.head(N * fullModelBlockVars),
                                 Eigen::Map<const MXdRowMajor>(vars.data() + N * fullModelBlockVars, numObstaclesVertices(), N));
