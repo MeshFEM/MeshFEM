@@ -244,7 +244,9 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         BENCHMARK_SCOPED_TIMER_SECTION timer("minimumElementHessianEigenvaluesLapack");
         Eigen::VectorXd result(numElements());
 
-        std::vector<DenseEighRealSolver<numElementLocalVars>> solver_for_thread(get_max_num_tbb_threads());
+        // WARNING: get_max_num_tbb_threads() leads to a crash due to noncontiguous thread indices after repeated calls to `set_max_num_tbb_threads`...
+        const int max_threads = tbb::this_task_arena::max_concurrency();
+        std::vector<DenseEighRealSolver<numElementLocalVars>> solver_for_thread(max_threads);
 
         parallel_for_range(numElements(), [&](size_t ei) {
             PerElementHessian H_e = elementHessian(ei, /* disableProjection = */ true).transpose();

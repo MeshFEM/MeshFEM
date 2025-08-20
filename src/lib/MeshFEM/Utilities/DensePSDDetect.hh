@@ -24,11 +24,22 @@
 #include <catamari/dense_factorizations.hpp>
 #endif
 
-#if 0 // The Lapack version seems slower for small matrices than Eigen...
+#if 0 // The Lapack version seems slower for small matrices than Eigen unless we crank the accuracy way down.
+extern "C" {
+/* DSYEVD prototype */
+extern void dsyevd_(char* jobz, char* uplo, int64_t* n, double* a, int64_t* lda,
+                    double* w, double* work, int64_t* lwork, int64_t* iwork, int64_t* liwork, int64_t* info );
+extern void dsyevr_(char* jobz, char* range, char* uplo, int64_t* n, double* a, int64_t* lda,
+                    double* vl, double* vu, int64_t* il, int64_t* iu, double* abstol,
+                    int64_t* m, double* w, double* z, int64_t* ldz,
+                    int64_t* isuppz, double* work, int64_t* lwork,
+                    int64_t* iwork, int64_t* liwork, int64_t* info );
+}
+
 template<size_t N>
 struct DenseEighRealSolver {
     static constexpr size_t  work_size_upper_bound = 1 + 6 * N + 2 * N * N;
-    static constexpr size_t iwork_size_upper_bound = 3 + 5 * N;
+    static constexpr size_t iwork_size_upper_bound = 100 * N; // dsyevd: 3 + 5 * N;
     // Use official upper bounds for workspace storage needed when
     // computing eigenvectors for a matrix of size `N x N`.
     DenseEighRealSolver()
@@ -38,16 +49,35 @@ struct DenseEighRealSolver {
     void compute(const Eigen::MatrixBase<Derived> &A) {
         m_eigenvectors = A;
 
-        char jobz = 'V'; // Compute eigenvectors
-        char uplo = 'L'; // Use upper triangle
+        auto A_copy = A.eval(); // dsyevr destroys the contents of `A`.
+
+        char jobz = 'V';  // Compute eigenvectors too
+        char range = 'A'; // Compute only eigenvalues in the range (VL, VU]
+        char uplo = 'L';  // Use upper triangle
+
         int64_t size = N;
         int64_t lda = N;
 
-        int info;
-        dsyevd_(&jobz, &uplo, &size, m_eigenvectors.data(), &lda,
-                m_eigenvalues.data(), work.data(), &lwork,
+        // Only compute negative eigenvalues
+        double vl = -std::numeric_limits<double>::infinity(), vu = 0.0;
+
+        int64_t not_used = 0; // il and iu won't be used.
+
+        double abstol = 1e-8;
+
+        int64_t m; // Number of eigenvalues found
+        Eigen::Array<int64_t, 2 * N, 1> isuppz;
+
+        int64_t info;
+        dsyevr_(&jobz, &range, &uplo, &size, A_copy.data(), &lda,
+                &vl, &vu, &not_used, &not_used, &abstol,
+                &m, m_eigenvalues.data(), m_eigenvectors.data(), &lda,
+                /* isuppz */ isuppz.data(), work.data(), &lwork,
                 iwork.data(), &liwork, &info);
 
+        // dsyevd_(&jobz, &uplo, &size, m_eigenvectors.data(), &lda,
+        //         m_eigenvalues.data(), work.data(), &lwork,
+        //         iwork.data(), &liwork, &info);
         if (info != 0) { std::cerr << "dsyevd_ failed with info = " << info << "\n"; }
     }
 

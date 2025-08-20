@@ -21,6 +21,8 @@
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
+#include <catamari/dense_basic_linear_algebra.hpp>
+
 template<typename _Real, size_t _Dim>
 struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
     static constexpr size_t Dimension = _Dim;
@@ -68,11 +70,15 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
         }
         else {
             // Analytical Hessian projection
-            Eigen::JacobiSVD<Matrix> svd;
+            // This SVD is taking 40% of the time!!!
+            Eigen::JacobiSVD<Matrix, Eigen::NoQRPreconditioner> svd;
             svd.compute(m_F, Eigen::ComputeFullU | Eigen::ComputeFullV);
             const Matrix &U = svd.matrixU();
             const Matrix &V = svd.matrixV();
             const VecN_T<Real, N> &sigma = svd.singularValues();
+            // const Matrix &U = m_F;
+            // const Matrix &V = m_Finv_T;
+            // const VecN_T<Real, N> sigma = m_F.diagonal();
 
             auto sigma_inv = (1.0 / sigma.array()).matrix().eval();
 
@@ -81,31 +87,109 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
             Matrix A;
             A.setConstant(m_lambda);
             A.diagonal().array() -= c;
-            Eigen::SelfAdjointEigenSolver<Matrix> eig(sigma_inv.asDiagonal() * A * sigma_inv.asDiagonal());
+            A = A.array().rowwise() * sigma_inv.transpose().array();
+            A = A.array().colwise() * sigma_inv            .array();
+            Eigen::SelfAdjointEigenSolver<Matrix> eig;
+            eig.computeDirect(A); // Use faster but less accurate closed-form solver
+            const auto &Q_A = eig.eigenvectors();
+            const VecN_T<Real, N> &eigenvalues_A = eig.eigenvalues();
+            // const auto Q_A = m_F;
+            // const auto eigenvalues_A = m_F.diagonal();
 
             Eigen::Matrix<Real, N * N, N> flattenedScalingBasis;
             for (size_t j = 0; j < N; ++j)
                 MMap(flattenedScalingBasis.col(j).data()) = U.col(j) * V.col(j).transpose();
 
-            Eigen::Matrix<Real, N * N, N> flattenedEigenmatrices = flattenedScalingBasis * eig.eigenvectors();
+            Eigen::Matrix<Real, N * N, N> flattenedEigenmatrices = flattenedScalingBasis * Q_A;
 
+#if 0
             H = flattenedEigenmatrices * (eig.eigenvalues().array() + m_mu).matrix().cwiseMax(0.0).asDiagonal() * flattenedEigenmatrices.transpose();
 
             for (size_t j = 0; j < N; ++j) {
                 for (size_t i = j + 1; i < N; ++i) {
+                    const Real inv_sigma_product = sigma_inv[i] * sigma_inv[j];
+                    const Real lambda_T = m_mu + c * inv_sigma_product;
+                    const Real lambda_L = m_mu - c * inv_sigma_product;
+
+                    if (lambda_L < 0 && lambda_T < 0) continue;
+
                     Matrix ui_o_vj = U.col(i) * V.col(j).transpose();
                     Matrix uj_o_vi = U.col(j) * V.col(i).transpose();
 
-                    Matrix T = ui_o_vj - uj_o_vi; // "Twist" eigenmatrix (unnormalized)
-                    Matrix L = ui_o_vj + uj_o_vi; // "Flip"  eigenmatrix (unnormalized)
-                    Real inv_sigma_product = sigma_inv[i] * sigma_inv[j];
+                    if (lambda_T > 0) {
+                        Matrix T = ui_o_vj - uj_o_vi; // "Twist" eigenmatrix (unnormalized)
+                        H += VMap(T.data()) * VMap(T.data()).transpose() * (lambda_T * 0.5);
+                    }
 
-                    Real lambda_T = m_mu + c * inv_sigma_product;
-                    Real lambda_L = m_mu - c * inv_sigma_product;
-                    if (lambda_T > 0) H += VMap(T.data()) * VMap(T.data()).transpose() * (lambda_T * 0.5);
-                    if (lambda_L > 0) H += VMap(L.data()) * VMap(L.data()).transpose() * (lambda_L * 0.5);
+                    if (lambda_L > 0) {
+                        Matrix L = ui_o_vj + uj_o_vi; // "Flip"  eigenmatrix (unnormalized)
+                        H += VMap(L.data()) * VMap(L.data()).transpose() * (lambda_L * 0.5);
+                    }
                 }
             }
+#else
+            Hessian nonnullEigenmatrices;
+            VecN_T<Real, N * N> nonnullEigenvalues;
+            size_t num_nonnull = 0;
+
+            auto insert_eigenpair = [&](Real eigenvalue, const auto &flat_eigenmatrix) {
+                nonnullEigenvalues[num_nonnull] = eigenvalue;
+                nonnullEigenmatrices.col(num_nonnull++) = flat_eigenmatrix;
+            };
+
+            for (size_t j = 0; j < N; ++j) {
+                Real lambda_scale_j = eigenvalues_A[j] + m_mu;
+                if (lambda_scale_j > 0) insert_eigenpair(lambda_scale_j, flattenedEigenmatrices.col(j));
+
+                for (size_t i = j + 1; i < N; ++i) {
+                    const Real inv_sigma_product = sigma_inv[i] * sigma_inv[j];
+                    const Real lambda_T = m_mu + c * inv_sigma_product;
+                    const Real lambda_L = m_mu - c * inv_sigma_product;
+
+                    if (lambda_L < 0 && lambda_T < 0) continue;
+
+                    Matrix ui_o_vj = U.col(i) * V.col(j).transpose();
+                    Matrix uj_o_vi = U.col(j) * V.col(i).transpose();
+
+                    if (lambda_T > 0) {
+                        Matrix T = ui_o_vj - uj_o_vi; // "Twist" eigenmatrix (unnormalized)
+                        insert_eigenpair(lambda_T * 0.5, VMap(T.data()));
+                    }
+
+                    if (lambda_L > 0) {
+                        Matrix L = ui_o_vj - uj_o_vi; // "Flip" eigenmatrix (unnormalized)
+                        insert_eigenpair(lambda_T * 0.5, VMap(L.data()));
+                    }
+                }
+            }
+
+            // One big syrk...
+            // VecN_T<Real, N * N> sqrt_eigenvalues;
+            // sqrt_eigenvalues.head(num_nonnull) = nonnullEigenvalues.head(num_nonnull).cwiseSqrt();
+            // nonnullEigenmatrices.leftCols(num_nonnull) = nonnullEigenmatrices.leftCols(num_nonnull).array().rowwise() * sqrt_eigenvalues.head(num_nonnull).transpose().array();
+#if 1
+            // H = nonnullEigenmatrices.leftCols(num_nonnull) * nonnullEigenmatrices.leftCols(num_nonnull).transpose();
+            H = nonnullEigenmatrices.leftCols(num_nonnull) * nonnullEigenvalues.head(num_nonnull).asDiagonal() * nonnullEigenmatrices.leftCols(num_nonnull).transpose();
+#else
+            catamari::BlasMatrixView<Real> H_view;
+            catamari::ConstBlasMatrixView<Real> Q_view;
+            H_view.data = H.data();
+            H_view.height = H.rows();
+            H_view.width = H.cols();
+            H_view.leading_dim = H.rows();
+
+            Q_view.data = nonnullEigenmatrices.data();
+            Q_view.height = nonnullEigenmatrices.rows();
+            Q_view.width = num_nonnull;
+            Q_view.leading_dim = nonnullEigenmatrices.rows();
+
+            LowerNormalHermitianOuterProduct(/* alpha = */ Real{1}, Q_view, /* beta = */ Real{0}, &H_view);
+            H.template triangularView<Eigen::StrictlyUpper>() = H.transpose();
+            // MatrixMultiplyNormalTranspose(/* alpha = */ Real{1}, Q_view, Q_view, /* beta = */ Real{0}, &H_view);
+#endif
+
+#endif
+
 
 #if 0
             {

@@ -304,8 +304,8 @@ struct SparsityLRU {
     double entryCacheBudgetRatio = 0.01;
 
     // Entries older than this are removed regardless of whether the budget is exceeded.
-    int expirationAge = 100;
-    int hardExpirationAge = 200; // Entries older than this trigger a rebuild.
+    int expirationAge = 25;
+    int hardExpirationAge = 250; // Entries older than this trigger a rebuild.
 
 private:
     SpMat m_S;
