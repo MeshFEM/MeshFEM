@@ -101,7 +101,6 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
                 MMap(flattenedScalingBasis.col(j).data()) = U.col(j) * V.col(j).transpose();
 
             Eigen::Matrix<Real, N * N, N> flattenedEigenmatrices = flattenedScalingBasis * Q_A;
-
 #if 0
             H = flattenedEigenmatrices * (eig.eigenvalues().array() + m_mu).matrix().cwiseMax(0.0).asDiagonal() * flattenedEigenmatrices.transpose();
 
@@ -157,8 +156,8 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
                     }
 
                     if (lambda_L > 0) {
-                        Matrix L = ui_o_vj - uj_o_vi; // "Flip" eigenmatrix (unnormalized)
-                        insert_eigenpair(lambda_T * 0.5, VMap(L.data()));
+                        Matrix L = ui_o_vj + uj_o_vi; // "Flip" eigenmatrix (unnormalized)
+                        insert_eigenpair(lambda_L * 0.5, VMap(L.data()));
                     }
                 }
             }
@@ -169,7 +168,8 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
             // nonnullEigenmatrices.leftCols(num_nonnull) = nonnullEigenmatrices.leftCols(num_nonnull).array().rowwise() * sqrt_eigenvalues.head(num_nonnull).transpose().array();
 #if 1
             // H = nonnullEigenmatrices.leftCols(num_nonnull) * nonnullEigenmatrices.leftCols(num_nonnull).transpose();
-            H = nonnullEigenmatrices.leftCols(num_nonnull) * nonnullEigenvalues.head(num_nonnull).asDiagonal() * nonnullEigenmatrices.leftCols(num_nonnull).transpose();
+            if (num_nonnull == 0) H.setZero();
+            else H = nonnullEigenmatrices.leftCols(num_nonnull) * nonnullEigenvalues.head(num_nonnull).asDiagonal() * nonnullEigenmatrices.leftCols(num_nonnull).transpose();
 #else
             catamari::BlasMatrixView<Real> H_view;
             catamari::ConstBlasMatrixView<Real> Q_view;
@@ -189,7 +189,6 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
 #endif
 
 #endif
-
 
 #if 0
             {
