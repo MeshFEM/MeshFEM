@@ -21,6 +21,7 @@ add_executable(unit_tests
     test_edensities.cc
     test_field_sampler.cc
     test_block_csc_hessian.cc
+    test_fast_decompositions.cc
     )
 
 target_link_libraries(unit_tests PUBLIC
