@@ -9,16 +9,16 @@
 //  Author:  Xinzhuo (Johnson) Hu
 //  Created:  06/29/2023 17:07 PM
 ////////////////////////////////////////////////////////////////////////////////
-
 #ifndef SYMMETRICDIRICHLET_HH
 #define SYMMETRICDIRICHLET_HH
 
 #include <Eigen/Dense>
 #include "Tensor.hh"
+#include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
+#include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
 
 template<typename _Real, size_t _Dim>
-struct SymmetricDirichlet
-{
+struct SymmetricDirichlet {
     static constexpr size_t Dimension = _Dim;
     static constexpr size_t N         = _Dim;
     static constexpr EDensityType EDType = EDensityType::FBased;
@@ -45,31 +45,44 @@ struct SymmetricDirichlet
         m_J = F.determinant();
 
         if (elevel < EvalLevel::Hessian) return;
-        m_projectionMask = (elevel != EvalLevel::HessianWithDisabledProjection);
+        bool projecting = (elevel != EvalLevel::HessianWithDisabledProjection);
 
-        m_Finv_FinvT = m_Finv*m_Finv.transpose();
-        m_FinvT_Finv = m_Finv.transpose()*m_Finv;
-        if (!m_projectionMask) {
-            Matrix dF = Matrix::Zero();
-            for (int j = 0; j < dF.cols(); ++j) {
-                for (int i = 0; i < dF.rows(); ++i) {
-                    dF(i, j) = 1;
-                    Eigen::Map<Matrix>(m_d2psi.col(N * j + i).data()) = delta_denergy(dF);
-                    dF(i, j) = 0;
-                }
+        using MMap = Eigen::Map<Matrix>;
+        Hessian &H = m_d2psi;
+
+        Matrix FinvT = m_Finv.transpose(); // copy to ensure contiguous memory access in loop below
+        Matrix FinvT_Finv = FinvT * m_Finv;
+        Matrix Finv_FinvT = m_Finv * FinvT;
+        Matrix FinvT_Finv_FinvT = FinvT_Finv * FinvT;
+
+        // ||F^-1||^2 term
+        for (size_t j = 0; j < N; ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                MMap(H.col(N * j + i).data()) = FinvT.col(j) * FinvT_Finv_FinvT.row(i)
+                                   +       FinvT_Finv.col(i) *       Finv_FinvT.col(j).transpose()
+                                   + FinvT_Finv_FinvT.col(j) *           m_Finv.col(i).transpose();
             }
-            return;
         }
+        H.diagonal().array() += 1; // Dirichlet term
+
+        if (!projecting) return; // projection disabled.
 
         if (N == 3) throw std::runtime_error("Analytical Hessian Projection in N=3 Unimplemented!");
 
         // Analytical Hessian Projection in 2D
+#if 0
         Eigen::JacobiSVD<Matrix> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
         const Matrix &U = svd.matrixU();
         const Matrix &V = svd.matrixV();
         const Vector &sigma = svd.singularValues();
+#else
+        Matrix U, V;
+        Vector sigma;
+        fast_decompositions::svd(F, U, sigma, V);
+#endif
 
+#if 0 // Complete analytical eigendecomposition
         Real I1 = m_F.trace();
         Real I2 = m_F.squaredNorm();
         Real I3 = m_J;
@@ -83,22 +96,39 @@ struct SymmetricDirichlet
         Real lambda_4 = 1.0 + (1.0/I3Sq) - (I2/I3Cu);
 
         VN2_T T;
-        Eigen::Map<Matrix>(T.data()) = U.col(1)*V.col(0).transpose() - U.col(0)*V.col(1).transpose();
+        MMap(T.data()) = U.col(1)*V.col(0).transpose() - U.col(0)*V.col(1).transpose();
         
         VN2_T L;
-        Eigen::Map<Matrix>(L.data()) = U.col(0)*V.col(1).transpose() + U.col(1)*V.col(0).transpose();
+        MMap(L.data()) = U.col(0)*V.col(1).transpose() + U.col(1)*V.col(0).transpose();
 
         VN2_T D1;
-        Eigen::Map<Matrix>(D1.data()) = U.col(0)*V.col(0).transpose();
+        MMap(D1.data()) = U.col(0)*V.col(0).transpose();
 
         VN2_T D2;
-        Eigen::Map<Matrix>(D2.data()) = U.col(1)*V.col(1).transpose();
+        MMap(D2.data()) = U.col(1)*V.col(1).transpose();
 
         if (useAbsProjection)
             lambda_4 = std::abs(lambda_4);
         else
             lambda_4 = std::max(lambda_4, 0.0); // clamp potentially negative eigenvalue.
-        m_d2psi = lambda_1*D1*D1.transpose() + lambda_2*D2*D2.transpose() + 0.5*lambda_3*L*L.transpose() + 0.5*lambda_4*T*T.transpose();
+        H = lambda_1*D1*D1.transpose() + lambda_2*D2*D2.transpose() + 0.5*lambda_3*L*L.transpose() + 0.5*lambda_4*T*T.transpose();
+#else // Modify only the potentially negative eigencomponent (the "Twist" mode)
+        Real I2 = m_F.squaredNorm();
+        Real I3 = m_J;
+        Real I3Sq = I3*I3;
+        Real I3Cu = I3Sq*I3;
+
+        Real lambda_4 = 1.0 + (1.0/I3Sq) - (I2/I3Cu);
+        Real lambda_4_proj = useAbsProjection ? std::abs(lambda_4) : std::max(lambda_4, 0.0);
+        Real proj_dist = lambda_4_proj - lambda_4;
+
+        if (proj_dist > 0) {
+            VN2_T T;
+            MMap(T.data()) = U.col(1) * V.col(0).transpose() - U.col(0) * V.col(1).transpose(); // "Twist" eigenmatrix (unnormalized)
+            H += (0.5 * proj_dist) * T * T.transpose();
+        }
+#endif
+
     }
 
     const Matrix &getDeformationGradient() const {return m_F; }
@@ -119,10 +149,7 @@ struct SymmetricDirichlet
 
     template<class Mat_>
     Matrix delta_denergy(const Mat_ &dF) const{
-        Matrix dF_mat = dF.matrix();
-        Matrix tmp = (m_Finv.transpose() * dF_mat.transpose() * m_Finv.transpose());
-        return dF_mat + (tmp + m_FinvT_Finv * dF_mat) * m_Finv_FinvT 
-                      +  m_FinvT_Finv * tmp;
+        return applyFlattened4thOrderTensor(d2energy(), dF);
     }
 
     _Real d2energy(const Matrix &dF_lhs, const Matrix &dF_rhs) const {
@@ -140,13 +167,10 @@ struct SymmetricDirichlet
     bool useAbsProjection = false;
 
 private:
-    bool m_projectionMask = true; // when set to false, we disable projection regardless of `projectionEnabled` flag.
-
-    Matrix m_F, m_Finv, m_Finv_FinvT, m_FinvT_Finv;
+    Matrix m_F, m_Finv;
     Real m_J;
 
     Hessian m_d2psi;
 };
-
 
 #endif /* end of include guard: SYMMETRICDIRICHLET_HH */
