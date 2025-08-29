@@ -11,6 +11,8 @@
 //  This code is roughly 2.5x faster than Eigen::SelfAdjointEigenSolver in
 //  double precision on Apple Silicon and still achieves backwards errors on
 //  the order of 1e-11 for random and near-degenerate matrices in our testing.
+//  It is slightly (~15%) slower than the `computeDirect` method of Eigen's
+//  solver, but gets several more digits of accuracy/factor orthogonality.
 //
 //  The polar decomposition code is the one from
 //      https://theorangeduck.com/page/closed-form-matrix-decompositions
@@ -152,10 +154,7 @@ void sym_evecs_from_evals(const Mat3_T<Real> &M, const Vec3_T<Real> &evals, Mat3
     // Short-circuit if the matrix is diagonal (all eigenvalues are equal).
     if (M(0, 1) == 0 && M(0, 2) == 0 && M(1, 2) == 0) { Q.setIdentity(); return; }
 
-    if ((evals[0] == evals[1]) && (evals[1] == evals[2]))
-        throw std::runtime_error("All eigenvalues are equal, but matrix is not diagonal.");
-
-    // JP: At this point we know that not all three eigenvalues are repeated.
+    // At this point we know that not all three eigenvalues are repeated.
     // We pick the one that is "most distinct" from the others and use it
     // to calculate the first eigenvector using a simple cross-product approach.
     // Then the second eigenvector is computed in a way that can handle
@@ -195,17 +194,26 @@ void sym_evecs_from_evals(const Mat3_T<Real> &M, const Vec3_T<Real> &evals, Mat3
     Q.col(third_idx) = q_0.cross(q_1);
 }
 
+#if 1
 // Solve a symmetric 3x3 eigenvalue problem, sorting the eigenvalues in ascending order.
-template<typename Real>
+// Setting `FullyRobust` disables some fairly expensive operations that are needed only in highly degenerate cases
+// (e.g., where matrix entries are all on the order of machine epsilon and columns are nearly parallel).
+template<bool FullyRobust = true, typename Real>
 void sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda, Mat3_T<Real> &Q) {
-    // Short-circuit in the diagonal case.
-    Real odiag_max_mag = std::max(std::max(std::abs(A(1, 0)), std::abs(A(2, 0))), std::abs(A(2, 1)));
-    Real  diag_max_mag = std::max(std::max(std::abs(A(0, 0)), std::abs(A(1, 1))), std::abs(A(2, 2)));
-    const bool is_numerically_diagonal = (odiag_max_mag <= std::numeric_limits<Real>::epsilon() * diag_max_mag); // also catches the zero matrix!
-    if (is_numerically_diagonal) { lambda = A.diagonal(); Q.setIdentity(); return; }
+    Real max_mag;
+    if constexpr (FullyRobust) {
+        Real odiag_max_mag = std::max(std::max(std::abs(A(1, 0)), std::abs(A(2, 0))), std::abs(A(2, 1)));
+        Real  diag_max_mag = std::max(std::max(std::abs(A(0, 0)), std::abs(A(1, 1))), std::abs(A(2, 2)));
+        const bool is_numerically_diagonal = (odiag_max_mag <= std::numeric_limits<Real>::epsilon() * diag_max_mag); // also catches the zero matrix!
+        if (is_numerically_diagonal) { lambda = A.diagonal(); Q.setIdentity(); return; } // Short-circuit in the diagonal case.
 
-    Real max_mag = std::max(odiag_max_mag, diag_max_mag);
-    A *= 1.0 / max_mag; // scale to mitigate underflow/overflow
+        max_mag = std::max(odiag_max_mag, diag_max_mag);
+        A *= 1.0 / max_mag; // scale to mitigate underflow/overflow
+    }
+    else {
+        // Short-circuit in the diagonal case.
+        if ((A(1, 0) == 0) && (A(2, 0) == 0) && (A(2, 1) == 0)) { lambda = A.diagonal(); Q.setIdentity(); return; }
+    }
 
     // Shift the matrix to have trace 0 (so one eigenvalue is guaranteed to be of a different sign from the other two).
     Real shift = A.trace() / 3;
@@ -228,8 +236,21 @@ void sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda
     sym_evecs_from_evals(A, lambda, Q);
     lambda.array() += shift;
 
-    lambda *= max_mag; // undo scaling
+    if constexpr (FullyRobust) {
+        lambda *= max_mag; // undo scaling
+    }
 }
+#else // Test Eigen's computeDirect.
+// Solve a symmetric 3x3 eigenvalue problem, sorting the eigenvalues in ascending order.
+template<typename Real>
+void sym_eigensolver(const Mat3_T<Real> &A, Vec3_T<Real> &lambda, Mat3_T<Real> &Q) {
+    Eigen::SelfAdjointEigenSolver<Mat3_T<Real>> es;
+    es.computeDirect(A);
+    lambda = es.eigenvalues();
+    Q = es.eigenvectors();
+}
+
+#endif
 
 // Cofactor matrix of a 3x3 matrix M. This is also the transpose of the adjugate
 // and the derivative of det(M) with respect to M.
@@ -374,14 +395,17 @@ void svd_from_polar(const Mat3_T<Real> &M, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat
     U = R * V;
 }
 
-template<typename Real>
+// Setting `FullyRobust = false` uses a slightly faster (~10%) but slightly less robust version of the symmetric eigensolver.
+template<bool FullyRobust = true, typename Real>
 void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &V) {
     using V3d = Vec3_T<Real>;
     // A = U Sigma V^T
     // M = A^T A = V Sigma^2 V^T
     Mat3_T<Real> M = A.transpose() * A;
-    V3d s_sq;
-    sym_eigensolver(M, s_sq, V); // s_sq holds eigenvalues of A^T A in ascending order
+    {
+        V3d s_sq;
+        sym_eigensolver<FullyRobust>(M, s_sq, V); // s_sq holds eigenvalues of A^T A in ascending order
+    }
 
     V.col(0).swap(V.col(2)); // sort the singular vectors so that singular values are in descending order
 
@@ -400,7 +424,7 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
     // Modified Gram-Schmidt QR step
     USigma.template rightCols<2>().noalias() -= u0 * (u0.transpose() * USigma.template rightCols<2>()).eval();
 
-    // Relative treshold for detecting columns of AV that are too small reliably normalize
+    // Relative threshold for detecting columns of AV that are too small reliably normalize
     // (i.e., whose corresponding singular values are tiny).
     static constexpr Real eps = std::is_same_v<Real, float> ? 1e-6f : 1e-10;
 

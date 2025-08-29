@@ -175,4 +175,23 @@ bool isPSDEigenDecomp(const Eigen::MatrixBase<Derived> &A, double tol = 1e-10) {
     return Hes.eigenvalues()[0] > -tol * (A_full.trace() / A_full.rows());
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Sylvester's criterion (fast test for small matrices):
+// A is positive definite iff all leading principal minors are positive.
+////////////////////////////////////////////////////////////////////////////////
+template<typename Real>
+bool isPSDSylvester(const Eigen::Matrix<Real, 2, 2> &A) {
+    if (A(0, 0) <= 0) return false;
+    if (A.determinant() <= 0) return false;
+    return true;
+}
+
+template<typename Real>
+bool isPSDSylvester(const Eigen::Matrix<Real, 3, 3> &A) {
+    if (A(0, 0) <= 0) return false;
+    if (A.template topLeftCorner<2, 2>().determinant() <= 0) return false;
+    if (A.determinant() <= 0) return false;
+    return true;
+}
+
 #endif /* end of include guard: DENSEPSDDETECT_HH */

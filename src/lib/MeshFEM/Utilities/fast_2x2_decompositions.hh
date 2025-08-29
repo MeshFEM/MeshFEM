@@ -38,7 +38,7 @@
 namespace fast_decompositions {
 
 // Simple closed-form eigendecomposition of a 2x2 symmetric matrix A = Q Lambda Q^T
-template<typename Real>
+template<bool FullyRobust = true, typename Real> // FullyRobust is for compatibility with the 3x3 SVD code.
 void sym_eigensolver(Mat2_T<Real> A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
     const Real a_minus_c = A(0, 0) - A(1, 1);
     const Real b = A(0, 1);
@@ -58,7 +58,7 @@ void sym_eigensolver(Mat2_T<Real> A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
 }
 
 
-template <class T>
+template<typename T>
 T sign(T val) { return (val >= T(0)) ? T(1) : T(-1); }
 
 // An atan2/cos/sin-free implementation of the approach presented in Blinn's paper "Consider the Lowly 2x2 Matrix"
@@ -66,7 +66,7 @@ T sign(T val) { return (val >= T(0)) ? T(1) : T(-1); }
 // This implementation is originally inspired by https://scicomp.stackexchange.com/a/19646, but
 // leverages different trig identities and incorporates several fixes (e.g., in sign recovery)
 // and robustness improvements.
-template <class T>
+template<bool FullyRobust = true, typename T> // FullyRobust is for compatibility with the 3x3 SVD code.
 void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
     T sigma_sum, sigma_diff;
     T c_m, c_p, s_m, s_p;
@@ -141,7 +141,7 @@ void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
 // Compute
 //      A = [x y] [c -s]
 //          [0 z] [s  c]
-template <class T>
+template<typename T>
 void RQDecomposition(const Mat2_T<T> &A, T &x, T &y, T &z, T &c, T &s) {
     T a_00 = A(0, 0);
     T a_01 = A(0, 1);
@@ -180,7 +180,7 @@ void RQDecomposition(const Mat2_T<T> &A, T &x, T &y, T &z, T &c, T &s) {
     c =  a_11 * den;
 }
 
-template <class T>
+template<typename T>
 void svd_petiaccja(const Mat2_T<T> &A, T &c1, T &s1, T &c2, T &s2, T &d1, T &d2) {
     // Calculate RQ decomposition of A
     T x, y, z;
@@ -222,7 +222,7 @@ void svd_petiaccja(const Mat2_T<T> &A, T &c1, T &s1, T &c2, T &s2, T &d1, T &d2)
     s1 = dmax != T(0) ? usmax2 / dmax : T(0);
 }
 
-template <class T>
+template<typename T>
 void svd_petiaccja(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &s, Mat2_T<T> &V) {
     svd_petiaccja(A, U(0, 0), U(0, 1), V(0, 0), V(0, 1), s[0], s[1]);
     U(1, 0) = -U(0, 1);

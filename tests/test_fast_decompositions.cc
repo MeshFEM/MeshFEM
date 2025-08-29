@@ -306,10 +306,10 @@ TEST_CASE("fast 3x3 decompositions", "[fast_3x3_decompositions]" ) {
         start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < runs; ++i) {
             Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
-            es.compute(A_mats[i]);
+            es.computeDirect(A_mats[i]);
         }
         duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
-        std::cout << "Eigen's 3x3 eigensolver took " << duration << "s for " << runs << " runs." << std::endl;
+        std::cout << "Eigen's computeDirect 3x3 eigensolver took " << duration << "s for " << runs << " runs." << std::endl;
     }
 }
 

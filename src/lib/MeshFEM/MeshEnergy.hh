@@ -195,7 +195,7 @@ struct MeshEnergy : public MeshEnergyBase {
     }
 
     void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian");
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
         if (!useXBasedProjection || !projectionMask) {
             // Use projection implemented by the element itself (e.g., F-based projection)
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
