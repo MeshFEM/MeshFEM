@@ -21,10 +21,9 @@
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
-#include <catamari/dense_basic_linear_algebra.hpp>
-
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
+#include <MeshFEM/Utilities/DensePSDDetect.hh>
 
 template<typename _Real, size_t _Dim>
 struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
