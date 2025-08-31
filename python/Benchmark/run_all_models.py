@@ -7,7 +7,7 @@ import MeshFEMParamSolverEnum as SolverOptionEnum
 import time
 from datetime import datetime
 
-def writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, repeat_number):
+def writelog(result_path, model_files, hessian_option_list, thread_num_list, save_uv_option, repeat_number):
     # Log file name
     log_file_name = 'experiment_log.txt'
     log_file_path = os.path.join(result_path, log_file_name)
@@ -24,6 +24,8 @@ def writelog(result_path, hessian_option_list, thread_num_list, save_uv_option, 
     with open(log_file_path, 'a') as log_file:
         # Write the timestamp
         log_file.write(f"Parametrization Benchmarking Experiment: {timestamp}\n")
+        # Write the model files
+        log_file.write(f"Model Filename List: {model_files}\n")
         # Write the Hessian option list
         log_file.write(f"Hessian Option List: {hessian_option_list}\n")
         # Write the thread number list
@@ -112,6 +114,9 @@ def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thre
     
     elapsed_total_time = time.time() - total_timer
     print(f"\nAll experiments completed successfully! Total Time: {elapsed_total_time : .4f} seconds.")
+
+    # Write Log
+    writelog(result_path, model_files, hessian_projection_labels, thread_num_list, save_uv_option, repeat_num)
 
 
 def validate_save_uv_option(value):
@@ -253,16 +258,10 @@ def main():
         thread_num_list,
         hessian_option_list,
     )
-    writelog(
-        args.result_path,
-        hessian_option_list,
-        thread_num_list,
-        args.save_uv_option,
-        args.repeat,
-    )
 
+    
 if __name__ == "__main__":
-    print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_list_option> <thread_list_option> [<repeat_num>]")
+    print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_options> <solver_varind_list> <threads> [<repeat>]")
     # print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
     print("Supported Hessian Options: <MeshFEM+int(0~2^n)> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
     print("--------------------------------------------------------------------------------------------------------------------")
