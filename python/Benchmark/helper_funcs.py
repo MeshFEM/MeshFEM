@@ -17,7 +17,9 @@ import copy, time
 import igl
 import csv
 
+from typing import NamedTuple
 import numpy as np
+from numpy.typing import NDArray
 
 def map_vertices_to_circle_area_normalized(V, F, bnd):
     """
@@ -233,6 +235,12 @@ def parse_custom_csv(folder_path, csv_filename):
 
     return table_data, summary_stats
 
+# self-defined NamedTuple for hessian arrays
+class HessianStats(NamedTuple):
+    projected:  NDArray[np.int_]
+    shifted:    NDArray[np.float_]
+    indefinite: NDArray[np.int_]
+
 def runSYDParam(m, ProjectionStrategy, EigenvalueModification, 
                 ProjectionType, AutodiffSetting, SteplengthComputer,
                 max_iter=200, hessian_shift=1e-12, grad_tol=None, uvsave_path=None):
@@ -250,12 +258,18 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
         obj_history.append(prob.energy())
         time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
+        # Record hessian_projected and hessian_shifted_amount_history as well in customCallback, assume recording time is less significant
+        if i > 1:  
+            hessian_projected_history.append(int(prob.hessianWasProjected))
+            hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
     
     def customSaveUVCallback(prob, i):
         obj_history.append(prob.energy())
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
-        if i > 1:  hessian_projected_history.append(int(prob.hessianWasProjected))
-        hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+        if i > 1:  
+            hessian_projected_history.append(int(prob.hessianWasProjected))
+            hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+        # save UV in compressed mode
         uv_fn = 'uv_ravel_'+ 'iter_' + str(i-1)
         uv_arr = uv.getVars()
         np.savez_compressed(os.path.join(uvsave_path, uv_fn), arr=uv_arr)
@@ -327,16 +341,17 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
     cr = opt.optimize()
     # benchmark.report()
 
-    if uvsave_path is not None:      
-        hessian_projected_history.append(int(prob.hessianWasProjected)) # The projection status of the Hessian used in are i-1
-        hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+    hessian_projected_history.append(int(prob.hessianWasProjected)) # The projection status of the Hessian used in are i-1
+    hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+    # Also saving hessian_related information (arrays)
+    hessian_projected_arr = np.array(hessian_projected_history, dtype=int)
+    hessian_shifted_arr = np.array(hessian_shifted_amount_history, dtype=float)
+    hessian_indef_arr = np.array(cr.indefinite, dtype=int)
 
+    if uvsave_path is not None:      
         obj_arr = np.array(obj_history)
         grad_norm_arr = np.array(grad_norm_history)
         # we saved uv coordinates per-iteration and hessian_projected_history
-        hessian_projected_arr = np.array(hessian_projected_history, dtype=int)
-        hessian_shifted_arr = np.array(hessian_shifted_amount_history, dtype=float)
-        hessian_indef_arr = np.array(cr.indefinite, dtype=int)
         step_size_arr = np.array(step_norm_history)
         dd_arr = np.array(directional_derivative_history)
 
@@ -359,7 +374,12 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
-        return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict
+        hessian_stats = HessianStats(
+            projected=hessian_projected_arr,
+            shifted=hessian_shifted_arr,
+            indefinite=hessian_indef_arr,
+        )
+        return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict, hessian_stats
     
 
 def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
