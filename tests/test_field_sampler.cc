@@ -181,9 +181,9 @@ void testBarycoords() {
             // Flip the normal so that it points to the convex side of the edge
             // (so that the closest point projection goes back to the edge)
             //              <--e--x
-            //               \ 0 / \
-            //                \ /`.1\
-            //                 +   `.\
+            //               \ 0 / \ 
+            //                \ /`.1\ 
+            //                 +   `.\ 
             //                       +
             if (n0.cross(n1).dot(he.tip().node()->p - he.tail().node()->p) < 0) n_avg *= -1;
 

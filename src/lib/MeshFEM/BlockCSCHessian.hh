@@ -753,12 +753,12 @@ struct MESHFEM_EXPORT BlockCSCHessian final : public BlockToScalarPolicyDefault<
             // Work around problem where `scalarOffsetForColumn` is broken when
             // diagonal blocks are missing... (not that we claim to fully
             // support this case)
-            static constexpr size_t N = VarStructure::MaxBlockDim;
+            static constexpr size_t N_ = VarStructure::MaxBlockDim; // Work around GCC's mistaken shadowing concerns...
 
             size_t numBlocks = Ai.size();
             size_t numDiagBlocks = numDiagonalBlocks();
             if (numDiagBlocks < size_t(n)) std::cout << "WARNING: missing diagonal blocks!" << std::endl;
-            return numBlocks * N * N - numDiagBlocks * (N * (N - 1)) / 2;
+            return numBlocks * N_ * N_ - numDiagBlocks * (N_ * (N_ - 1)) / 2;
         }
         return this->scalarOffsetForColumn(n);
     }
