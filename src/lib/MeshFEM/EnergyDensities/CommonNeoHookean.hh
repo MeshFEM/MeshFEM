@@ -133,13 +133,11 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
                 Matrix uj_o_vi = U.col(j) * V.col(i).transpose();
 
                 if (lambda_T < 0) {
-                    Matrix T = ui_o_vj - uj_o_vi; // "Twist" eigenmatrix (unnormalized)
                     MMap(eigenmatricesToProject.col(num_components_to_project).data()) = ui_o_vj - uj_o_vi; // "Twist" eigenmatrix (unnormalized)
                     projectionShifts[num_components_to_project++] = -lambda_T * 0.5;
                 }
 
                 if (lambda_L < 0) {
-                    Matrix L = ui_o_vj + uj_o_vi; // "Flip"  eigenmatrix (unnormalized)
                     MMap(eigenmatricesToProject.col(num_components_to_project).data()) = ui_o_vj + uj_o_vi; // "Flip"  eigenmatrix (unnormalized)
                     projectionShifts[num_components_to_project++] = -lambda_L * 0.5;
                 }

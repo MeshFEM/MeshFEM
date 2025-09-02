@@ -28,13 +28,12 @@ void run_tests() {
     size_t numTests = 1e7;
     for (size_t i = 0; i < numTests; ++i) {
         // Generate random material properties.
-        Real E = 1.0, nu;
-        Real alpha = double(rand()) / RAND_MAX;
-        nu = (1 - alpha) * -0.99 + alpha * ((N == 3) ? 0.499 : 1);
-
         auto lambdaFromENu = [](double E, double nu, bool is3D = true) { return is3D ? (E * nu / ((1 + nu) * (1 - 2 * nu))) : ((nu * E) / (1.0 - nu * nu)); };
         auto     muFromENu = [](double E, double nu)                   { return E / (2 * (1 + nu)); };
 
+        Real E = 1.0, nu;
+        Real alpha = double(rand()) / RAND_MAX;
+        nu = (1 - alpha) * -0.99 + alpha * ((N == 3) ? 0.499 : 1);
         Real lambda = lambdaFromENu(E, nu, N == 3);
         Real mu     = muFromENu(E, nu);
 

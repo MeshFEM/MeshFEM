@@ -52,6 +52,7 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
             assembler.template assembleHessian<false>(H, m, [&](size_t ei) -> PerElementHessian { return PerElementHessian::Zero(); });
     }
 
+#if 1
     // Benchmark setFromTriplets method of block sparsity pattern construction.
     {
         for (size_t run = 0; run < num_runs; ++run) {
@@ -78,6 +79,7 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
                 std::cout << "Nonzeros in eigen_csc: " << eigen_csc.nonZeros() << std::endl;
         }
     }
+#endif
 
 #if 0 // This is hopelessly slow despite parallelism since it uses an `n log(n)` algorithm.
     // Benchmark TripletMatrix to CSCMatrix conversion method.

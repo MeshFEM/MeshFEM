@@ -211,6 +211,7 @@ void sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda
         A *= 1.0 / max_mag; // scale to mitigate underflow/overflow
     }
     else {
+        UNUSED(max_mag);
         // Short-circuit in the diagonal case.
         if ((A(1, 0) == 0) && (A(2, 0) == 0) && (A(2, 1) == 0)) { lambda = A.diagonal(); Q.setIdentity(); return; }
     }
