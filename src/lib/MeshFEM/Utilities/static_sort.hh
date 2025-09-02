@@ -322,6 +322,38 @@ inline void dispatchedStaticSort(T *data, size_t n) {
     dispatchedStaticSort<MinSize, MaxSize>(data, n, [](const T &a, const T &b) { return a < b; });
 }
 
+// The same overload interface as our `argsort`, but for sorting arrays directly.
+#include <array>
+template<typename T, size_t Size>
+static void static_sort_with_fallback(std::array<T, Size> &blockVars) { // For static element sizes
+    StaticTimSort<Size> timBoseNelsonSort;
+    timBoseNelsonSort(blockVars);
+}
+
+#include <Eigen/Dense>
+template<typename Derived>
+static void static_sort_with_fallback(Eigen::MatrixBase<Derived> &blockVars) {
+    // Only works with contiguous storage...
+    static_assert(Derived::IsVectorAtCompileTime && Derived::InnerStrideAtCompileTime == 1, "static_sort_with_fallback only works with contiguous vectors");
+    if constexpr (Derived::RowsAtCompileTime == Eigen::Dynamic || Derived::ColsAtCompileTime == Eigen::Dynamic) {
+        std::sort(blockVars.derived().data(), blockVars.derived().data() + blockVars.size());
+    } else {
+        StaticTimSort<Derived::SizeAtCompileTime> timBoseNelsonSort;
+        timBoseNelsonSort(blockVars.derived().data());
+    }
+}
+
+#include "../VarStructure.hh"
+template<size_t MinSize, size_t MaxSize>
+static void static_sort_with_fallback(ElementBlockVarsWithSizeRange<MinSize, MaxSize> &blockVars) { // For "partially dynamic" element sizes
+    dispatchedStaticSort<MinSize, MaxSize>(blockVars.data(), blockVars.size());
+}
+
+template<typename T>
+static void static_sort_with_fallback(std::vector<T> &blockVars) { // For fully dynamic element sizes
+    std::sort(blockVars.begin(), blockVars.end());
+}
+
 #include <algorithm>
 // JP: A sorting method tuned for sorting arrays of size `N` (via a static sort)
 // but that still can sort other-sized arrays via a fallback to `std::sort`.

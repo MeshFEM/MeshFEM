@@ -57,6 +57,9 @@ endif()
 add_executable(benchmark_sorts benchmark_sorts.cc)
 target_link_libraries(benchmark_sorts MeshFEM)
 
+add_executable(benchmark_assembly benchmark_assembly.cc)
+target_link_libraries(benchmark_assembly MeshFEM)
+
 if (MESHFEM_WITH_SCOTCH)
     add_executable(benchmark_scotch benchmark_scotch.cc)
     target_link_libraries(benchmark_scotch MeshFEM)

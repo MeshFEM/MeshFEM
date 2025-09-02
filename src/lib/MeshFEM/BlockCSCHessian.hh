@@ -309,14 +309,22 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
         m_scalarLoc = m_colStart;
     }
 
-    Index advanceToBlock(Index bi) {
-        // Linear scan seems faster than binary search...
+    // Advance to block (bi, bj) and find the offset in data array `Ax` of its upper-left corner.
+    Index advanceToBlock(const Index bi) {
+        // static constexpr Index switch_threshold = 3; // linear search should be faster for short spans...
+        // if (m_bloc + switch_threshold >= m_end || bi < m_H.Ai[m_bloc + switch_threshold]) {
+        //     while (m_H.Ai[m_bloc] < bi) { ++m_bloc; m_scalarLoc += blockStride(); }
+        //     return m_scalarLoc;
+        // }
+
         // Index old_bloc = m_bloc;
         // m_bloc = binary_search(bi, m_H.Ai.data(), old_bloc, m_end);
         // return (m_scalarLoc += blockStride() * (m_bloc - old_bloc));
-#if 0
+#if 1
         Index old_bloc = m_bloc;
-        while (m_H.Ai[m_bloc] < bi) ++m_bloc;
+
+        const Index *ptr = m_H.Ai.data() + m_bloc;
+        while (*ptr++ < bi) ++m_bloc;
         return (m_scalarLoc += blockStride() * (m_bloc - old_bloc));
 #else
         while (m_H.Ai[m_bloc] < bi) { ++m_bloc; m_scalarLoc += blockStride(); } // Does more cheap integer additions vs a multiplication at the end...
@@ -325,7 +333,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
     }
 
     // Find the scalar offset of the block entry (bi, bj) without advancing the scanner.
-    Index findBlock(Index bi) const { return m_colStart + VarStructure::MaxBlockDim * (m_H.findEntry(bi, m_bj) - m_H.Ap[m_bj]); }
+    Index findBlock(Index bi) const { return m_colStart + m_H.scalarOffsetWithinColumn(bi, m_bj); }
 
     // Support for iterating through every block in the column.
     ColumnScanner &operator++() { ++m_bloc; m_scalarLoc += blockStride(); return *this; }
@@ -343,15 +351,15 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
 
     static constexpr bool SpecialDBkStride = !StoreFullDiagonalBlocks && ContiguousBlocks;
     Index colStride(size_t c [[maybe_unused]]) const { if constexpr (ContiguousBlocks) return rowBlockSize(); else return m_colStride + c; } // Stride from scalar column `c` within this block to the next
-    Index blockStride()                        const { if constexpr (ContiguousBlocks) return    blockSize(); else return rowBlockSize();  } // Stride from upper-left corner of this block to the next.
+    static constexpr Index blockStride()             { if constexpr (ContiguousBlocks) return    blockSize(); else return rowBlockSize();  } // Stride from upper-left corner of this block to the next.
     Index diagBlockColStride(size_t c)         const { if constexpr (SpecialDBkStride) return          c + 1; else return colStride(c);    } // Stride within diagonal blocks is special in the contiguous + non-full-diag-block case.
 
-    // Intended for non-diagonal blocks
-    // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
+    // Add `block` to the global Hessian block whose upper-left corner is at
+    // offset `loc` in `Ax`.
+    // Intended for non-diagonal blocks but works for diagonal blocks as well
+    // when StoreFullDiagonalBlocks is true.
     template<class Block>
-    void advanceToAndAddBlock(double *Ax, size_t bi, const Block &block) {
-        // Find offset in `Ax` of the block's upper-left corner.
-        SuiteSparse_long loc = advanceToBlock(bi);
+    void addBlockAtLoc(double *Ax, size_t loc, const Block &block) {
         if constexpr (ContiguousBlocks)
             Eigen::Map<Eigen::Matrix<double, VarStructure::MaxBlockDim, VarStructure::MaxBlockDim>>(Ax + loc) += block;
         else {
@@ -360,6 +368,20 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
                 loc += colStride(c);
             }
         }
+    }
+
+    // Accumulate `block` to block (bi, bj) of global Hessian data `Ax`.
+    // Uses a binary search to find the block location.
+    template<class Block>
+    void addBlock(double *Ax, size_t bi, const Block &block) {
+        addBlockAtLoc(Ax, findBlock(bi), block);
+    }
+
+    // Intended for non-diagonal blocks
+    // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
+    template<class Block>
+    void advanceToAndAddBlock(double *Ax, size_t bi, const Block &block) {
+        addBlockAtLoc(Ax, advanceToBlock(bi), block);
     }
 
 private:
@@ -454,16 +476,12 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
         else return colStride(c); // In the non-contiguous case, diagonal block strides are no different from off-diagonal ones.
     }
 
-    // Intended for non-diagonal blocks
-    // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
+    // Add `block` to the global Hessian block whose upper-left corner is at
+    // offset `loc` in `Ax`.
+    // Intended for non-diagonal blocks but works for diagonal blocks as well
+    // when StoreFullDiagonalBlocks is true.
     template<class Block>
-    void advanceToAndAddBlock(double *Ax, size_t bi, const Block &block) {
-        // Find offset in `Ax` of the block's upper-left corner.
-#if 1
-        SuiteSparse_long loc = advanceToBlock(bi);
-#else
-        SuiteSparse_long loc = colScanner.findBlock(bi);
-#endif
+    void addBlockAtLoc(double *Ax, size_t loc, const Block &block) {
         if constexpr (ContiguousBlocks)
             Eigen::Map<Eigen::MatrixXd>(Ax + loc, block.rows(), block.cols()) += block;
         else {
@@ -472,6 +490,22 @@ struct ColumnScanner<BCSCH, std::enable_if_t<!BlockCSCHTraits<BCSCH>::VarStructu
                 loc += colStride(c);
             }
         }
+    }
+
+    // Accumulate `block` to block (bi, bj) of global Hessian data `Ax`.
+    // Uses a binary search to find the block location.
+    template<class Block>
+    void addBlock(double *Ax, size_t bi, const Block &block) {
+        addBlockAtLoc(Ax, findBlock(bi), block);
+    }
+
+    // Intended for non-diagonal blocks
+    // (but works for diagonal blocks as well when StoreFullDiagonalBlocks is true).
+    template<class Block>
+    void advanceToAndAddBlock(double *Ax, size_t bi, const Block &block) {
+        // Find offset in `Ax` of the block's upper-left corner.
+        SuiteSparse_long loc = advanceToBlock(bi);
+        addBlockAtLoc(Ax, loc, block);
     }
 
 private:
