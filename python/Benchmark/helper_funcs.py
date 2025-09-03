@@ -254,7 +254,7 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
     directional_derivative_history = []
 
     def customCallback(prob, i):
-        it_time = time.time()
+        it_time = time.perf_counter()
         obj_history.append(prob.energy())
         time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
@@ -320,6 +320,9 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
 
     # Work around energy nullspace by adding a small shift
     prob.hessianShift = hessian_shift
+    print("-------------------------------------------------------------------------")
+    print(f'[SymDiriParam] MeshFEM Problem: Set Hessian Shift to {hessian_shift}.')
+    print("-------------------------------------------------------------------------")
     opt = prob.optimizer()
     opt.options.niter = max_iter
     if grad_tol is not None: opt.options.gradTol = grad_tol  # default is 2e-8
@@ -337,7 +340,7 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
     
     # Run Optimization
     benchmark.reset()
-    start_time = time.time()
+    start_time = time.perf_counter()
     cr = opt.optimize()
     # benchmark.report()
 
