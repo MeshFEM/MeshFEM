@@ -221,6 +221,11 @@ void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const
         m_blockSize = mat.maxBlockSize();
         m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
     }
+    else if (mat.isScalar()) {
+        m_blockSize = 1;
+        m_dataOffsetForScalarHessianLoc.resize(0);
+        m_factorizeSymbolic(m_scalarHessian, pinnedVars);
+    }
     else {
         m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
         m_dataOffsetForScalarHessianLoc = mat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
@@ -370,6 +375,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
                                                             Ai_downcast.data(), Ap_downcast.data());
                 iperm_downcast.resize(A_reduced->m);
+                catamari::Buffer<int> CParent(A_reduced->m), CMember(A_reduced->m);
                 cholmod_nested_dissection(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0,
                                             iperm_downcast.data(), (int *) CParent.Data(), (int *) CMember.Data(), m_c_int.get());
                 Eigen::Map<VecX_T<catamari::Int>>(ordering.inverse_permutation.Data(), A_reduced->m) = iperm_downcast.template cast<catamari::Int>();
@@ -379,8 +385,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
                                             (SuiteSparse_long *) ordering.inverse_permutation.Data(),
                                             CParent.Data(), CMember.Data(), m_c.get());
-                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
 #endif
+                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
             }
             else if (actualOrderingMethod == OrderingMethod::Metis) {
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_metis");

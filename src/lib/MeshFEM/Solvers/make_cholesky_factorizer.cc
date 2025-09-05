@@ -6,6 +6,7 @@
 #endif
 #include "CatamariFactorizer.hh"
 #include "PardisoFactorizer.hh"
+#include "AccelerateFactorizer.hh"
 
 std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvider provider) {
     switch (provider) {
@@ -13,6 +14,8 @@ std::unique_ptr<CholeskyFactorizerBase> make_cholesky_factorizer(CholeskyProvide
             return std::make_unique<CholmodFactorizer>();
         case CholeskyProvider::PARDISO:
             return std::make_unique<PardisoFactorizer>();
+        case CholeskyProvider::Accelerate:
+            return std::make_unique<AccelerateFactorizer>();
         case CholeskyProvider::Catamari:
         case CholeskyProvider::CatamariNesdis:
         case CholeskyProvider::CatamariMetis:
