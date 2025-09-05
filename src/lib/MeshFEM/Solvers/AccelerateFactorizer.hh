@@ -70,8 +70,8 @@ struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase
 
     void clearFactors() override {
 #ifdef __APPLE__
-        if (hasFactorization(FactorizationType::Numeric)) SparseCleanup(m_factor);
-        if (hasFactorization(FactorizationType::Symbolic)) SparseCleanup(m_symfactor);
+        m_numfactor.reset();
+        m_symfactor.reset();
 #endif
     }
 
@@ -81,8 +81,6 @@ struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase
 
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
-
-    ~AccelerateFactorizer();
 
 private:
     // The row/col-removed matrix that is actually factorized.
@@ -102,8 +100,50 @@ private:
 #ifdef __APPLE__
     // Accelerate sparse objects
     SparseMatrix_Double   m_sparseA; // structure + Ax
-    SparseOpaqueSymbolicFactorization m_symfactor; // opaque Cholesky factorization
-    SparseOpaqueFactorization_Double m_factor; // opaque Cholesky factorization
+
+    template<class FType>
+    struct FactorizationWrapper {
+        template<typename... Args>
+        FactorizationWrapper(Args&&... args) : factor(SparseFactor(std::forward<Args>(args)...)) {
+            auto status = factor.status;
+            if (status != SparseStatusOK) SparseCleanup(factor);
+            statusCheck(factor.status);
+        }
+        FType factor;
+
+        static void statusCheck(SparseStatus_t status) {
+            if (status != SparseStatusOK) {
+                std::string description;
+                switch (status) {
+                    case SparseStatusOK:            description = "SparseStatusOK"; break;
+                    case SparseFactorizationFailed: description = "SparseFactorizationFailed"; break;
+                    case SparseMatrixIsSingular:    description = "SparseMatrixIsSingular"; break;
+                    case SparseInternalError:       description = "SparseInternalError"; break;
+                    case SparseParameterError:      description = "SparseParameterError"; break;
+                    case SparseStatusReleased:      description = "SparseStatusReleased"; break;
+                    default:                        description = "Unknown error code " + std::to_string(status); break;
+                }
+                // std::cout << "factor status: " << description << std::endl;
+
+                throw std::runtime_error("Accelerate SparseFactor failed with status " + description);
+            }
+        }
+
+        void statusCheck() const { statusCheck(factor.status); }
+
+        ~FactorizationWrapper() {
+            // Note: this is skipped if the factor was not successfully created.
+            // Is this really what we want?
+            SparseCleanup(factor);
+        }
+    };
+
+    using SFWrap = FactorizationWrapper<SparseOpaqueSymbolicFactorization>;
+    using NFWrap = FactorizationWrapper<SparseOpaqueFactorization_Double>;
+
+    // "Semi-opaque" symbolic and numeric factorization objects
+    std::unique_ptr<SFWrap> m_symfactor;
+    std::unique_ptr<NFWrap> m_numfactor;
 
     // Control options
     SparseSymbolicFactorOptions m_opts;

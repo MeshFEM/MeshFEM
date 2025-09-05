@@ -54,24 +54,6 @@ void AccelerateFactorizer::m_setUpperTriangleCSC(const SuiteSparseMatrix &A_redu
 #endif
 }
 
-void factorStatusCheck(SparseStatus_t status) {
-    if (status != SparseStatusOK) {
-        std::string description;
-        switch (status) {
-            case SparseStatusOK:            description = "SparseStatusOK"; break;
-            case SparseFactorizationFailed: description = "SparseFactorizationFailed"; break;
-            case SparseMatrixIsSingular:    description = "SparseMatrixIsSingular"; break;
-            case SparseInternalError:       description = "SparseInternalError"; break;
-            case SparseParameterError:      description = "SparseParameterError"; break;
-            case SparseStatusReleased:      description = "SparseStatusReleased"; break;
-            default:                        description = "Unknown error code " + std::to_string(status); break;
-        }
-        // std::cout << "factor status: " << description << std::endl;
-
-        throw std::runtime_error("Accelerate SparseFactor failed with status " + description);
-    }
-}
-
 void AccelerateFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
     g_matrixRecorder.recordSymbolic(mat, pinnedVars);
 
@@ -170,33 +152,22 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
 #ifdef __APPLE__
     BENCHMARK_SCOPED_TIMER_SECTION sftimer("SparseFactor call");
 
-    if (hasFactorization(FactorizationType::Symbolic))
-        clearFactors(); // potentially both symbolic and numeric!
-
-    m_symfactor = SparseFactor(SparseFactorizationCholesky, m_sparseA.structure, m_opts);
-    // std::cout << "Symbolic factorization" << std::endl;
-    factorStatusCheck(m_symfactor.status);
-#endif
-
+    m_numfactor.reset();
+    m_symfactor.reset();
+    m_symfactor = std::make_unique<SFWrap>(SparseFactorizationCholesky, m_sparseA.structure, m_opts); // throws on failure!
     m_factorizationType = FactorizationType::Symbolic;
+#endif
 }
 
 void AccelerateFactorizer::m_numericFactorizationImpl(const Real *Ax) {
 #ifdef __APPLE__
     assertFactorization(FactorizationType::Symbolic);
 
-    if (hasFactorization(FactorizationType::Numeric)) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("Cleanup");
-        SparseCleanup(m_factor);
-    }
-
     BENCHMARK_SCOPED_TIMER_SECTION timer("Accelerate SparseFactor Numeric Call");
     m_sparseA.data = const_cast<Real *>(Ax);
     // Re-factor numerically using the existing symbolic factorization.
-    m_factor = SparseFactor(m_symfactor, m_sparseA);
-    auto status = m_factor.status;
-    // if (status != SparseStatusOK) SparseCleanup(m_factor);
-    factorStatusCheck(status);
+    m_numfactor.reset();
+    m_numfactor = std::make_unique<NFWrap>(m_symfactor->factor, m_sparseA); // throws on failure!
     m_factorizationType = FactorizationType::Numeric;
 #endif
 }
@@ -287,10 +258,6 @@ void AccelerateFactorizer::solveRawReduced(const Real *b,
     DenseVector_Double rhs{ m_reducedSizeScalar, const_cast<Real *>(b) }; // Accelerate doesn't have a const DenseVector...
     DenseVector_Double sol{ m_reducedSizeScalar, x };
 
-    SparseSolve(m_factor, rhs, sol);
+    SparseSolve(m_numfactor->factor, rhs, sol);
 #endif
-}
-
-AccelerateFactorizer::~AccelerateFactorizer() {
-    clearFactors();
 }
