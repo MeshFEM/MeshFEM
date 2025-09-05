@@ -54,6 +54,7 @@ void AccelerateFactorizer::m_setUpperTriangleCSC(const SuiteSparseMatrix &A_redu
 #endif
 }
 
+#ifdef __APPLE__
 void factorStatusCheck(SparseStatus_t status) {
     if (status != SparseStatusOK) {
         std::string description;
@@ -71,6 +72,7 @@ void factorStatusCheck(SparseStatus_t status) {
         throw std::runtime_error("Accelerate SparseFactor failed with status " + description);
     }
 }
+#endif
 
 void AccelerateFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
     g_matrixRecorder.recordSymbolic(mat, pinnedVars);
