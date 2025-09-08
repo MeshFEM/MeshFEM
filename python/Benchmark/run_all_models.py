@@ -7,7 +7,7 @@ import MeshFEMParamSolverEnum as SolverOptionEnum
 import time
 from datetime import datetime
 
-def writelog(result_path, model_files, hessian_option_list, thread_num_list, save_uv_option, repeat_number):
+def writelog(result_path, model_files, hessian_option_list, thread_num_list, save_uv_option, repeat_number, hessian_shift):
     # Log file name
     log_file_name = 'experiment_log.txt'
     log_file_path = os.path.join(result_path, log_file_name)
@@ -26,14 +26,16 @@ def writelog(result_path, model_files, hessian_option_list, thread_num_list, sav
         log_file.write(f"Parametrization Benchmarking Experiment: {timestamp}\n")
         # Write the model files
         log_file.write(f"Model Filename List: {model_files}\n")
+        log_file.write("\n")
         # Write the Hessian option list
         log_file.write(f"Hessian Option List: {hessian_option_list}\n")
+        log_file.write(f"Hessian Shift of MeshFEM: {hessian_shift}\n")
         # Write the thread number list
         log_file.write(f"Thread Number List: {thread_num_list}\n")
         log_file.write(f"Save UV Option: {save_uv_option}\n")
         log_file.write(f"Repeat Number: {repeat_number}\n")
 
-def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_projection_labels):
+def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thread_num_list, hessian_projection_labels, hessian_shift):
     # Check if the result path exists
     if not os.path.exists(result_path):
         print(f"Error: The specified result path '{result_path}' does not exist.")
@@ -80,7 +82,8 @@ def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thre
                     solver_option,
                     save_uv_option,
                     str(thread_num),
-                    str(repeat_num) 
+                    str(repeat_num),
+                    str(hessian_shift) 
                 ]
                 try:
                     subprocess.run(cmd, check=True)
@@ -116,7 +119,7 @@ def run_all_models(result_path, modelbase_path, save_uv_option, repeat_num, thre
     print(f"\nAll experiments completed successfully! Total Time: {elapsed_total_time : .4f} seconds.")
 
     # Write Log
-    writelog(result_path, model_files, hessian_projection_labels, thread_num_list, save_uv_option, repeat_num)
+    writelog(result_path, model_files, hessian_projection_labels, thread_num_list, save_uv_option, repeat_num, hessian_shift)
 
 
 def validate_save_uv_option(value):
@@ -228,6 +231,12 @@ def main():
         default=1,
         help="Number of repetitions (default: 1). Must be a positive integer.",
     )
+    parser.add_argument(
+        "-MeshFEM_hessian_shift",
+        type=float,
+        default=1e-12,
+        help="Hessian shift amount set in MeshFEM's newton problem.",
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -248,6 +257,7 @@ def main():
     print(f"Using Save UV Option: {args.save_uv_option}")
     print(f"Using Hessian Options: {hessian_option_list}")
     print(f"Using Thread Numbers: {thread_num_list}")
+    print(f"Using hessian shift in MeshFEM: {args.MeshFEM_hessian_shift}")
 
     # Call your main functions
     run_all_models(
@@ -257,11 +267,12 @@ def main():
         args.repeat,
         thread_num_list,
         hessian_option_list,
+        args.MeshFEM_hessian_shift
     )
 
     
 if __name__ == "__main__":
-    print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_options> <solver_varind_list> <threads> [<repeat>]")
+    print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_options> <solver_varind_list> <threads> [<repeat>] [<MeshFEM_hessian_shift>]")
     # print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
     print("Supported Hessian Options: <MeshFEM+int(0~2^n)> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
     print("--------------------------------------------------------------------------------------------------------------------")

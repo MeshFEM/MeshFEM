@@ -37,7 +37,7 @@ def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats 
     
     print(f"[File] Successfully Write {arr_fn}, {dict_fn}, and {hessian_stats_fn} in {save_dir}!")
 
-def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num):
+def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num, hessian_shift):
      # Print the parameters for confirmation
     print("-------------------------------------------------------------------------------------------------------------------")
     print(f"Running Symmetric Dirichelt Parametrization with the following parameters:")
@@ -89,7 +89,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         else:
             # get solver options str f"MeshFEM{n}"
             name_tuple = SolverOptionEnum.optionNames(hessian_proj_option)
-            obj_arr, time_arr, grad_norm_arr, benchmark_dict, hessian_stats = helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], name_tuple[4])
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict, hessian_stats = helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], name_tuple[4], hessian_shift=hessian_shift)
             
             symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
             numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
@@ -133,7 +133,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
 
     print(f"[File] Successfully Write {txt_fn} in {outer_folder_dir}!")
 
-def recordUV(base_path, model_name, model_path, hessian_proj_option):
+def recordUV(base_path, model_name, model_path, hessian_proj_option, hessian_shift):
     # Print the parameters for confirmation
     print("-------------------------------------------------------------------------------------------------------------------")
     print(f"Running Symmetric Dirichelt Parametrization Saving UV per-iteration with the following parameters:")
@@ -153,7 +153,7 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option):
     elif hessian_proj_option == 'CompMajor':  helper_funcs.runCompMajor(model_name, model_path, uvsave_path=folder_dir)
     else:                                
         name_tuple = SolverOptionEnum.optionNames(hessian_proj_option)
-        helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], name_tuple[4], uvsave_path=folder_dir)
+        helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], name_tuple[4], hessian_shift=hessian_shift, uvsave_path=folder_dir)
     print(f"[File] Model: {model_name}. Hessian option: {hessian_proj_option} Saved UVs of all iterations in {folder_dir}.")
 
 def main():
@@ -180,6 +180,7 @@ def main():
     # Set default value for thread_num iter_num if not provided
     thread_num = int(sys.argv[6]) if len(sys.argv) > 6 else 0  # thread_num is 0 means using default thread number
     repeat_num = int(sys.argv[7]) if len(sys.argv) > 7 else 1
+    hessian_shift = float(sys.argv[8]) if len(sys.argv) > 8 else 1e-12
 
     # Check if base_path exists
     if not os.path.exists(base_path):
@@ -196,14 +197,14 @@ def main():
         parallelism.set_max_num_tbb_threads(int(thread_num))
     
     if save_uv_option.lower() == 'no':
-        recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num)
+        recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num, hessian_shift)
     
     if save_uv_option.lower() == 'yes':
-        recordUV(base_path, model_name, model_path, hessian_proj_option)
+        recordUV(base_path, model_name, model_path, hessian_proj_option, hessian_shift)
     
     if save_uv_option.lower() == 'both':
-        recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num)
-        recordUV(base_path, model_name, model_path, hessian_proj_option)
+        recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num, hessian_shift)
+        recordUV(base_path, model_name, model_path, hessian_proj_option, hessian_shift)
 
 if __name__ == "__main__":
     main()
