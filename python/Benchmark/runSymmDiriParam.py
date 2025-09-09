@@ -15,7 +15,7 @@ import helper_funcs
 import MeshFEMParamSolverEnum as SolverOptionEnum
 import warnings
 
-def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats : helper_funcs.HessianStats):
+def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats=None):
     if (obj_arr.shape[0] != time_arr.shape[0]):
         raise RuntimeWarning("[File] Array size mismatch of objective array and time array")
     if (obj_arr.shape[0] != grad_norm_arr.shape[0]):
@@ -26,16 +26,21 @@ def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats 
     hessian_stats_fn = 'hessian_stats.npz'
 
     np.savez_compressed(os.path.join(save_dir, arr_fn), obj_arr = obj_arr, time_arr = time_arr, grad_norm_arr=grad_norm_arr)
-    np.savez_compressed(os.path.join(save_dir, hessian_stats_fn),
-                        projected = stats.projected,
-                        shifted = stats.shifted,
-                        indefinite = stats.indefinite)
+
+    if stats is not None:
+        np.savez_compressed(os.path.join(save_dir, hessian_stats_fn),
+                            projected = stats.projected,
+                            shifted = stats.shifted,
+                            indefinite = stats.indefinite)
     
     # save benchmark dictionary
     with open(os.path.join(save_dir, dict_fn), "wb") as f:
         pickle.dump(benchmark_dict, f)
     
-    print(f"[File] Successfully Write {arr_fn}, {dict_fn}, and {hessian_stats_fn} in {save_dir}!")
+    if stats is not None:
+        print(f"[MeshFEM Stats] Successfully Write {arr_fn}, {dict_fn}, and {hessian_stats_fn} in {save_dir}!")
+    else:
+        print(f"[Others Stats] Successfully Write {arr_fn}, {dict_fn} in {save_dir}!")
 
 def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num, hessian_shift):
      # Print the parameters for confirmation
@@ -67,6 +72,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
 
         m = helper_funcs.read_mesh(model_path) # read mesh from model_path
+        hessian_stats = None # Only returned in MeshFEM Variants
         if hessian_proj_option == 'TinyAD':
             obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSymmds_TinyAD(m)
             line_search_time = benchmark.totalTime('Line Search$', d=benchmark_dict)
@@ -109,7 +115,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         hessian_eval_time_list.append(hessian_eval_time)
 
         print(f"[Opt] Symmetric Dirichlet Parametrization of {model_name} Ended in {newton_steps} Newton Steps. Total Elapsed Time: {total_time: .4f} seconds.")
-        saveStats(folder_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, hessian_stats)
+        saveStats(folder_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats=hessian_stats)
 
         print(f"Ended parametrization experiment {i + 1}/{repeat_num}.")
     
