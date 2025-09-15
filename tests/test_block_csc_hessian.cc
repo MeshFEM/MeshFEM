@@ -41,8 +41,8 @@ auto assembleTestMatrices() {
     }
 
 
-    auto blockHsp        = assembler.template blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
-    auto blockHsp_subset = assembler.template blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp        = assembler.template blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp_subset = assembler.template blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
 
     return std::make_pair(std::move(blockHsp), std::move(blockHsp_subset));
 }
@@ -213,7 +213,7 @@ void runTestsForPolicy() {
 }
 
 TEST_CASE("block sparse hessian indexing", "[block_sparse_hessian]" ) {
-    set_max_num_tbb_threads(2);
+    set_max_num_tbb_threads(4);
     for (size_t i = 0; i < 10; ++i) {
         runTestsForPolicy<BlockToScalarPolicyTypeOffsetsPerColumn>();
         runTestsForPolicy<BlockToScalarPolicyLocLookup>();

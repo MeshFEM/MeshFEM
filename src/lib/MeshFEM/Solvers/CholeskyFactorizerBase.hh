@@ -14,7 +14,7 @@
 #include "MatrixRecorder.hh"
 
 enum class CholeskyProvider {
-    CHOLMOD, Catamari, CatamariNesdis, CatamariMetis, CatamariLegacy, CatamariAMD, CatamariAdaptive, PARDISO
+    CHOLMOD, Catamari, CatamariNesdis, CatamariMetis, CatamariLegacy, CatamariAMD, CatamariAdaptive, PARDISO, Accelerate
 };
 
 // Eigen provides a `swap` method rather than overloading `std::swap`

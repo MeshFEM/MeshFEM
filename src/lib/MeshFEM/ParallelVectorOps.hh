@@ -15,15 +15,15 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/partitioner.h>
 
-extern "C" {
-
-int ddot_(const int *N,
-          const double *DX,
-          const int *INCX,
-          const double *DY,
-          const int *INCY);
-
-}
+// extern "C" {
+//
+// int ddot_(const int *N,
+//           const double *DX,
+//           const int *INCX,
+//           const double *DY,
+//           const int *INCY);
+//
+// }
 
 template<class Derived>
 void setZeroParallel(const Eigen::MatrixBase<Derived> &result) {

@@ -45,7 +45,7 @@ using SuiteSparse_long = long;
 template<typename Real>
 struct Triplet
 {
-    typedef Real value_type;
+    using value_type = Real;
     size_t i, j;
     Real v;
 
@@ -231,7 +231,7 @@ struct TripletMatrix {
     size_t nnz() const { return nz.size(); }
     void addNZUnpruned(size_t i, size_t j, Real v) {
         assert((i < m) && (j < n));
-        nz.push_back(Triplet(i, j, v));
+        nz.emplace_back(i, j, v);
     }
     void addNZ(size_t i, size_t j, Real v) {
         if (spmat_helper::valueMagnitudeSq(v) <= this->pruneTol) return;
@@ -425,6 +425,7 @@ struct TripletMatrix {
     // WARNING: Assumes sumRepeated() has already been called.
     template<typename _Index, typename _Real>
     void getCompressedColumn(_Index *Ap, _Index *Ai, _Real *Ax) const {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("getCompressedColumn");
         const size_t num_nz = nnz();
         for (size_t i = 0; i < num_nz; ++i) {
             Ai[i] = nz[i].row();

@@ -21,7 +21,9 @@ add_executable(unit_tests
     test_edensities.cc
     test_field_sampler.cc
     test_block_csc_hessian.cc
-    )
+    test_fast_decompositions.cc
+    test_analytic_hessian_projections.cc
+)
 
 target_link_libraries(unit_tests PUBLIC
 	Catch2::Catch2
@@ -54,6 +56,9 @@ endif()
 
 add_executable(benchmark_sorts benchmark_sorts.cc)
 target_link_libraries(benchmark_sorts MeshFEM)
+
+add_executable(benchmark_assembly benchmark_assembly.cc)
+target_link_libraries(benchmark_assembly MeshFEM)
 
 if (MESHFEM_WITH_SCOTCH)
     add_executable(benchmark_scotch benchmark_scotch.cc)

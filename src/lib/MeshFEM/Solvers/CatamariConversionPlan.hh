@@ -138,7 +138,7 @@ ConversionPlan constructConversionPlan(const CMat &A_rowcolreduced_full, const L
                     }
 
                     // Record which source entry should be read for `locForEntry`
-                    SuiteSparse_long srcEntry = srcReducedEntryForFullMatrixEntry[ii];
+                    Int srcEntry = srcReducedEntryForFullMatrixEntry[ii];
                     if (entryForReducedEntry.size()) srcEntry = entryForReducedEntry[srcEntry];
                     if (dataOffsetForScalarHessianLoc.size()) srcEntry = dataOffsetForScalarHessianLoc[srcEntry];
                     cplan.entries()[columnBack++] = ConversionPlan::Entry{locForEntry, srcEntry};
@@ -421,12 +421,14 @@ ConversionPlan constructBlockConversionPlan(const CMat &A_rowcolreduced_full_blo
                                             // the first stores the entries corresponding to transposed blocks (lower tri),
                                             // and the second stores entries for blocks not requiring transposition (strict upper tri).
 
+    const bool parallel = get_max_num_tbb_threads() > 1;
+
     // Count the lower-triangular entries *in the permuted matrix*.
     // We work with the *full* (non-triangular) matrix so that we can efficiently loop over all nonzeros in a given
     // column of the *permuted* lower factor.
     Int *columnSizes = cplan.columnOffsets.data() + 1;
-    tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
-        for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
+    auto fill_column_sizes = [&](Int s_start, Int s_end) {
+        for (Int supernode = s_start; supernode < s_end; ++supernode) {
             const Int supernode_end = sno[supernode + 1];
             for (Int j_perm = sno[supernode]; j_perm < supernode_end; ++j_perm) {
                 Int j_orig = o.inverse_permutation[j_perm];
@@ -442,7 +444,13 @@ ConversionPlan constructBlockConversionPlan(const CMat &A_rowcolreduced_full_blo
                 columnSizes[2 * j_perm + 1] = colSizeUpperTriSrc;
             }
         }
-    });
+    };
+    if (parallel) {
+        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
+            fill_column_sizes(r.begin(), r.end());
+        });
+    }
+    else fill_column_sizes(0, num_supernodes);
 
     // Convert sizes to offsets and allocate conversion plan entries.
     cplan.columnOffsets[0] = 0;
@@ -466,8 +474,9 @@ ConversionPlan constructBlockConversionPlan(const CMat &A_rowcolreduced_full_blo
     // determine whether/where its permuted instance goes in the *lower triangle* of the factorization
     // as well as which original matrix entry that it originated from.
     // This is done one supernode of the factorization at a time.
-    tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
-        for (Int supernode = r.begin(); supernode < r.end(); ++supernode) {
+    // tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes), [&](const tbb::blocked_range<catamari::Int> &r) {
+    auto fill_entries = [&](Int s_start, Int s_end) {
+        for (Int supernode = s_start; supernode < s_end; ++supernode) {
             const Int supernode_start = sno[supernode    ];
             const Int supernode_end   = sno[supernode + 1];
             const catamari::BlasMatrixView<double>& db_scalar = df_scalar->blocks[supernode];
@@ -481,10 +490,8 @@ ConversionPlan constructBlockConversionPlan(const CMat &A_rowcolreduced_full_blo
                 // Note: catamari::CoordinateMatrix is row major, hence the implicit transpose happening here...
                 const Int col_entries_begin = A_rowcolreduced_full_block.RowEntryOffset(j_orig);
                 const Int col_entries_end   = A_rowcolreduced_full_block.RowEntryOffset(j_orig + 1);
-                const Int *guess = nullptr;
                 for (Int ii = col_entries_begin; ii < col_entries_end; ++ii) {
-                    const catamari::MatrixEntry<double> &e = A_rowcolreduced_full_block.Entry(ii);
-                    const Int i_orig = e.column;
+                    const Int i_orig = A_rowcolreduced_full_block.Entry(ii).column;
                     Int i_perm = o.permutation[i_orig];
                     if (i_perm < j_perm) continue; // Skip the strict upper triangle.
 
@@ -499,23 +506,14 @@ ConversionPlan constructBlockConversionPlan(const CMat &A_rowcolreduced_full_blo
                         locForEntry = std::distance(f_vals_scalar, (const double *) db_scalar.Pointer(block_size * i_rel, block_size * j_rel));
                     }
                     else {
-                        // Search [lf->structureBeg, lf->structureEnd) for value `i_perm`,
-                        // first checking at `*guess` (which will be correct for consecutive
-                        // strips of entries).
-                        const Int *iter;
-                        if ((guess >= index_beg) && (guess < index_end) && (*guess == i_perm)) iter = guess;
-                        else {
-                            iter = sb_lower_bound(index_beg, index_end, i_perm);
-                            if ((iter == index_end) || (*iter != i_perm)) throw std::runtime_error("Couldn't locate row index " + std::to_string(i_perm) + " in supernode " + std::to_string(supernode) + " containing rows in [" + std::to_string(*index_beg) + ", " +  std::to_string(*index_end) + ")");
-                        }
-                        guess = iter + 1;
-
+                        // Search [lf->structureBeg, lf->structureEnd) for value `i_perm`
+                        const Int *iter = sb_lower_bound(index_beg, index_end, i_perm);
                         i_rel = std::distance(index_beg, iter);
                         locForEntry = std::distance(f_vals_scalar, (const double *) lb_scalar.Pointer(block_size * i_rel, block_size * j_rel));
                     }
 
                     // Record which source entry should be read for `locForEntry`
-                    SuiteSparse_long srcEntry_block = srcReducedEntryForFullMatrixEntry_block[ii];
+                    Int srcEntry_block = srcReducedEntryForFullMatrixEntry_block[ii];
                     if (entryForReducedEntry_block.size()) srcEntry_block = entryForReducedEntry_block[srcEntry_block];
                     if  (i_orig >= j_orig) cplan.entries()[columnBacks[2 * j_perm    ]++] = ConversionPlan::Entry{locForEntry, srcEntry_block * block_size * block_size}; // source in lower triangle (transpose)
                     else                   cplan.entries()[columnBacks[2 * j_perm + 1]++] = ConversionPlan::Entry{locForEntry, srcEntry_block * block_size * block_size}; // source in strict upper triangle (no transpose)
@@ -525,7 +523,13 @@ ConversionPlan constructBlockConversionPlan(const CMat &A_rowcolreduced_full_blo
                 //         [](const std::pair<Int, Int> &a, const std::pair<Int, Int> &b) { return a.dst < b.dst; });
             }
         }
-    });
+    };
+    if (parallel) {
+        tbb::parallel_for(tbb::blocked_range<catamari::Int>(0, num_supernodes, 10), [&](const tbb::blocked_range<catamari::Int> &r) {
+            fill_entries(r.begin(), r.end());
+        });
+    }
+    else fill_entries(0, num_supernodes);
 
     return cplan;
 }
@@ -546,8 +550,8 @@ void validate(const catamari::ConversionPlan &cplan, const catamari::SparseLDL<d
     // look up the dst location in `ldl_scalar`.
     // Search for the corresponding entry in the conversion plan.
     for (auto it = A_scalar.begin(); it != A_scalar.end(); ++it) {
-        const Int i_orig = reducedRowForRow_scalar[it.get_i()];
-        const Int j_orig = reducedRowForRow_scalar[it.get_j()];
+        const SuiteSparse_long i_orig = reducedRowForRow_scalar[it.get_i()];
+        const SuiteSparse_long j_orig = reducedRowForRow_scalar[it.get_j()];
 
         if (i_orig == SuiteSparseMatrix::INDEX_NONE || j_orig == SuiteSparseMatrix::INDEX_NONE)
             continue;

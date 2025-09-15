@@ -198,6 +198,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
 #if MESHFEM_WITH_MKL_PARDISO || MESHFEM_WITH_PARDISO
         .value("PARDISO", CholeskyProvider::PARDISO)
 #endif
+#if __APPLE__
+        .value("Accelerate", CholeskyProvider::Accelerate)
+#endif
         ;
 
     using CFB = CholeskyFactorizerBase;

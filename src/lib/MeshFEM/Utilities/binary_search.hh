@@ -6,6 +6,7 @@
 // (drop-in replacement for std::lower_bound)
 template <class ForwardIt, class T, class Compare = std::less<T>>
 constexpr ForwardIt sb_lower_bound(ForwardIt first, ForwardIt last, const T& value, Compare comp = Compare{}) {
+#if 1
     auto length = last - first;
     while (length > 0) {
         auto half = length / 2;
@@ -16,6 +17,9 @@ constexpr ForwardIt sb_lower_bound(ForwardIt first, ForwardIt last, const T& val
         length = half;
     }
     return first;
+#else
+    return std::lower_bound(first, last, value, comp);
+#endif
 }
 
 #endif /* end of include guard: BINARY_SEARCH_HH */

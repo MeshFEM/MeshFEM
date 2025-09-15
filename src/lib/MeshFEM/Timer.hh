@@ -18,22 +18,13 @@
 #include <cassert>
 #include <list>
 
-#include <sys/timeb.h>
-#ifndef WIN32
-#include <sys/time.h>
-#endif
+#include <chrono>
 
-// Get time in seconds
+// Get time in seconds using the `steady_clock`, which will never adjust
+// backwards (e.g., despite NTP synchronization).
 inline double Time(void) {
-#ifdef WIN32
-    struct _timeb t;
-    _ftime(&t);
-    return double(t.time) + double(t.millitm) / 1000.0;
-#else // WIN32
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    return t.tv_sec + t.tv_usec/1.0e6;
-#endif // WIN32
+    using namespace std::chrono;
+    return duration<double>(steady_clock::now().time_since_epoch()).count();
 }
 
 class Timer
