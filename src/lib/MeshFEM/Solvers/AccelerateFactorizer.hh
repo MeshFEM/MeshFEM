@@ -2,6 +2,7 @@
 #define ACCELERATEFACTORIZER_HH
 
 #ifdef __APPLE__
+#include <CoreFoundation/CFAttributedString.h> // Apparently needed to build on non-Xcode compilers
 #include <Accelerate/Accelerate.h>
 #endif
 
