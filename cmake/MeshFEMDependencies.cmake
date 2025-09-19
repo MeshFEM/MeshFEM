@@ -173,6 +173,11 @@ endif()
 #     add_subdirectory(${MESHFEM_EXTERNAL}/catamari)
 # endif()
 
+if (MESHFEM_WITH_CATAMARI AND MESHFEM_USE_LEGACY_CATAMARI AND NOT TARGET catamari)
+    meshfem_download_catamari_legacy()
+    add_subdirectory(${MESHFEM_EXTERNAL}/catamari_legacy)
+endif()
+
 if (MESHFEM_WITH_IPC_TOOLKIT AND NOT TARGET ipc::toolkit)
     meshfem_download_ipc_toolkit()
     add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit)

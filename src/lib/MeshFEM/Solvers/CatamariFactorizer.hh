@@ -83,7 +83,11 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override;
 
     bool preferInPlaceSolve() const override { return true; }
+#ifdef MESHFEM_USE_LEGACY_CATAMARI
+    bool supportsPrePermutation() const override { return false; }
+#else
     bool supportsPrePermutation() const override { return true; }
+#endif
 
     void        stashFactorization()       override;
     bool   hasStashedFactorization() const override;

@@ -1,11 +1,9 @@
+#ifndef MESHFEM_USE_LEGACY_CATAMARI
+#error CatamariFactorizerLegacy.cc should be included only when MESHFEM_USE_LEGACY_CATAMARI is set!
+#endif
+
 #include "CatamariFactorizer.hh"
 #include "MeshFEM/GlobalBenchmark.hh"
-
-#if MESHFEM_WITH_CATAMARI
-
-#ifdef MESHFEM_USE_LEGACY_CATAMARI
-#error CatamariFactorizer.cc should not be included when MESHFEM_USE_LEGACY_CATAMARI is set!
-#endif
 
 #include "CholmodFactorizer.hh"
 #include "amd.h"
@@ -24,7 +22,6 @@
 #include <filesystem>
 #endif
 
-#include "CatamariConversionPlan.hh"
 #include "CatamariConverter.hh"
 
 CatamariFactorizer::CatamariFactorizer(bool legacy) {
@@ -35,7 +32,6 @@ CatamariFactorizer::CatamariFactorizer(bool legacy) {
     m_ldlControl->supernodal_control.algorithm = catamari::kRightLookingLDL; // catamari::kRightLookingLDL;
     m_ldlControl->supernodal_control.relaxation_control.relax_supernodes = true;
     m_ldlControl->supernodal_control.parallel_ratio_threshold = 0.02;
-    m_ldlControl->supernodal_control.legacy = m_legacy = legacy; // TODO: simplify Catamari by removing this mode now that we have the MESHFEM_USE_LEGACY_CATAMARI codepath.
     // m_ldlControl->supernodal_control.factor_tile_size = std::numeric_limits<catamari::Int>::max(); // Effectively disable node-level parallelism
 }
 
@@ -47,16 +43,10 @@ size_t CatamariFactorizer::n_reduced() const { assertFactorization(Factorization
 
 void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
     g_matrixRecorder.recordSymbolic(mat, pinnedVars);
-    // We only support uniform block sizes, and only up to
-    // `MAX_INSTANTIATED_BLOCK_SIZE`; all others get converted to an ordinary scalar matrix.
-    // TODO: convert to GCD block size instead? Do we have a use case for this?
-    // TODO: try block reordering of nonuniform block sizes (then expand to scalar)?
 
     const bool blockFactorizationSupported = m_useBlockAccel && mat.uniformBlockSize() && (mat.maxBlockSize() <= MAX_INSTANTIATED_BLOCK_SIZE);
-    if (blockFactorizationSupported) {
-        m_blockSize = mat.maxBlockSize();
-        m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
-    }
+    m_blockSize = 1;
+    if (mat.maxBlockSize() == 1) m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars); // Already scalar
     else {
         m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
         m_dataOffsetForScalarHessianLoc = mat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
@@ -78,84 +68,20 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
     std::vector<SuiteSparse_long> reducedRowForRow_block;
     std::vector<SuiteSparse_long> blockEntryForReducedBlockEntry; // the original block nz corresponding to each nz in the block row-col-removed matrix
 
-    if (m_blockSize > 1 && pinnedVars.size() > 0) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("BlockCSC Pin Handling");
-        // Check for partially pinned blocks, which currently require a scalar
-        // factorization fallback.
+    A_reduced = m_initRowColRemoval(mat, pinnedVars);
+    reducedRowForRow_block = m_reducedRowForRow;
 
-        // Convert the scalar variable indices in `pinnedVars` to their
-        // corresponding block variable indices.
-        size_t numBlockVars = mat.n;
-        std::vector<bool> scalarFixedVarMask(numBlockVars * m_blockSize, false);
-        std::vector<size_t> pinnedBlockVars, scalarFixedVars;
-        std::vector<size_t> numComponentsPinned(numBlockVars); // how many scalar variables within each block have been pinned?
-        for (size_t i : pinnedVars) {
-            if (scalarFixedVarMask[i]) continue;
-            scalarFixedVarMask[i] = true;
-            scalarFixedVars.push_back(i);
-            size_t bi = i / m_blockSize;
-            if (++numComponentsPinned[bi] == 1) pinnedBlockVars.push_back(bi);
-        }
-        // Detect entries of `pinnedVars` that do not respect the block
-        // structure (i.e., that pin only part of a block); these will need to
-        // be handled specially.
-        for (size_t bi : pinnedBlockVars) {
-            if (numComponentsPinned[bi] != m_blockSize) {
-                std::cout << "WARNING: Partially-pinned block variables not yet implemented; falling back to scalar factorization" << std::endl;
-                const BlockCSCHessianBase &bmat = static_cast<const BlockCSCHessianBase &>(mat);
-                m_scalarHessian = bmat.toScalar(/* sparsityOnly = */ true);
-                m_dataOffsetForScalarHessianLoc = bmat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
-                m_blockSize = 1;
-                return m_factorizeSymbolic(m_scalarHessian, pinnedVars);
-            }
-            // TODO: keep the partially pinned block in the sparsity pattern and
-            // apply the scalar pin constraint during numeric factorization?
-        }
-        A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
-        blockEntryForReducedBlockEntry.swap(m_entryForReducedEntry);
-        reducedRowForRow_block.swap(m_reducedRowForRow);
-
-        // `m_initRowColRemoval` has now stored the pinned **block** variable
-        // indices, whereas `m_fixedVars` should store **scalar** variable indices.
-        m_fixedVars.swap(scalarFixedVars);
-
-        if (!reducedRowForRow_block.empty()) {
-            // Upgrade `reducedRowForRow_block` to a scalar version as needed
-            // for the `solve` phase.
-            m_reducedRowForRow.resize(m_blockSize * mat.n);
-            for (size_t i = 0; i < reducedRowForRow_block.size(); ++i) {
-                SuiteSparse_long brr = reducedRowForRow_block[i];
-                if (brr == SuiteSparseMatrix::INDEX_NONE) {
-                    for (size_t c = 0; c < m_blockSize; ++c)
-                        m_reducedRowForRow[m_blockSize * i + c] = SuiteSparseMatrix::INDEX_NONE;
-                }
-                else {
-                    for (size_t c = 0; c < m_blockSize; ++c)
-                        m_reducedRowForRow[m_blockSize * i + c] = m_blockSize * brr + c;
-                }
-            }
-        }
-    }
-    else {
-        A_reduced = m_initRowColRemoval(mat, pinnedVars);
-        reducedRowForRow_block = m_reducedRowForRow;
-    }
+    m_permutedReducedRowForRow.clear(); // The upcoming symbolic factorization will change any existing permutation...
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Symbolic Factorize");
-    // Note: passing `block_size = 1` below prevents the converter from
-    // expanding entries in the (block) sparsity pattern into
-    // `block_size` x `block_size` blocks of scalars in the block case.
-    // (I.e., we leave the pattern in its compressed form.)
     if (m_catamariConverter) {
         BENCHMARK_SCOPED_TIMER_SECTION t2("CatamariConverter_reset");
         m_catamariConverter.reset();
     }
-    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, /* block_size = */ 1, m_legacy, m_entryForReducedEntry);
-
-    m_ldlControl->supernodal_control.relaxation_control.block_size = m_blockSize;
+    m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, /* block_size = */ 1, /* legacy = */ true, m_entryForReducedEntry);
 
     if (orderingMethod == OrderingMethod::Catamari)
-        m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl);
     else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis)
           || (orderingMethod == OrderingMethod::AMD) || (orderingMethod == OrderingMethod::Adaptive)) {
         if (!m_c) {
@@ -173,7 +99,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         }
 
         // Time the ordering-dependent parts of the symbolic factorization
-        auto sym_fact_start = std::chrono::high_resolution_clock::now();
+        auto sym_fact_start = std::chrono::steady_clock::now();
 
         catamari::SymmetricOrdering ordering;
         {
@@ -366,9 +292,9 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             }
             else throw std::runtime_error("Unknown orderingMethod");
         }
-        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
 
-        double sym_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sym_fact_start).count();
+        double sym_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - sym_fact_start).count();
         if (orderingMethod == OrderingMethod::Adaptive)
             adaptiveOrdering.recordSymbolic(sym_fact_duration);
     }
@@ -383,60 +309,13 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
         scotch_ordering(*A_reduced, perm, iperm, scotchSettings.stratFlag, scotchSettings.imbalanceRatio);
 
-        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
 #else
         throw std::runtime_error("Scotch support not compiled in");
 #endif
     }
     else throw std::runtime_error("Unknown orderingMethod");
 
-    std::unique_ptr<catamari::SparseLDL<double>> ldl_block;
-    if (m_blockSize > 1) {
-        // Currently we must expand the symbolic factorization to a scalar one.
-        // TODO: once a full "block factorization type" is supported,
-        // we can omit this conversion.
-        ldl_block = std::move(m_ldl);
-        m_ldl = ldl_block->ExpandSymbolicFactorizationToScalar(m_blockSize);
-    }
-
-    if (!m_legacy) {
-        // Build a conversion plan to support direct injection of values
-        // into the Cholesky factor. This must be done specially for non-unit
-        // block sizes.
-        BENCHMARK_SCOPED_TIMER_SECTION t2("ConversionPlan");
-        if (m_blockSize > 1) {
-            assert(ldl_block);
-            const BlockCSCHessianBase &bmat = static_cast<const BlockCSCHessianBase &>(mat);
-            if (bmat.hasContiguousBlocks())
-                m_catamariConverter->conversionPlan = catamari_conversion_plan::constructBlockConversionPlan(m_catamariConverter->get(), m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
-            else
-                m_catamariConverter->conversionPlan = catamari_conversion_plan::constructScalarConversionPlan(m_catamariConverter->get(), mat, reducedRowForRow_block, m_blockSize, *m_ldl, *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
-            // auto cp_compare = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *ldl_block, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, blockEntryForReducedBlockEntry);
-        }
-        else m_catamariConverter->conversionPlan = catamari_conversion_plan::constructConversionPlan(m_catamariConverter->get(), *m_ldl, m_catamariConverter->m_sourceReducedEntryForFullMatrixEntry, m_entryForReducedEntry, m_dataOffsetForScalarHessianLoc);
-
-#if 0
-        // Validation
-        {
-            BENCHMARK_SCOPED_TIMER_SECTION tv("Conversion plan validate");
-            SuiteSparseMatrix A_scalar = expandSparsityPattern<>(mat, m_blockSize);
-            std::vector<SuiteSparse_long> reducedRowForRow_scalar;
-            std::vector<SuiteSparse_long> entryForReducedEntry_scalar;
-
-            SuiteSparseMatrix A_scalar_reduced = A_scalar;
-            std::vector<bool> scalarFixedVarMask(A_scalar.n, false);
-            for (size_t i : pinnedVars) scalarFixedVarMask[i] = true;
-            A_scalar_reduced.rowColRemoval([&](SuiteSparse_long i) { return scalarFixedVarMask[i]; }, &reducedRowForRow_scalar, &entryForReducedEntry_scalar);
-            catamari_conversion_plan::validate(m_catamariConverter->conversionPlan, *m_ldl, A_scalar, reducedRowForRow_scalar, A_scalar_reduced.m);
-        }
-#endif
-
-        {
-            BENCHMARK_SCOPED_TIMER_SECTION t("Cleanup");
-            ldl_block.reset();
-            m_catamariConverter->freeCatamariMatrix();
-        }
-    }
     m_factorizationType = FactorizationType::Symbolic;
 }
 
@@ -454,53 +333,21 @@ void CatamariFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, R
 
 template<typename... Args>
 void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, Args&&... args) {
-    BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
     assertFactorization(FactorizationType::Symbolic);
 
-    auto num_fact_start = std::chrono::high_resolution_clock::now();
 
     catamari::SparseLDLResult<double> result;
-    // TODO: account for m_dataOffsetForScalarHessianLoc in legacy mode.
-    if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
-    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
+    if (m_dataOffsetForScalarHessianLoc.size())
+        throw std::runtime_error("FIXME: account for m_dataOffsetForScalarHessianLoc in legacy mode");
 
-    double num_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - num_fact_start).count();
+    auto num_fact_start = std::chrono::steady_clock::now();
 
-    if constexpr (false) {
-        static bool first = true;
-        if (first) {
-            using catamari::Int;
-            auto &lf = m_ldl->supernodal_factorization->lower_factor_;
-            const Int num_supernodes = m_ldl->supernodal_factorization->ordering_.supernode_sizes.Size();
-            std::cout << "Lower factor structure size (total degree): " << lf->StructureEnd(num_supernodes - 1) - lf->StructureBeg(0) << std::endl;
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
+    auto &cm = m_catamariConverter->convert(A.Ax.data(), std::forward<Args>(args)...);
 
-            if (!m_legacy) {
-                std::cout << "Factor data size: " << m_ldl->supernodal_factorization->factor_values_.Height() << std::endl;
-                std::cout << "Catamari converter size: " << m_ldl->supernodal_factorization->m_inputData.cplan->size() << std::endl;
-            }
-            first = false;
-        }
-    }
+    result = m_ldl->RefactorWithFixedSparsityPattern(cm);
 
-#if CATAMARI_FINEGRAINED_TIMERS
-    if (m_ldlControl->supernodal_control.algorithm == catamari::kRightLookingLDL) {
-        static std::string directory = "catamari_timers";
-        static size_t counter = 0;
-        if (counter == 0) {
-            // Get a unique directory name.
-            size_t id = 0;
-            while (std::filesystem::exists(directory)) directory = "catamari_timers_" + std::to_string(id++);
-            std::filesystem::create_directory(directory);
-
-            std::cout << "Writing Catamari timers to " << directory << std::endl;
-            std::cout << "To disable, set CATAMARI_FINEGRAINED_TIMERS to 0" << std::endl;
-        }
-        std::string dirname = directory + "/" + std::to_string(counter++);
-        std::filesystem::create_directory(dirname);
-        m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);
-        m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
-    }
-#endif
+    double num_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - num_fact_start).count();
 
     if (size_t(result.num_successful_pivots) != n_reduced()) {
         m_factorizationType = FactorizationType::Symbolic;
@@ -517,81 +364,21 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
 }
 
 size_t CatamariFactorizer::getFactorNNZ() const {
-    assertFactorization(FactorizationType::Symbolic);
-    return m_ldl->supernodal_factorization->GetFactorNNZ();
+    throw std::runtime_error("CatamariFactorizer::getFactorNNZ not available in legacy mode");
 }
 
 double CatamariFactorizer::getFlopEstimate() const {
     assertFactorization(FactorizationType::Symbolic);
-    return m_ldl->supernodal_factorization->EstimateTotalWork();
+    throw std::runtime_error("CatamariFactorizer::getFlopEstimate not available in legacy mode");
 }
 
-void CatamariFactorizer::writeSolveTimers() const {
-#if CATAMARI_FINEGRAINED_TIMERS
-    static std::string directory = "catamari_solve_timers";
-    static size_t counter = 0;
-    if (counter == 0) {
-        // Get a unique directory name.
-        size_t id = 0;
-        while (std::filesystem::exists(directory)) directory = "catamari_solve_timers_" + std::to_string(id++);
-        std::filesystem::create_directory(directory);
-
-        std::cout << "Writing Catamari solve timers to " << directory << std::endl;
-        std::cout << "To disable, set CATAMARI_FINEGRAINED_TIMERS to 0" << std::endl;
-    }
-    std::string dirname = directory + "/" + std::to_string(counter++);
-    std::filesystem::create_directory(dirname);
-    m_ldl->supernodal_factorization->WriteFinegrainedSolveTimerStats(dirname);
-    m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
-    m_ldl->supernodal_factorization->ResetFinegrainedSolveTimerStats();
-#endif
-}
+void CatamariFactorizer::writeSolveTimers() const { }
 
 // Raw pointer version (Use with care! Caller must allocate/own both pointers)
 void CatamariFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys, bool alreadyPermuted) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariFactorizer.solveRawReduced");
     const size_t s = m_reduced();
-    if (alreadyPermuted) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer2("copy " + std::to_string(s) + " entries");
-        // Eigen::Map<Eigen::VectorXd>(x, s) = Eigen::Map<const Eigen::VectorXd>(b, s);
-        copyParallel(m_reduced(), b, x);
-
-        solveRawReducedInPlace(x, sys, alreadyPermuted);
-    }
-    else {
-        // Avoid extra copy step by permuting into the scratch RHS
-        if (size_t(m_permuted_rhs_scratch.size()) < s)
-            m_permuted_rhs_scratch.resize(s);
-
-        catamari::BlasMatrixView<double> v_perm;
-        v_perm.height = s;
-        v_perm.width = 1;
-        v_perm.leading_dim = s;
-        v_perm.data = m_permuted_rhs_scratch.data();
-
-        catamari::BlasMatrixView<double> v = v_perm;
-        v.data = const_cast<Real *>(b);
-
-        auto f = m_ldl->supernodal_factorization.get();
-        if (f == nullptr) throw std::runtime_error("solveRawReduced: only supernodal factorizations are supported");
-        InversePermute(f->ordering_.inverse_permutation, v, &v_perm); // Note: InversePermute is faster than Permute due to contiguous writes avoiding false sharing.
-
-        {
-            BENCHMARK_SCOPED_TIMER_SECTION solveTimer("Catamari Solve");
-
-            auto solve_start = std::chrono::high_resolution_clock::now();
-            m_ldl->Solve(&v_perm, /* alreadyPermuted = */ true);
-            double solve_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - solve_start).count();
-
-            if (orderingMethod == OrderingMethod::Adaptive)
-                adaptiveOrdering.recordSolve(solve_duration);
-        }
-
-        catamari::BlasMatrixView<double> v_x = v_perm;
-        v_x.data = x;
-
-        InversePermute(f->ordering_.permutation, v_perm, &v_x);
-    }
+    throw std::runtime_error("CatamariFactorizer::solveRawReduced not supported in legacy mode");
 }
 
 void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool alreadyPermuted) const {
@@ -600,6 +387,8 @@ void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool 
         std::cout << "Alternative CholeskySys not yet wrapped for Catamari" << std::endl;
         throw std::runtime_error("Alternative CholeskySys not yet wrapped for Catamari");
     }
+
+    if (alreadyPermuted) throw std::runtime_error("CatamariFactorizer::solveRawReducedInPlace does not support alreadyPermuted=true in legacy mode");
 
     catamari::BlasMatrixView<double> v;
     const size_t s = m_reduced();
@@ -610,60 +399,24 @@ void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool 
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
 
-    auto solve_start = std::chrono::high_resolution_clock::now();
-    m_ldl->Solve(&v, alreadyPermuted);
-    double solve_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - solve_start).count();
+    auto solve_start = std::chrono::steady_clock::now();
+    m_ldl->Solve(&v);
+    double solve_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - solve_start).count();
 
     if (orderingMethod == OrderingMethod::Adaptive)
         adaptiveOrdering.recordSolve(solve_duration);
 }
 
 void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &B, Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &X) const {
-    BENCHMARK_SCOPED_TIMER_SECTION otimer("solveMultiRHS");
-    if (size_t(B.rows()) != m()) throw std::runtime_error("Incorrect RHS size");
-    const size_t nrhs = B.cols();
-    if (nrhs < 1) throw std::runtime_error("Must specify at least one rhs.");
+    throw std::runtime_error("CatamariFactorizer::solveMultiRHS not yet implemented in legacy mode");
+}
 
-    catamari::BlasMatrixView<double> v;
-    const size_t s = m_reduced();
-    v.height = s;
-    v.width = nrhs;
-    v.leading_dim = s;
-
-    if (hasFixedVars()) {
-        Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> X_scratch;
-        removeFixedEntries(B, X_scratch, /* permute = */ true);
-
-#if 1
-        v.data = X_scratch.data();
-
-        {
-            BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-            m_ldl->Solve(&v, /* alreadyPermuted = */ true);
-        }
-#else
-        v.width = 1;
-        for (size_t i = 0; i < nrhs; ++i) {
-            v.data = X_scratch.col(i).data();
-            {
-                BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-                m_ldl->Solve(&v, /* alreadyPermuted = */ true);
-            }
-        }
-#endif
-
-        extractFullSolution(X_scratch, X, /* permute = */ true);
-    }
-    else {
-        X = B;
-        v.data = X.data();
-        BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-        m_ldl->Solve(&v, /* alreadyPermuted = */ false);
-    }
+void CatamariFactorizer::m_populatePermutedReducedRowForRow() const {
+    throw std::runtime_error("CatamariFactorizer::m_populatePermutedReducedRowForRow should never be called in legacy mode");
 }
 
 // Stashing support
-void CatamariFactorizer::       stashFactorization()       { m_ldlStash = m_ldl->Clone(); }
+void CatamariFactorizer::       stashFactorization()       { throw std::runtime_error("CatamariFactorizer::stashFactorization not supported in legacy mode"); }
 bool CatamariFactorizer::  hasStashedFactorization() const { return bool(m_ldlStash); }
 void CatamariFactorizer:: swapStashedFactorization()       { if (!hasStashedFactorization()) { throw std::runtime_error("No stashed factorization"); } std::swap(m_ldl, m_ldlStash); }
 void CatamariFactorizer::clearStashedFactorization()       { m_ldlStash.reset(); }
@@ -672,5 +425,3 @@ CatamariFactorizer::~CatamariFactorizer() {
     if (m_c) cholmod_l_finish(m_c.get());
     if (m_c_int) cholmod_finish(m_c_int.get());
 }
-
-#endif
