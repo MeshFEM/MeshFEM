@@ -57,6 +57,11 @@ void CatamariFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const
         m_blockSize = mat.maxBlockSize();
         m_factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
     }
+    else if (mat.isScalar()) {
+        m_blockSize = 1;
+        m_dataOffsetForScalarHessianLoc.resize(0);
+        m_factorizeSymbolic(m_scalarHessian, pinnedVars);
+    }
     else {
         m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
         m_dataOffsetForScalarHessianLoc = mat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
@@ -154,6 +159,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
     m_ldlControl->supernodal_control.relaxation_control.block_size = m_blockSize;
 
+    using catamari::Int;
+
     if (orderingMethod == OrderingMethod::Catamari)
         m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl, /* symbolic_only = */ true);
     else if ((orderingMethod == OrderingMethod::CholmodNesdis) || (orderingMethod == OrderingMethod::Metis)
@@ -173,11 +180,10 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         }
 
         // Time the ordering-dependent parts of the symbolic factorization
-        auto sym_fact_start = std::chrono::high_resolution_clock::now();
+        auto sym_fact_start = std::chrono::steady_clock::now();
 
         catamari::SymmetricOrdering ordering;
         {
-            static_assert(sizeof(SuiteSparse_long) == sizeof(catamari::Int), "Mismatched integer type");
             ordering.inverse_permutation.Resize(A_reduced->m);
             auto cholmat = cholmod_sparse_view(*A_reduced);
             // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
@@ -190,6 +196,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             cholmat.x = const_cast<double *>((const double *) A_reduced->Ai.data());
 
             if (actualOrderingMethod == OrderingMethod::CholmodNesdis) {
+#if QUOTIENT_USE_64BIT
 #if 0 // Whether to downcast for ordering -- the difference in time seems negligible
                 if (!m_c_int) {
                     m_c_int = std::make_unique<cholmod_common>();
@@ -204,6 +211,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
                                                             Ai_downcast.data(), Ap_downcast.data());
                 iperm_downcast.resize(A_reduced->m);
+                catamari::Buffer<int> CParent(A_reduced->m), CMember(A_reduced->m);
                 cholmod_nested_dissection(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0,
                                             iperm_downcast.data(), (int *) CParent.Data(), (int *) CMember.Data(), m_c_int.get());
                 Eigen::Map<VecX_T<catamari::Int>>(ordering.inverse_permutation.Data(), A_reduced->m) = iperm_downcast.template cast<catamari::Int>();
@@ -213,13 +221,45 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
                                             (SuiteSparse_long *) ordering.inverse_permutation.Data(),
                                             CParent.Data(), CMember.Data(), m_c.get());
-                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
 #endif
+#else // !QUOTIENT_USE_64BIT
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_nested_dissection");
+                if (!m_c_int) {
+                    m_c_int = std::make_unique<cholmod_common>();
+                    cholmod_start(m_c_int.get());
+                }
+
+                // TODO: remove this when we make the BlockCSCHessian/assembly index type configurable match catamari::Int.
+                VecX_T<int> Ai_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+                VecX_T<int> Ap_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+                auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
+                                                            Ai_downcast.data(), Ap_downcast.data());
+                static_assert(std::is_same_v<catamari::Int, int>, "catamari::Int must be `int` here");
+                catamari::Buffer<Int> CParent(A_reduced->m), CMember(A_reduced->m);
+                cholmod_nested_dissection(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0,
+                                          ordering.inverse_permutation.Data(), CParent.Data(), CMember.Data(), m_c_int.get());
+
+#endif
+                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
             }
             else if (actualOrderingMethod == OrderingMethod::Metis) {
+#if QUOTIENT_USE_64BIT
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_metis");
                 cholmod_l_metis(&cholmat, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
                                 (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
+#else
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_metis");
+                if (!m_c_int) {
+                    m_c_int = std::make_unique<cholmod_common>();
+                    cholmod_start(m_c_int.get());
+                }
+                VecX_T<int> Ai_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+                VecX_T<int> Ap_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+                auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
+                                                            Ai_downcast.data(), Ap_downcast.data());
+                cholmod_metis(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
+                              ordering.inverse_permutation.Data(), m_c_int.get());
+#endif
                 quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
             }
             else if (actualOrderingMethod == OrderingMethod::AMD) {
@@ -292,7 +332,6 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 // is generally different from the supernodal assembly tree
                 // consisting of fundamental supernodes).
                 {
-                    using catamari::Int;
 
                     // Record which supernode contains column `j` of L.
                     // Note that only the entries corresponding to the
@@ -368,7 +407,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         }
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
 
-        double sym_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sym_fact_start).count();
+        double sym_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - sym_fact_start).count();
         if (orderingMethod == OrderingMethod::Adaptive)
             adaptiveOrdering.recordSymbolic(sym_fact_duration);
     }
@@ -378,8 +417,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         ordering.permutation        .Resize(A_reduced->m);
         ordering.inverse_permutation.Resize(A_reduced->m);
 
-        Eigen::Map<VecX_T<SuiteSparse_long>> perm(ordering.permutation.Data(), A_reduced->m);
-        Eigen::Map<VecX_T<SuiteSparse_long>> iperm(ordering.inverse_permutation.Data(), A_reduced->m);
+        Eigen::Map<VecX_T<catamari::Int>> perm(ordering.permutation.Data(), A_reduced->m);
+        Eigen::Map<VecX_T<catamari::Int>> iperm(ordering.inverse_permutation.Data(), A_reduced->m);
 
         scotch_ordering(*A_reduced, perm, iperm, scotchSettings.stratFlag, scotchSettings.imbalanceRatio);
 
@@ -457,14 +496,14 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
     assertFactorization(FactorizationType::Symbolic);
 
-    auto num_fact_start = std::chrono::high_resolution_clock::now();
+    auto num_fact_start = std::chrono::steady_clock::now();
 
     catamari::SparseLDLResult<double> result;
     // TODO: account for m_dataOffsetForScalarHessianLoc in legacy mode.
     if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
     else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
-    double num_fact_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - num_fact_start).count();
+    double num_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - num_fact_start).count();
 
     if constexpr (false) {
         static bool first = true;
@@ -579,9 +618,9 @@ void CatamariFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys
         {
             BENCHMARK_SCOPED_TIMER_SECTION solveTimer("Catamari Solve");
 
-            auto solve_start = std::chrono::high_resolution_clock::now();
+            auto solve_start = std::chrono::steady_clock::now();
             m_ldl->Solve(&v_perm, /* alreadyPermuted = */ true);
-            double solve_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - solve_start).count();
+            double solve_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - solve_start).count();
 
             if (orderingMethod == OrderingMethod::Adaptive)
                 adaptiveOrdering.recordSolve(solve_duration);
@@ -610,9 +649,9 @@ void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool 
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
 
-    auto solve_start = std::chrono::high_resolution_clock::now();
+    auto solve_start = std::chrono::steady_clock::now();
     m_ldl->Solve(&v, alreadyPermuted);
-    double solve_duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - solve_start).count();
+    double solve_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - solve_start).count();
 
     if (orderingMethod == OrderingMethod::Adaptive)
         adaptiveOrdering.recordSolve(solve_duration);

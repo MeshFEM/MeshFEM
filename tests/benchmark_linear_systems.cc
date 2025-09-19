@@ -12,8 +12,11 @@
 #include <MeshFEM/SparseMatrices.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 #include <MeshFEM/Solvers/CholmodFactorizer.hh>
+#include <MeshFEM/Solvers/AccelerateFactorizer.hh>
 #include <MeshFEM/Solvers/CatamariFactorizer.hh>
 #include <MeshFEM/Solvers/MatrixRecorder.hh>
+
+#include <glob.h>
 
 void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads, size_t repeats) {
     set_max_num_tbb_threads(tbb_threads);
@@ -36,6 +39,8 @@ void benchmark_method(const std::string &method, const std::string &directory, s
         // it will be applied to "catamari_nesdis", "catamari_legacy", and "catamari_left".
         if (method == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
+        if (method == "catamari_amd")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
         if (method == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
 #if MESHFEM_WITH_SCOTCH
@@ -49,6 +54,12 @@ void benchmark_method(const std::string &method, const std::string &directory, s
         throw std::runtime_error("Catamari not included");
 #endif
     }
+    else if (method.substr(0, 10) == "accelerate") {
+        auto af = std::make_unique<AccelerateFactorizer>();
+        if (method.substr(method.size() - 8) == "_noblock")
+            af->setUseBlockAccel(false);
+        factorizer = std::move(af);
+    }
     else if (method == "pardiso") {
         factorizer = make_cholesky_factorizer(CholeskyProvider::PARDISO);
     }
@@ -57,7 +68,35 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     Eigen::VectorXd x_gt, b;
 
     for (int counter = 0; ; counter++) {
-        std::string symPath = directory + "/" + MatrixRecorder::symbolicMatrixFileName(counter);
+        std::string symPathPattern = directory + "/" + MatrixRecorder::symbolicMatrixFileName(counter);
+        symPathPattern = symPathPattern.substr(0, symPathPattern.size() - 4); // Remove ".bin"
+        symPathPattern += "_from_update_*.bin";
+
+        // find the first matching file using glob pattern
+        std::string symPath;
+        {
+            glob_t glob_result;
+            memset(&glob_result, 0, sizeof(glob_result));
+
+            int return_value = glob(symPathPattern.c_str(), GLOB_TILDE, NULL, &glob_result);
+            if (return_value != 0) {
+                globfree(&glob_result);
+                if (return_value == GLOB_NOMATCH) {
+                    // No matching file found
+                    symPath = ""; // Indicate no file found
+                } else {
+                    throw std::runtime_error("Error during globbing for pattern: " + symPathPattern);
+                }
+            } else {
+                if (glob_result.gl_pathc > 0) {
+                    symPath = std::string(glob_result.gl_pathv[0]); // Take the first match
+                } else {
+                    symPath = ""; // No matches found
+                }
+            }
+            globfree(&glob_result);
+        }
+
         std::ifstream symFile(symPath);
         if (symFile.good()) {
             // std::cout << symPath << std::endl;
@@ -120,7 +159,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
 int main(int argc, const char *argv[]) {
     if (argc < 4 || argc > 5) {
         std::cout << "Usage: " << argv[0] << " method tbb_threads matrix_directory [numeric_repeats]" << std::endl;
-        std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, catamari_left[_noblock], catamari_right[_noblock], pardiso}" << std::endl;
+        std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, catamari_left[_noblock], catamari_right[_noblock], pardiso, accelerate[_noblock]}" << std::endl;
         exit(-1);
     }
 
