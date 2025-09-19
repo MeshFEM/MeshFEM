@@ -501,8 +501,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     auto num_fact_start = std::chrono::steady_clock::now();
 
     catamari::SparseLDLResult<double> result;
-    // TODO: account for m_dataOffsetForScalarHessianLoc in legacy mode.
-    if (m_legacy) result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->          convert(A.Ax.data(), std::forward<Args>(args)...));
+    if (m_legacy) throw std::runtime_error("Partial legacy mode disabled; build with MESHFEM_USE_LEGACY_CATAMARI instead.");
     else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
     double num_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - num_fact_start).count();

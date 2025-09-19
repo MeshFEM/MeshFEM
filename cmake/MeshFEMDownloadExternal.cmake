@@ -109,7 +109,7 @@ endfunction()
 function(meshfem_download_catamari_legacy)
     meshfem_download_project(catamari_legacy
         GIT_REPOSITORY https://github.com/MeshFEM/catamari.git
-        GIT_TAG        336f30a765e538e865e7496d4df902b95186090b)
+        GIT_TAG        3c12f9cafd5bf78d0e5aeb5539f754321ae0b69d)
 endfunction()
 
 ## IPC-Toolkit

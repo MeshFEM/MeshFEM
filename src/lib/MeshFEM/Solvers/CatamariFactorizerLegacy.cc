@@ -337,13 +337,11 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
 
 
     catamari::SparseLDLResult<double> result;
-    if (m_dataOffsetForScalarHessianLoc.size())
-        throw std::runtime_error("FIXME: account for m_dataOffsetForScalarHessianLoc in legacy mode");
 
     auto num_fact_start = std::chrono::steady_clock::now();
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
-    auto &cm = m_catamariConverter->convert(A.Ax.data(), std::forward<Args>(args)...);
+    auto &cm = m_catamariConverter->convert(A.Ax.data(), m_dataOffsetForScalarHessianLoc, std::forward<Args>(args)...);
 
     result = m_ldl->RefactorWithFixedSparsityPattern(cm);
 
@@ -378,7 +376,8 @@ void CatamariFactorizer::writeSolveTimers() const { }
 void CatamariFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys, bool alreadyPermuted) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariFactorizer.solveRawReduced");
     const size_t s = m_reduced();
-    throw std::runtime_error("CatamariFactorizer::solveRawReduced not supported in legacy mode");
+    copyParallel(m_reduced(), b, x);
+    solveRawReducedInPlace(x, sys, alreadyPermuted);
 }
 
 void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool alreadyPermuted) const {

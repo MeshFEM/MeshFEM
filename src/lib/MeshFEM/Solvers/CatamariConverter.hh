@@ -115,19 +115,22 @@ struct CatamariConverter {
     // Note Ax_data is the scalar data before rowcol removal.
     // Legacy: convert and cache the numerical values of matrix `A` (assuming `A` has
     // an identical sparsity pattern to `m_Asp`).
-    const CMat &convert(const double *Ax_data) {
+    const CMat &convert(const double *Ax_data, const VecX_T<SuiteSparse_long> &dataOffsetForScalarHessianLoc) {
         if (!m_legacy) throw std::runtime_error("convert() is for legacy mode only!");
         BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter.convert");
         catamari::Int nc = m_result.NumColumns();
-        for (size_t i = 0; i < m_result.Entries().Size(); ++i)
-            m_result.Entries()[i].value = Ax_data[m_sourceLocForCatamariInputEntry[i]];
+        for (size_t i = 0; i < m_result.Entries().Size(); ++i) {
+            SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
+            if (dataOffsetForScalarHessianLoc.size()) loc = dataOffsetForScalarHessianLoc[loc];
+            m_result.Entries()[i].value = Ax_data[loc];
+        }
         return m_result;
     }
 
     // Legacy: convert and cache the numerical values of matrix `A + sigma B` (assuming
     // `A` and `B` have identical sparsity patterns to `m_Asp`).
     // If `B_data == nullptr`, convert the values `A + sigma * I`.
-    const CMat &convert(const double *Ax_data, double sigma, const double *B_data) {
+    const CMat &convert(const double *Ax_data, const VecX_T<SuiteSparse_long> &dataOffsetForScalarHessianLoc, double sigma, const double *B_data) {
         if (!m_legacy) throw std::runtime_error("convertWithShift() is for legacy mode only!");
         BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter.convert");
         catamari::Int nc = m_result.NumColumns();
@@ -135,12 +138,16 @@ struct CatamariConverter {
         if (B_data != nullptr) {
             for (size_t i = 0; i < m_result.Entries().Size(); ++i) {
                 SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
+                if (dataOffsetForScalarHessianLoc.size()) loc = dataOffsetForScalarHessianLoc[loc];
                 m_result.Entries()[i].value = Ax_data[loc] + sigma * B_data[loc];
             }
         }
         else {
-            for (size_t i = 0; i < m_result.Entries().Size(); ++i)
-                m_result.Entries()[i].value = Ax_data[m_sourceLocForCatamariInputEntry[i]];
+            for (size_t i = 0; i < m_result.Entries().Size(); ++i) {
+                SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
+                if (dataOffsetForScalarHessianLoc.size()) loc = dataOffsetForScalarHessianLoc[loc];
+                m_result.Entries()[i].value = Ax_data[loc];
+            }
             if (sigma != 0) { // Add the shift to the diagonal entries
                 // This is slow!!!
                 for (catamari::Int j = 0; j < m_result.NumColumns(); ++j)
