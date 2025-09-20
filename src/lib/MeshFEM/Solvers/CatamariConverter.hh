@@ -118,12 +118,13 @@ struct CatamariConverter {
     const CMat &convert(const double *Ax_data, const VecX_T<SuiteSparse_long> &dataOffsetForScalarHessianLoc) {
         if (!m_legacy) throw std::runtime_error("convert() is for legacy mode only!");
         BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter.convert");
-        catamari::Int nc = m_result.NumColumns();
-        for (size_t i = 0; i < m_result.Entries().Size(); ++i) {
-            SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
-            if (dataOffsetForScalarHessianLoc.size()) loc = dataOffsetForScalarHessianLoc[loc];
-            m_result.Entries()[i].value = Ax_data[loc];
-        }
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_result.Entries().Size()), [&](const tbb::blocked_range<size_t> &r) {
+            for (size_t i = r.begin(); i < r.end(); ++i) {
+                SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
+                if (dataOffsetForScalarHessianLoc.size()) loc = dataOffsetForScalarHessianLoc[loc];
+                m_result.Entries()[i].value = Ax_data[loc];
+            }
+        });
         return m_result;
     }
 
@@ -133,7 +134,6 @@ struct CatamariConverter {
     const CMat &convert(const double *Ax_data, const VecX_T<SuiteSparse_long> &dataOffsetForScalarHessianLoc, double sigma, const double *B_data) {
         if (!m_legacy) throw std::runtime_error("convertWithShift() is for legacy mode only!");
         BENCHMARK_SCOPED_TIMER_SECTION timer("CatamariConverter.convert");
-        catamari::Int nc = m_result.NumColumns();
 
         if (B_data != nullptr) {
             for (size_t i = 0; i < m_result.Entries().Size(); ++i) {
@@ -143,15 +143,18 @@ struct CatamariConverter {
             }
         }
         else {
-            for (size_t i = 0; i < m_result.Entries().Size(); ++i) {
-                SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
-                if (dataOffsetForScalarHessianLoc.size()) loc = dataOffsetForScalarHessianLoc[loc];
-                m_result.Entries()[i].value = Ax_data[loc];
-            }
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, m_result.Entries().Size()), [&](const tbb::blocked_range<size_t> &r) {
+                for (size_t i = r.begin(); i < r.end(); ++i) {
+                    SuiteSparse_long loc = m_sourceLocForCatamariInputEntry[i];
+                    if (dataOffsetForScalarHessianLoc.size()) loc = dataOffsetForScalarHessianLoc[loc];
+                    m_result.Entries()[i].value = Ax_data[loc];
+                }
+            });
             if (sigma != 0) { // Add the shift to the diagonal entries
-                // This is slow!!!
-                for (catamari::Int j = 0; j < m_result.NumColumns(); ++j)
-                    m_result.Entries()[m_result.EntryOffset(j, j)].value += sigma;
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, m_result.NumColumns()), [&](const tbb::blocked_range<size_t> &r) {
+                    for (size_t j = r.begin(); j < r.end(); ++j)
+                        m_result.Entries()[m_result.EntryOffset(j, j)].value += sigma;
+                });
             }
         }
 
