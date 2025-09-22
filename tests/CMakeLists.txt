@@ -43,11 +43,13 @@ target_link_libraries(benchmark_sparsity_lru MeshFEM)
 add_executable(benchmark_solves benchmark_solves.cc)
 target_link_libraries(benchmark_solves MeshFEM)
 
-add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
-target_link_libraries(benchmark_dense_linalg MeshFEM)
+if (NOT MESHFEM_USE_LEGACY_CATAMARI)
+    add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
+    target_link_libraries(benchmark_dense_linalg MeshFEM)
 
-add_executable(benchmark_dense_psd_detect benchmark_dense_psd_detect.cc)
-target_link_libraries(benchmark_dense_psd_detect MeshFEM)
+    add_executable(benchmark_dense_psd_detect benchmark_dense_psd_detect.cc)
+    target_link_libraries(benchmark_dense_psd_detect MeshFEM)
+endif()
 
 if (MESHFEM_WITH_IPC_TOOLKIT)
 add_executable(benchmark_ipc_toolkit benchmark_ipc_toolkit.cc)

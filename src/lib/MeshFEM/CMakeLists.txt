@@ -152,6 +152,15 @@ add_library(MeshFEM SHARED
         ClosestPointProjection.cc
 )
 
+# Swap `Solvers/CatamariFactorizerLegacy.cc` in for `Solvers/CatamariFactorizer.cc`
+# if the legacy Catamari solver is requested.
+if (MESHFEM_USE_LEGACY_CATAMARI)
+    get_target_property(modified_sources MeshFEM SOURCES)
+    list(REMOVE_ITEM modified_sources Solvers/CatamariFactorizer.cc)
+    list(APPEND modified_sources Solvers/CatamariFactorizerLegacy.cc)
+    set_target_properties(MeshFEM PROPERTIES SOURCES "${modified_sources}")
+endif()
+
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC ..)
 
@@ -225,6 +234,9 @@ endif()
 if (MESHFEM_WITH_CATAMARI)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_CATAMARI)
     target_link_libraries(${PROJECT_NAME} PUBLIC catamari)
+    if (MESHFEM_USE_LEGACY_CATAMARI)
+        target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_USE_LEGACY_CATAMARI)
+    endif()
 endif()
 
 if (MESHFEM_WITH_SCOTCH)

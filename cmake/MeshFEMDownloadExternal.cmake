@@ -101,9 +101,16 @@ endfunction()
 # DISABLED until BlockCatamari is released.
 # function(meshfem_download_catamari)
 #     meshfem_download_project(catamari
-#         GIT_REPOSITORY https://github.com/jpanetta/catamari.git
+#         GIT_REPOSITORY https://github.com/MeshFEM/catamari.git
 #         GIT_TAG        23b858e18f639261bae4a2fe15d00a286cda963d)
 # endfunction()
+
+## catamari_legacy
+function(meshfem_download_catamari_legacy)
+    meshfem_download_project(catamari_legacy
+        GIT_REPOSITORY https://github.com/MeshFEM/catamari.git
+        GIT_TAG        3c12f9cafd5bf78d0e5aeb5539f754321ae0b69d)
+endfunction()
 
 ## IPC-Toolkit
 function(meshfem_download_ipc_toolkit)

@@ -86,6 +86,7 @@ option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TO
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
 option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   ON)
+option(MESHFEM_USE_LEGACY_CATAMARI   "Use Jack Poulson's original Catamari code for comparisons instead of our accelerated BlockCatamari"  OFF)
 option(MESHFEM_WITH_SCOTCH           "Compile MeshFEM with support for Scotch reordering, if possible" OFF)
 option(MESHFEM_WITH_MKL_PARDISO      "Compile MeshFEM with MKL Pardiso"   OFF)
 option(MESHFEM_WITH_PARDISO          "Compile MeshFEM with Pardiso"   OFF)
@@ -129,7 +130,11 @@ endif()
 # TODO: change back from a Git submodule to a CMake project download when
 # BlockCatamari is released.
 if (MESHFEM_WITH_CATAMARI)
-    add_subdirectory(3rdparty/catamari)
+    if (MESHFEM_USE_LEGACY_CATAMARI)
+        # catamari_legacy is already added by MeshFEMDependencies.cmake
+    else()
+        add_subdirectory(3rdparty/catamari)
+    endif()
 endif()
 
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python
