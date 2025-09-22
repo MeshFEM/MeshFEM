@@ -107,6 +107,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         else if (orderingMethod == OrderingMethod::CholmodNesdis) return CholeskyProvider::CatamariNesdis;
         else if (orderingMethod == OrderingMethod::AMD)           return CholeskyProvider::CatamariAMD;
         else if (orderingMethod == OrderingMethod::Adaptive)      return CholeskyProvider::CatamariAdaptive;
+        else if (orderingMethod == OrderingMethod::Metis)         return CholeskyProvider::CatamariMetis;
 
         throw std::runtime_error("Unknown orderingMethod in mapping to `CholeskyProvider`");
     }
