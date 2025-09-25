@@ -41,8 +41,8 @@ auto assembleTestMatrices() {
     }
 
 
-    auto blockHsp        = assembler.template blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
-    auto blockHsp_subset = assembler.template blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp        = assembler.blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp_subset = assembler.blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
 
     return std::make_pair(std::move(blockHsp), std::move(blockHsp_subset));
 }

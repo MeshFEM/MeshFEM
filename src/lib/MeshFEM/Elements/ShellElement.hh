@@ -133,7 +133,7 @@ struct ShellElement {
         // Membrane energy contribution
         if (etype == EnergyType::Full || etype == EnergyType::Membrane) {
             result.template topLeftCorner<9, 9>().template triangularView<Eigen::Upper>()
-                = HLE::template hessian(mat.getPsi(), FBGetter(plate.de), elementData, /* projectionDisabled = */ !membraneProjection, (weight * mat.getThickness()));
+                = HLE::hessian(mat.getPsi(), FBGetter(plate.de), elementData, /* projectionDisabled = */ !membraneProjection, (weight * mat.getThickness()));
             result.template rightCols<3>().setZero();
         }
         else {
