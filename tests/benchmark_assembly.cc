@@ -20,7 +20,7 @@ template<size_t K, size_t N, size_t Deg>
 void run(std::vector<MeshIO::IOVertex> &vertices,
          const std::vector<MeshIO::IOElement> &elements,
          bool useBlockMergeAlgorithm) {
-    static constexpr size_t num_runs = 100;
+    static constexpr size_t num_runs = 50;
 
     // Project meshes into the 2d-plane if needed
     if (N == 2) for (auto &v : vertices) v[2] = 0;
@@ -55,24 +55,28 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
 #if 1
     // Benchmark setFromTriplets method of block sparsity pattern construction.
     {
+        std::vector<Eigen::Triplet<int, uint32_t>> triplets;
+        const size_t ne = m.numElements();
+        size_t numEntriesPerElement = ((numNodesPerElement + 1) * numNodesPerElement) / 2;
+        triplets.resize(ne * numEntriesPerElement); // Don't time zero-initialization, since this is not fundamentally required.
         for (size_t run = 0; run < num_runs; ++run) {
             BENCHMARK_SCOPED_TIMER_SECTION timer("setFromTriplets Sparsity Pattern");
-            using ESP = Eigen::SparseMatrix<double, 0, SuiteSparse_long>;
-            std::vector<Eigen::Triplet<double, SuiteSparse_long>> triplets;
+            using ESP = Eigen::SparseMatrix<int, 0, SuiteSparse_long>;
             {
-                BENCHMARK_SCOPED_TIMER_SECTION timer("generate triplets");
-                triplets.reserve(m.numElements() * (numNodesPerElement * (numNodesPerElement + 1)) / 2);
-                for (size_t ei = 0; ei < m.numElements(); ++ei) {
-                    auto nidx = m.elementNodeIndices(ei);
-                    for (size_t j = 0; j < numNodesPerElement; ++j) {
-                        for (size_t i = 0; i < numNodesPerElement; ++i) {
-                            if (nidx[i] > nidx[j]) continue; // only assemble upper triangle
-                            triplets.emplace_back(nidx[i], nidx[j], 1.0);
+                BENCHMARK_SCOPED_TIMER_SECTION gttimer("generate triplets");
+                parallel_for_range(ne, [&](size_t ei) {
+                    const auto &bvars = m.elementNodeIndices(ei);
+                    size_t back = ei * numEntriesPerElement;
+                    for (size_t v_b : bvars) {
+                        for (size_t v_a : bvars) {
+                            if (v_a > v_b) continue;
+                            triplets[back++] = Eigen::Triplet<int, uint32_t>(v_a, v_b, 1);
                         }
                     }
-                }
+                });
             }
             ESP eigen_csc(m.numNodes(), m.numNodes());
+            BENCHMARK_SCOPED_TIMER_SECTION sfttimer("setFromTriplets call");
             eigen_csc.setFromTriplets(triplets.begin(), triplets.end());
             eigen_csc.makeCompressed();
             if (run == num_runs - 1)
