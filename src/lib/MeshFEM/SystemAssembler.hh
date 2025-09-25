@@ -391,12 +391,13 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
         BENCHMARK_START_TIMER_SECTION("Ai fill");
         // for (size_t j = 0; j < n; ++j) { // could be parallelized
-        // parallel_for_range(n, [&](size_t j) {
         // Parallelizing this loop only seems to help significantly on Apple Silicon...
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, n, 128), [&](const tbb::blocked_range<size_t> &r) {
-            for (size_t j = r.begin(); j != r.end(); ++j)
-                std::memcpy(Ai.data() + Ap[j], columnBuckets.data() + bucketStart[j], Ap[j + 1] - Ap[j]);
-        // }
+        parallel_for_range(n, [&](size_t j) {
+            // Note that the following can't be a std::memcpy
+            // unless `RowIndex` is the same as `decltype(Ai[0])`...
+            size_t offset = bucketStart[j];
+            for (index_type ii = Ap[j]; ii < Ap[j + 1]; ++ii)
+                Ai[ii] = columnBuckets[offset++];
         });
         BENCHMARK_STOP_TIMER_SECTION("Ai fill");
 
