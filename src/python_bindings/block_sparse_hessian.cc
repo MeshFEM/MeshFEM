@@ -47,8 +47,8 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
     py::class_<BlockCSCHessianBase, std::shared_ptr<BlockCSCHessianBase>>(m, "BlockCSCHessianBase")
         .def(py::init([](const std::string &path) { return BlockCSCHessianBase::constructFromBinaryFile(path); }), py::arg("path"))
         .def_property("Ap", [](const BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ap) { A.Ap = Ap; }, "Offsets into Ai/Ax of the entries for each column")
-        .def_property("Ai", [](const BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ai) { A.Ai = Ai; }, "Row indices of nonzero entries")
         .def_property("Ax", [](const BlockCSCHessianBase &A) { return py::array_t<            Real>(A.Ax.size(), A.Ax.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<            Real> Ax) { A.Ax = Ax; }, "Values of nonzero entries")
+        .def_readwrite("Ai", &BlockCSCHessianBase::Ai, "Row indices of nonzero entries")
 
         .def("blockVarSizesAndCounts", &BlockCSCHessianBase::blockVarSizesAndCounts)
         .def("numScalarCols", &BlockCSCHessianBase::numScalarCols)

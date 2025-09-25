@@ -845,8 +845,9 @@ struct CSCMatrix {
     using DataMap  = SizedDataMap<Eigen::Dynamic>;
     using DataCMap = SizedDataCMap<Eigen::Dynamic>;
 
-    IdxVector  Ap, Ai;   // Column pointer and row index arrays
-                         // Note: the row index array must be sorted!
+    IdxVector Ap; // Column pointer array
+    VecX_T<_Index> Ai; // Row index array (must be sorted!)
+
     container_type Ax;   // Value array (aligned if necessary)
     _Index m, n, nz;     // Number of rows, columns, and nonzeros
 
@@ -1566,7 +1567,8 @@ struct CSCMatrix {
 
         CSCMatrix result(a.m, a.n);
         result.symmetry_mode = a.symmetry_mode;
-        auto &newAp = result.Ap, &newAi = result.Ai;
+        auto &newAp = result.Ap;
+        std::vector<index_type> newAi;
         newAp.reserve(a.Ap.size());
         newAi.reserve(a.Ai.size());
 
@@ -1615,6 +1617,9 @@ struct CSCMatrix {
         // Terminate all remaining columns
         for (_Index c = currCol; c < a.n; ++c)
             newAp.push_back(newAi.size());
+
+        result.Ai.resize(newAi.size());
+        std::copy(newAi.begin(), newAi.end(), result.Ai.data());
 
         assert(newAp.size() == size_t(a.n + 1));
         result.nz = newAi.size();

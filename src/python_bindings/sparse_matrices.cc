@@ -80,9 +80,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def_readwrite("n",    &SuiteSparseMatrix::n)
         .def_readwrite("nz",   &SuiteSparseMatrix::nz)
 
-        .def_property("Ap", [](SuiteSparseMatrix &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ap) { A.Ap = Ap; }, "Offsets into Ai/Ax of the entries for each column")
-        .def_property("Ai", [](SuiteSparseMatrix &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ai) { A.Ai = Ai; }, "Row indices of nonzero entries")
-        .def_property("Ax", [](SuiteSparseMatrix &A) { return py::array_t<            Real>(A.Ax.size(), A.Ax.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<            Real> Ax) { A.Ax = Ax; }, "Values of nonzero entries")
+        .def_property("Ap", [](SuiteSparseMatrix &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, [](SuiteSparseMatrix &A, const std::vector<SuiteSparse_long> &Ap) { A.Ap = Ap; }, "Offsets into Ai/Ax of the entries for each column")
+        .def_property("Ax", [](SuiteSparseMatrix &A) { return py::array_t<            Real>(A.Ax.size(), A.Ax.data(), /* owner = */ py::cast(A)); }, [](SuiteSparseMatrix &A, const std::vector<            Real> &Ax) { A.Ax = Ax; }, "Values of nonzero entries")
+        .def_readwrite("Ai", &SuiteSparseMatrix::Ai, "Row indices of nonzero entries")
 
         .def("setZero",        &SuiteSparseMatrix::template setZero<false>)
         .def("fill",           &SuiteSparseMatrix::fill)
@@ -115,7 +115,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
                         SuiteSparseMatrix result(t[0].cast<SuiteSparse_long>(), t[1].cast<SuiteSparse_long>());
                         result.nz = t[2].cast<SuiteSparse_long>();
                         result.Ap = t[3].cast<std::vector<SuiteSparse_long>>();
-                        result.Ai = t[4].cast<std::vector<SuiteSparse_long>>();
+                        auto Ai = t[4].cast<std::vector<SuiteSparse_long>>(); // std::vector for backwards compatibility
+                        result.Ai.resize(Ai.size());
+                        result.Ai = Eigen::Map<const decltype(result.Ai)>(Ai.data(), Ai.size());
                         result.Ax = t[5].cast<std::vector<double>>();
                         // For backwards compatibility with pickled files
                         // written before we fixed the missing symmetry mode...

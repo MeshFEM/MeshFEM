@@ -110,7 +110,7 @@ struct SparsityLRU {
     Index update(const SpMat &S_dynamic) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("SparsityLRU.update");
 
-        if (m_entryAge.size() != m_S.Ai.size()) throw std::runtime_error("SparsityLRU: age size mismatch");
+        if (m_entryAge.size() != size_t(m_S.Ai.size())) throw std::runtime_error("SparsityLRU: age size mismatch");
         if ((S_dynamic.m != m_S.m) || (S_dynamic.n != m_S.n)) throw std::runtime_error("SparsityLRU: S_dynamic size mismatch");
         if (S_dynamic.symmetry_mode != m_S.symmetry_mode) throw std::runtime_error("Symmetry mode mismatch");
 
@@ -265,7 +265,7 @@ struct SparsityLRU {
             while (ii_D < ii_D_end) entryInDOnly();
         }
 
-        if (new_ages.size() != S_new.Ai.size())
+        if (new_ages.size() != size_t(S_new.Ai.size()))
             throw std::runtime_error("updated new ages size mismatch: " + std::to_string(new_ages.size()) + " != " + std::to_string(S_new.Ai.size()));
 
         // Verify that S_new has all of its diagonal entries.

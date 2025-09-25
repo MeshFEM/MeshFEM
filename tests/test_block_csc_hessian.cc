@@ -40,7 +40,6 @@ auto assembleTestMatrices() {
         }
     }
 
-
     auto blockHsp        = assembler.blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
     auto blockHsp_subset = assembler.blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
 
