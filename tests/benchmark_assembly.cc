@@ -55,13 +55,14 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
 #if 1
     // Benchmark setFromTriplets method of block sparsity pattern construction.
     {
-        std::vector<Eigen::Triplet<int, uint32_t>> triplets;
+        using ET = Eigen::Triplet<char, uint32_t>;
+        std::vector<ET> triplets;
         const size_t ne = m.numElements();
         size_t numEntriesPerElement = ((numNodesPerElement + 1) * numNodesPerElement) / 2;
         triplets.resize(ne * numEntriesPerElement); // Don't time zero-initialization, since this is not fundamentally required.
         for (size_t run = 0; run < num_runs; ++run) {
             BENCHMARK_SCOPED_TIMER_SECTION timer("setFromTriplets Sparsity Pattern");
-            using ESP = Eigen::SparseMatrix<int, 0, SuiteSparse_long>;
+            using ESP = Eigen::SparseMatrix<char, 0, SuiteSparse_long>;
             {
                 BENCHMARK_SCOPED_TIMER_SECTION gttimer("generate triplets");
                 parallel_for_range(ne, [&](size_t ei) {
@@ -70,7 +71,7 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
                     for (size_t v_b : bvars) {
                         for (size_t v_a : bvars) {
                             if (v_a > v_b) continue;
-                            triplets[back++] = Eigen::Triplet<int, uint32_t>(v_a, v_b, 1);
+                            triplets[back++] = ET(v_a, v_b, 1);
                         }
                     }
                 });

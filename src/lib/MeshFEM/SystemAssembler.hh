@@ -217,7 +217,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
         std::vector<size_t> bucketStart;
         {
-            BENCHMARK_SCOPED_TIMER_SECTION timer1("calc size");
+            // BENCHMARK_SCOPED_TIMER_SECTION timer1("calc size");
             bucketStart.resize(n + 1);
             size_t *sizes = bucketStart.data() + 1;
             for (size_t ei = 0; ei < numElems; ++ei) {
@@ -238,7 +238,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
         size_t origNNZ = 0;
         {
-            BENCHMARK_SCOPED_TIMER_SECTION timer1("cumsum");
+            // BENCHMARK_SCOPED_TIMER_SECTION timer1("cumsum");
             // Next, compute bucketStart[2:] = cumsum(bucketStart[1:])
             for (size_t j = 1; j <= n; ++j) {
                 size_t colsize_j = bucketStart[j];
@@ -250,7 +250,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         using RowIndex = uint32_t; // Using a narrower integer type substantially reduces memory i/o
         Eigen::Matrix<RowIndex, Eigen::Dynamic, 1> columnBuckets;
         {
-            BENCHMARK_SCOPED_TIMER_SECTION timer1("fill adjacency");
+            // BENCHMARK_SCOPED_TIMER_SECTION timer1("fill adjacency");
 
             columnBuckets.resize(origNNZ);
             // Fill the index buckets; note incrementing the offsets in
@@ -326,11 +326,11 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
         // BENCHMARK_SCOPED_TIMER_SECTION timer1("Generate CSCMat");
 
-        BENCHMARK_START_TIMER_SECTION("Ap resize");
+        // BENCHMARK_START_TIMER_SECTION("Ap resize");
         Ap.resize(n + 1);
-        BENCHMARK_STOP_TIMER_SECTION("Ap resize");
+        // BENCHMARK_STOP_TIMER_SECTION("Ap resize");
 
-        BENCHMARK_START_TIMER_SECTION("Sort and deduplicate");
+        // BENCHMARK_START_TIMER_SECTION("Sort and deduplicate");
 #if 1
         {
             // Deduplicate **first** and then sort; this is faster than sorting
@@ -371,9 +371,9 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         });
 #endif
 
-        BENCHMARK_STOP_TIMER_SECTION("Sort and deduplicate");
+        // BENCHMARK_STOP_TIMER_SECTION("Sort and deduplicate");
 
-        BENCHMARK_START_TIMER_SECTION("cumsum");
+        // BENCHMARK_START_TIMER_SECTION("cumsum");
         // Calculate column pointer array using cumulative sum.
         size_t newNNZ = 0;
         for (size_t j = 0; j < n; ++j) {
@@ -382,16 +382,19 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
             newNNZ += colsize_j;
         }
         Ap[n] = newNNZ;
-        BENCHMARK_STOP_TIMER_SECTION("cumsum");
+        // BENCHMARK_STOP_TIMER_SECTION("cumsum");
 
         // Fill row index array `Ai`
-        BENCHMARK_START_TIMER_SECTION("Ai resize");
+        // BENCHMARK_START_TIMER_SECTION("Ai resize");
         Ai.resize(newNNZ);
-        BENCHMARK_STOP_TIMER_SECTION("Ai resize");
+        // BENCHMARK_STOP_TIMER_SECTION("Ai resize");
 
-        BENCHMARK_START_TIMER_SECTION("Ai fill");
-        // for (size_t j = 0; j < n; ++j) { // could be parallelized
-        // Parallelizing this loop only seems to help significantly on Apple Silicon...
+        // BENCHMARK_START_TIMER_SECTION("Ai fill");
+        // Parallelizing this loop is especially important
+        // when `Ai.resize` does not zero-initialize (i.e., when `Ai` is not a
+        // std::vector). In that case, the loop's writes will incur first-touch
+        // page faults on unmapped memory, and parallelization helps spread
+        // this overhead across threads.
         parallel_for_range(n, [&](size_t j) {
             // Note that the following can't be a std::memcpy
             // unless `RowIndex` is the same as `decltype(Ai[0])`...
@@ -399,9 +402,9 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
             for (index_type ii = Ap[j]; ii < Ap[j + 1]; ++ii)
                 Ai[ii] = columnBuckets[offset++];
         });
-        BENCHMARK_STOP_TIMER_SECTION("Ai fill");
+        // BENCHMARK_STOP_TIMER_SECTION("Ai fill");
 
-        BENCHMARK_SCOPED_TIMER_SECTION timer2("finalize");
+        // BENCHMARK_SCOPED_TIMER_SECTION timer2("finalize");
         columnBuckets.resize(0); // this deallocation takes significant time!
         result->nz = newNNZ;
         // result->Ax.resize(newNNZ); // <--- Intentionally leave empty since we generally don't need to store data in the block pattern.
