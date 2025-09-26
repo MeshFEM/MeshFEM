@@ -553,6 +553,7 @@ struct MESHFEM_EXPORT BlockCSCHessianBase : public SuiteSparseMatrix {
         std::vector<size_t> result;
         for (const auto &p : blockVarSizesAndCounts())
             result.push_back(p.first);
+        if (result.empty()) throw std::runtime_error("Matrix has no block types");
         return result;
     }
 
