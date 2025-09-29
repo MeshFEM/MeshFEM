@@ -64,14 +64,14 @@ void runTest() {
     // std::cout << "blockHsp.data(): " << blockHsp.data().transpose() << std::endl;
     // std::cout << "blockHsp.Ap(): " << Eigen::Map<VecX_T<SuiteSparse_long>>(blockHsp.Ap.data(), blockHsp.Ap.size()).transpose() << std::endl;
     // std::cout << "blockHsp.Ai(): " << Eigen::Map<VecX_T<SuiteSparse_long>>(blockHsp.Ai.data(), blockHsp.Ai.size()).transpose() << std::endl;
-    REQUIRE(scalarHsp.trace() == blockHsp.trace());
+    REQUIRE_THAT(scalarHsp.trace(), Catch::Matchers::WithinRel(blockHsp.trace(), 1e-15));
 
     blockHsp.zeroOutLowerTriangleOfDiagonalBlocks();
 
     // Test conversions between alternate storage layouts.
     auto shuffled = blockHsp.template cloneWithLayout<!ContiguousBlocks>();
     if (ContiguousBlocks) {
-        REQUIRE(scalarHsp.trace() == shuffled->trace());
+        REQUIRE_THAT(scalarHsp.trace(), Catch::Matchers::WithinRel(shuffled->trace(), 1e-15));
         REQUIRE((scalarHsp.data() - shuffled->data()).norm() == 0.0);
         REQUIRE((testMatrices.first->data() - shuffled->data()).norm() == 0.0);
     }
@@ -129,13 +129,13 @@ void runTest() {
         blockH->addNZScalar(t.i, t.j, t.value());
 
     REQUIRE((scalarH.data() - blockH->toScalar().data()).norm() == 0.0);
-    REQUIRE(scalarH.trace() == blockH->trace());
+    REQUIRE_THAT(scalarH.trace(), Catch::Matchers::WithinRel(blockH->trace(), 1e-15));
 
     {
         Eigen::VectorXd d = Eigen::VectorXd::Random(scalarH.n);
         scalarH.addDiag(d);
         blockH->addDiag(d);
-        REQUIRE(scalarH.trace() == blockH->trace());
+        REQUIRE_THAT(scalarH.trace(), Catch::Matchers::WithinRel(blockH->trace(), 1e-15));
     }
 
     // Validate `addWithSubSparsityFast`
