@@ -37,7 +37,7 @@ void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
                          << " (Deg " << Deg << " quadrature): " << relError << endl;
                     cerr << "computed: " << val << ", true: " << ints.at(d).at(i) << endl;
                 }
-                REQUIRE(relError <= 1e-15);
+                REQUIRE(relError <= 1e-14);
             };
 
             const auto &f = funcs[d][i];

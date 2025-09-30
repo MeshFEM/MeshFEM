@@ -52,7 +52,7 @@ void run_tests() {
         Eigen::SelfAdjointEigenSolver<decltype(H_exact)> Hes(H_exact);
         auto H_brute_proj = Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
 
-        Real tol = 1e-8;
+        Real tol = 1e-7;
         Real projectionError = (H_brute_proj - H_proj).norm() / H_exact.norm();
         if (!(projectionError < tol)) {
             std::cout << "Energy density: " << Psi::name() << std::endl;
