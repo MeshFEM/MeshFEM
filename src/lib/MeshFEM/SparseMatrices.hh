@@ -2052,7 +2052,7 @@ struct CSCMatrix {
         m = n = colptr_back;
 
         if (!sparsityOnly) Ax.resize(nz);
-        Ai.resize(nz);
+        Ai.conservativeResize(nz);
         Ap.resize(n + 1);
         if (entryForReducedEntry) (*entryForReducedEntry).resize(nz);
     }
@@ -2077,7 +2077,7 @@ struct CSCMatrix {
         }
         nz = entry_back;
         Ax.resize(nz);
-        Ai.resize(nz);
+        Ai.conservativeResize(nz);
     }
 
     ////////////////////////////////////////////////////////////////////////////

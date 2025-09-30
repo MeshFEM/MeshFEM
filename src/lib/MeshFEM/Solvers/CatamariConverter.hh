@@ -66,9 +66,12 @@ struct CatamariConverter {
 
             // Get an integer-valued sparse matrix where each entry holds the
             // index of the source upper triangle entry that generated it.
-            BENCHMARK_START_TIMER_SECTION("toSymmetryMode");
-            CSCMatrix<SuiteSparse_long, SuiteSparse_long> A_full = Asp_ptr->toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::NONE, [](size_t ii) { return ii; });
-            BENCHMARK_STOP_TIMER_SECTION("toSymmetryMode");
+            CSCMatrix<SuiteSparse_long, SuiteSparse_long> A_full;
+
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION t2("toSymmetryMode");
+                A_full = Asp_ptr->toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::NONE, [](size_t ii) { return ii; });
+            }
 
             catamari::Buffer<catamari::MatrixEntry<typename SuiteSparseMatrix::value_type>> new_entries(A_full.nz);
             parallel_for_range(A_full.n, [&](size_t j) {
