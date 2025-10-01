@@ -24,6 +24,8 @@
 #include <MeshFEM/MeshIO.hh>
 #include <Eigen/Sparse>
 
+using EigenRowIndex = int32_t; // Using a narrower integer type substantially reduces memory i/o
+
 template<size_t K, size_t BlockSize, size_t Deg>
 void run(std::vector<MeshIO::IOVertex> &vertices,
          const std::vector<MeshIO::IOElement> &elements,
@@ -57,17 +59,14 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
 
     // Benchmark setFromTriplets method of Hessian evaluation.
     {
-        using RowIndex = int32_t; // Using a narrower integer type substantially reduces memory i/o
-        using ET = Eigen::Triplet<double, RowIndex>;
+        using ET = Eigen::Triplet<double, EigenRowIndex>;
         const size_t ne = m.numElements();
-        size_t numEntriesPerElement =
-            (numNodesPerElement * (numNodesPerElement - 1)) / 2 * (BlockSize * BlockSize) // Strict upper-triangle blocks
-           + numNodesPerElement * ((BlockSize * (BlockSize + 1)) / 2); // Upper triangle of the diagonal blocks
+        size_t numEntriesPerElement = (numElementLocalVars * (numElementLocalVars + 1)) / 2;
         std::vector<ET> triplets;
         triplets.resize(ne * numEntriesPerElement); // Don't time zero-initialization, since this is not fundamentally required.
         for (size_t run = 0; run < num_runs; ++run) {
             BENCHMARK_SCOPED_TIMER_SECTION timer("setFromTriplets assembly");
-            using ESP = Eigen::SparseMatrix<double, 0, RowIndex>;
+            using ESP = Eigen::SparseMatrix<double, 0, EigenRowIndex>;
             {
                 BENCHMARK_SCOPED_TIMER_SECTION gttimer("generate triplets");
                 parallel_for_range(ne, [&](size_t ei) {
@@ -94,6 +93,99 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
             eigen_csc.makeCompressed();
             if (run == num_runs - 1)
                 std::cout << "Nonzeros in eigen_csc: " << eigen_csc.nonZeros() << std::endl;
+        }
+    }
+}
+
+#include <MeshFEM/BlockCSCHessianDynCastWorkaround.hh> // Needed for custom <3, 1> instantiation
+void run_mixed(std::vector<MeshIO::IOVertex> &vertices,
+         const std::vector<MeshIO::IOElement> &elements,
+         bool useBlockMergeAlgorithm) {
+    FEMMesh<2, 1, VectorND<3>> m(elements, vertices); // Linear triangle mesh in 3D
+
+    // Build the halfedge -> edge map.
+    std::vector<size_t> edgeForHalfEdge(m.numHalfEdges());
+    size_t numEdges = 0;
+    m.visitEdges([&edgeForHalfEdge, &numEdges](auto he, size_t edgeIndex) {
+        ++numEdges;
+        edgeForHalfEdge.at(he.index()) = edgeIndex;
+        auto hopp = he.opposite();
+        if (hopp) edgeForHalfEdge.at(hopp.index()) = edgeIndex;
+    });
+
+    auto elementStencil = [&](size_t ei) {
+        const auto &bvars = m.elementNodeIndices(ei);
+        std::array<size_t, 6> result;
+        for (size_t i = 0; i < 3; ++i) result[i] = bvars[i];
+        for (size_t i = 0; i < 3; ++i) result[3 + i] = edgeForHalfEdge[3 * ei + i] + m.numNodes();
+        return result;
+    };
+
+    SystemAssembler<3, 1> assembler(m.numNodes(), numEdges);
+
+    NewtonHessian Hsp = assembler.sparsityPattern(m.numElements(), elementStencil);
+
+    static constexpr size_t numNodesPerElement = 3;
+    static constexpr size_t numElementLocalVars = 3 * numNodesPerElement + 3;
+    using PerElementHessian = Eigen::Matrix<double, numElementLocalVars, numElementLocalVars>;
+
+    static constexpr size_t num_runs = 5;
+
+    NewtonHessian H = Hsp;
+
+    if (useBlockMergeAlgorithm) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("assembleHessian (merge algorithm)");
+        for (size_t run = 0; run < num_runs; ++run)
+            assembler.template assembleHessian<true>(H, m.numElements(), [&](size_t ei) -> PerElementHessian { return PerElementHessian::Zero(); }, elementStencil);
+    }
+    else {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("assembleHessian (binary search algorithm)");
+        for (size_t run = 0; run < num_runs; ++run)
+            assembler.template assembleHessian<false>(H, m.numElements(), [&](size_t ei) -> PerElementHessian { return PerElementHessian::Zero(); }, elementStencil);
+    }
+
+    // Benchmark setFromTriplets method of Hessian evaluation.
+    {
+        using ET = Eigen::Triplet<double, EigenRowIndex>;
+        const size_t ne = m.numElements();
+        size_t numEntriesPerElement = numElementLocalVars * (numElementLocalVars + 1) / 2;
+        std::vector<ET> triplets;
+        triplets.resize(ne * numEntriesPerElement); // Don't time zero-initialization, since this is not fundamentally required.
+        for (size_t run = 0; run < num_runs; ++run) {
+            BENCHMARK_SCOPED_TIMER_SECTION timer("setFromTriplets assembly");
+            using ESP = Eigen::SparseMatrix<double, 0, EigenRowIndex>;
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION gttimer("generate triplets");
+                parallel_for_range(ne, [&](size_t ei) {
+                    const auto &bvars = elementStencil(ei);
+                    size_t back = ei * numEntriesPerElement;
+                    for (size_t v_b : bvars) {
+                        int bs_b = (v_b < m.numNodes()) ? 3 : 1;
+                        int vo_b = (v_b < m.numNodes()) ? v_b * 3 : m.numNodes() * 3 + (v_b - m.numNodes());
+                        for (size_t v_a : bvars) {
+                            int bs_a = (v_a < m.numNodes()) ? 3 : 1;
+                            if (v_a > v_b) continue;
+                            int vo_a = (v_a < m.numNodes()) ? v_a * 3 : m.numNodes() * 3 + (v_a - m.numNodes());
+                            for (int c_b = 0; c_b < bs_b; ++c_b) {
+                                for (int c_a = 0; c_a < bs_a; ++c_a) {
+                                    int var_a = vo_a + c_a;
+                                    int var_b = vo_b + c_b;
+                                    if (var_a > var_b) continue;
+                                    triplets.at(back++) = ET(var_a, var_b, 1.0);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            ESP eigen_csc(assembler.numVars(), assembler.numVars());
+            BENCHMARK_SCOPED_TIMER_SECTION sfttimer("setFromTriplets call");
+            eigen_csc.setFromTriplets(triplets.begin(), triplets.end());
+            eigen_csc.makeCompressed();
+            if (run == num_runs - 1) {
+                std::cout << "Nonzeros in eigen_csc: " << eigen_csc.nonZeros() << std::endl;
+                std::cout << "Nonzeros in H.toScalar(): " << H.toScalar().nnz() << std::endl;
+            }
         }
     }
 }
@@ -141,15 +233,21 @@ int main(int argc, const char *argv[]) {
     else if (type == MeshIO::MESH_TRI) K = 2;
     else    throw std::runtime_error("Mesh must be pure triangle or tet.");
 
-    size_t BlockSize = std::stoi(argv[2]); // per-node variable block size
-    size_t Deg = std::stoi(argv[3]);       // FEM degree
-
+    size_t Deg = std::stoi(argv[3]); // FEM degree
     bool useBlockMergeAlgorithm = (std::stoi(argv[4]) != 0);
 
     size_t num_threads = std::stoul(argv[5]);
     set_max_num_tbb_threads(num_threads);
 
-    run(vertices, elements, K, BlockSize, Deg, useBlockMergeAlgorithm);
+    if (argv[2] == std::string("mixed")) {
+        if (K != 2 || Deg != 1)
+            throw std::runtime_error("Mixed block size is only supported for linear triangles.");
+        run_mixed(vertices, elements, useBlockMergeAlgorithm);
+    }
+    else {
+        size_t BlockSize = std::stoi(argv[2]); // nodal variable block size
+        run(vertices, elements, K, BlockSize, Deg, useBlockMergeAlgorithm);
+    }
 
     BENCHMARK_REPORT();
 }
