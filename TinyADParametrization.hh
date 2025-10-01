@@ -54,12 +54,19 @@ Eigen::VectorX<PassiveT> newton_direction(
 
     if (_solver.sparsity_pattern_dirty)
     {
+        BENCHMARK_START_TIMER_SECTION("Symbolic Factorization");
         _solver.solver.analyzePattern(H_reg);
+        BENCHMARK_STOP_TIMER_SECTION("Symbolic Factorization");
         _solver.sparsity_pattern_dirty = false;
     }
 
+    BENCHMARK_START_TIMER_SECTION("Numeric Factorization");
     _solver.solver.factorize(H_reg);
+    BENCHMARK_STOP_TIMER_SECTION("Numeric Factorization");
+
+    BENCHMARK_START_TIMER_SECTION("Solve");
     const Eigen::VectorX<PassiveT> d = _solver.solver.solve((-_g).eval());
+    BENCHMARK_STOP_TIMER_SECTION("Solve");
 
     if (_solver.solver.info() != Eigen::Success)
         TINYAD_ERROR_throw("Linear solve failed.");
