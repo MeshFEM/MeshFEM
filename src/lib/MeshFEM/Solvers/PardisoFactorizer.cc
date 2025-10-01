@@ -50,7 +50,7 @@ PardisoFactorizer::PardisoFactorizer() {
 
 template<class IdxVec>
 Eigen::ArrayXi fortranIndexArrayFromCIndexArray(const IdxVec &ivec) {
-    return Eigen::Map<const Eigen::Array<SuiteSparse_long, Eigen::Dynamic, 1>>(ivec.data(), ivec.size()).cast<int>() + 1;
+    return Eigen::Map<const Eigen::Array<std::decay_t<decltype(ivec[0])>, Eigen::Dynamic, 1>>(ivec.data(), ivec.size()).template cast<int>() + 1;
 }
 
 void PardisoFactorizer::m_pardisoFactorization(int phase) {

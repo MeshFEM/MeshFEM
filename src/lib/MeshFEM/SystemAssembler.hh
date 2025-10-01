@@ -73,7 +73,7 @@ struct ElementHessianContribAssembler<true> {
             }
 
             // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
+            auto loc = colScanner.diagBlockScalarLoc();
             auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
@@ -112,7 +112,7 @@ struct ElementHessianContribAssembler<false> {
             }
 
             // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
+            auto loc = colScanner.diagBlockScalarLoc();
             auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
@@ -657,11 +657,11 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         }, 32, 100);
 
         if (size_t(g.size()) != N * m.numNodes()) throw std::runtime_error("Unexpected g size");
-        SuiteSparse_long *Ai = m_localNodesForNode->Ai.data();
-        SuiteSparse_long *Ap = m_localNodesForNode->Ap.data();
+        auto *Ai = m_localNodesForNode->Ai.data();
+        auto *Ap = m_localNodesForNode->Ap.data();
         parallel_for_range(m.numNodes(), [&g, Ai, Ap, this](size_t ni) {
-                SuiteSparse_long *idxPtr = Ai + Ap[ni];
-                SuiteSparse_long *colEnd = Ai + Ap[ni + 1];
+                auto *idxPtr = Ai + Ap[ni];
+                auto *colEnd = Ai + Ap[ni + 1];
                 VecN_T<Real, N> g_n = m_pregatherGradient.template segment<N>(*idxPtr);
                 for (++idxPtr; idxPtr < colEnd; ++idxPtr)
                     g_n += m_pregatherGradient.template segment<N>(*idxPtr);
@@ -680,8 +680,8 @@ private:
 
         auto order = argsort(blockVars);
 
-        SuiteSparse_long *Ap = H.Ap.data();
-        SuiteSparse_long *Ai = H.Ai.data();
+        auto *Ap = H.Ap.data();
+        auto *Ai = H.Ai.data();
 
         for (size_t lbj_i = 0; lbj_i < nbv; ++lbj_i) {
             size_t lbj = order[lbj_i];
@@ -796,7 +796,7 @@ private:
             }
 
             // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
+            auto loc = colScanner.diagBlockScalarLoc();
             auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
@@ -833,7 +833,7 @@ private:
             }
 
             // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
+            auto loc = colScanner.diagBlockScalarLoc();
             auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);

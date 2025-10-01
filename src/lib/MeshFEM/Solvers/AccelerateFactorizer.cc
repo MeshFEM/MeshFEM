@@ -26,11 +26,11 @@ void AccelerateFactorizer::m_setUpperTriangleCSC(const SuiteSparseMatrix &A_redu
 #ifdef __APPLE__
     const auto &Lsp = A_reduced;
 
-    using VXiSS = Eigen::Matrix<SuiteSparse_long, Eigen::Dynamic, 1>;
 
     m_A_csc.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
     m_A_csc.Ap = Lsp.Ap; // std::move(Lsp.Ap);
     // Accelerate uses int32_t row indices...
+    using VXiSS = Eigen::Matrix<std::decay_t<decltype(Lsp.Ai[0])>, Eigen::Dynamic, 1>;
     m_rowIndices_i32 = Eigen::Map<const VXiSS>(Lsp.Ai.data(), Lsp.Ai.size()).template cast<int32_t>();
 
     m_A_csc.m = Lsp.m;

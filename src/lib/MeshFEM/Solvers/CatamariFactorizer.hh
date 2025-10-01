@@ -182,6 +182,8 @@ private:
     bool m_legacy = false;
 
     mutable Eigen::VectorXd m_permuted_rhs_scratch;
+
+    Eigen::VectorXd m_valuesDummy; // Needed to run `cholmod_l_nested_dissection` without values in certain cases.
 };
 #endif
 

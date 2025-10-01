@@ -423,8 +423,8 @@ struct TripletMatrix {
     }
 
     // WARNING: Assumes sumRepeated() has already been called.
-    template<typename _Index, typename _Real>
-    void getCompressedColumn(_Index *Ap, _Index *Ai, _Real *Ax) const {
+    template<typename _Index, typename _RowIndex, typename _Real>
+    void getCompressedColumn(_Index *Ap, _RowIndex *Ai, _Real *Ax) const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("getCompressedColumn");
         const size_t num_nz = nnz();
         for (size_t i = 0; i < num_nz; ++i) {
@@ -786,8 +786,8 @@ struct TripletMatrix {
 };
 
 // Search for "i" in "Ai" at indices in the range "[lb, ub)"
-template<typename _Index>
-_Index binary_search(_Index i, const _Index *Ai, _Index lb, _Index ub) {
+template<typename _RowIndex, typename _Index>
+_Index binary_search(_RowIndex i, const _RowIndex *Ai, _Index lb, _Index ub) {
 #if 1
     return std::distance(Ai, sb_lower_bound(Ai + lb, Ai + ub, i));
 #else
@@ -846,7 +846,10 @@ struct CSCMatrix {
     using DataCMap = SizedDataCMap<Eigen::Dynamic>;
 
     IdxVector Ap; // Column pointer array
-    VecX_T<_Index> Ai; // Row index array (must be sorted!)
+
+    // using RowIndex = int32_t; // Can differ from the index type of `Ap`/nonzero count (since we expect the number of rows to be much less than the number of nonzeros).
+    using RowIndex = _Index; // Can differ from the index type of `Ap`/nonzero count (since we expect the number of rows to be much less than the number of nonzeros).
+    VecX_T<RowIndex> Ai; // Row index array (must be sorted!)
 
     container_type Ax;   // Value array (aligned if necessary)
     _Index m, n, nz;     // Number of rows, columns, and nonzeros
@@ -909,7 +912,7 @@ struct CSCMatrix {
                 spmat_helper::setZero(Ax[i]);
         }
     }
-    void clear() { Ap.clear(); Ai.clear(); Ax.clear(); nz = 0; }
+    void clear() { Ap.clear(); Ai.resize(0); Ax.clear(); nz = 0; }
 
     void setIdentity(bool preserveSparsity = false) {
         if (m != n) throw std::runtime_error("Only square matrices are supported");
@@ -1313,7 +1316,7 @@ struct CSCMatrix {
     }
 
     template<bool _detectMissing = false>
-    _Index findEntry(_Index i, _Index j) const {
+    _Index findEntry(RowIndex i, _Index j) const {
         // Find the entry in the sparsity pattern.
         // Row indices are sorted, so we can use a binary search.
         const _Index colend = Ap[j + 1];

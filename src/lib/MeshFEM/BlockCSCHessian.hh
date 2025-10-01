@@ -158,7 +158,8 @@ struct BlockToScalarPolicyTypeOffsetsPerColumn {
             first_of_type += nblocks;
             first_of_type_scalar_offset += nblocks * bdim;
         }
-        _Index result = first_of_type_scalar_offset + bdim * (binary_search(bi, H.Ai.data(), first_of_type, H.Ap[bj + 1]) - first_of_type);
+        // The std::decay_t hack before can be removed when we properly support mixed row/nnz index types
+        _Index result = first_of_type_scalar_offset + bdim * (binary_search(std::decay_t<decltype(H.Ai[0])>(bi), H.Ai.data(), first_of_type, H.Ap[bj + 1]) - first_of_type);
         // `result` currently holds the scalar *row* offset of nonzero (bi, bj)
         // from the beginning of column `bj`. When storing data contiguously,
         // we need to multiply this by the width of each block (i.e., the column
@@ -323,7 +324,7 @@ struct ColumnScanner<BCSCH, std::enable_if_t<BlockCSCHTraits<BCSCH>::VarStructur
 #if 1
         Index old_bloc = m_bloc;
 
-        const Index *ptr = m_H.Ai.data() + m_bloc;
+        const auto *ptr = m_H.Ai.data() + m_bloc;
         while (*ptr++ < bi) ++m_bloc;
         return (m_scalarLoc += blockStride() * (m_bloc - old_bloc));
 #else

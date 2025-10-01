@@ -13,8 +13,10 @@ constexpr ForwardIt sb_lower_bound(ForwardIt first, ForwardIt last, const T& val
         auto half = length / 2;
 #if defined(__clang__)
         // On recent versions of LLVM/Clang, `__builtin_unpredictable`
-        // suffices to generate a CMOV
+        // suffices to generate a CMOV on x86.
         // https://github.com/llvm/llvm-project/issues/62790
+        // It seems that on Apple Silicon a `CSEL` is generated regardless of
+        // whether this hint is applied and also on older Clang versions.
         if (__builtin_unpredictable(comp(first[half], value)))
             first += length - half;
 #else
