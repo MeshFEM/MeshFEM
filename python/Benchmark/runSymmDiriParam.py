@@ -63,6 +63,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
     linsys_solve_time_list = []
     hessian_eval_time_list = []
     line_search_time_list = []
+    solve_in_linsys_time_list = []
 
     for i in range(repeat_num):
         print(f"Running parametrization experiment {i + 1}/{repeat_num}...")
@@ -76,9 +77,14 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         if hessian_proj_option == 'TinyAD':
             obj_arr, time_arr, grad_norm_arr, benchmark_dict = helper_funcs.runSymmds_TinyAD(m)
             line_search_time = benchmark.totalTime('Line Search$', d=benchmark_dict)
-            linsys_solve_time = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
             hessian_eval_time = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
+            # In Linear Solve
+            linsys_solve_time = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
+            symbolic_factorize_time = benchmark.totalTime('Linear Solve.Symbolic Factorization$', d=benchmark_dict)
+            numeric_factorize_time = benchmark.totalTime('Linear Solve.Numeric Factorization$', d=benchmark_dict)
+            solve_in_linsys_time = benchmark.totalTime('Linear Solve.Solve$', d=benchmark_dict)
             line_search_time_list.append(line_search_time)
+            solve_in_linsys_time_list.append(solve_in_linsys_time)
         
         elif hessian_proj_option in ['SLIM', 'CompMajor']:
             if hessian_proj_option == 'SLIM':
@@ -89,8 +95,6 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
             numeric_factorize_time = benchmark_dict['numeric_fac_time']
             linsys_solve_time = benchmark_dict['linear_solve_time'] + symbolic_factorize_time + numeric_factorize_time
             hessian_eval_time = benchmark_dict['hessian_eval_time']
-            symbolic_factorize_time_list.append(symbolic_factorize_time)
-            numeric_factroize_time_list.append(numeric_factorize_time)
 
         else:
             # get solver options str f"MeshFEM{n}"
@@ -101,8 +105,6 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
             numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
             linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict) + symbolic_factorize_time + numeric_factorize_time
             hessian_eval_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict) + benchmark.totalTime('NewtonMultiobjectiveProblem.gradient$', d=benchmark_dict)
-            symbolic_factorize_time_list.append(symbolic_factorize_time)
-            numeric_factroize_time_list.append(numeric_factorize_time)
         
         newton_steps = obj_arr.shape[0]
         total_time = time_arr[-1]
@@ -113,6 +115,8 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         newton_steps_list.append(newton_steps)
         linsys_solve_time_list.append(linsys_solve_time)
         hessian_eval_time_list.append(hessian_eval_time)
+        symbolic_factorize_time_list.append(symbolic_factorize_time)
+        numeric_factroize_time_list.append(numeric_factorize_time)
 
         print(f"[Opt] Symmetric Dirichlet Parametrization of {model_name} Ended in {newton_steps} Newton Steps. Total Elapsed Time: {total_time: .4f} seconds.")
         saveStats(folder_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats=hessian_stats)
@@ -123,8 +127,9 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
     # save to txt file
     txt_fn = 'summary.txt'
     if hessian_proj_option == 'TinyAD':
-        summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list, linsys_solve_time_list, hessian_eval_time_list, line_search_time_list))
-        np.savetxt(os.path.join(outer_folder_dir, txt_fn), summary_data, fmt='%.8f', delimiter="\t", header="iter\t\ttime\t\tenergy\t\tlinsolve\thessian_eval\tline_search", comments='')
+        summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list, symbolic_factorize_time_list, numeric_factroize_time_list, 
+                                        solve_in_linsys_time_list, linsys_solve_time_list, hessian_eval_time_list, line_search_time_list))
+        np.savetxt(os.path.join(outer_folder_dir, txt_fn), summary_data, fmt='%.8f', delimiter="\t", header="iter\t\ttime\t\tenergy\t\tsymbol\t\tnumeric\t\tsolve\t\tlinsolve\thessian_eval\tline_search", comments='')
 
     else:
         summary_data = np.column_stack((newton_steps_list, total_time_list, final_obj_list, symbolic_factorize_time_list,
