@@ -11,6 +11,10 @@
 #include <vector>
 
 struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase {
+    enum class OrderingMethod {
+        Metis, AMD, Nesdis, CholmodAMD
+    };
+
     AccelerateFactorizer();
 
     // *Scalar* size of the reduced system
@@ -76,12 +80,14 @@ struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase
 #endif
     }
 
-    CholeskyProvider provider() const override { return CholeskyProvider::Accelerate; }
+    CholeskyProvider provider() const override { return CholeskyProvider::Accelerate; } // TODO: extend to set ordering.
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
 
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
+
+    OrderingMethod orderingMethod = OrderingMethod::Metis;
 
 private:
     // The row/col-removed matrix that is actually factorized.
@@ -105,10 +111,14 @@ private:
     template<class FType>
     struct FactorizationWrapper {
         template<typename... Args>
-        FactorizationWrapper(Args&&... args) : factor(SparseFactor(std::forward<Args>(args)...)) {
+        FactorizationWrapper(Args&&... args) {
+            {
+                // BENCHMARK_SCOPED_TIMER_SECTION timer("SparseFactor Call");
+                factor = SparseFactor(std::forward<Args>(args)...);
+            }
             auto status = factor.status;
             if (status != SparseStatusOK) SparseCleanup(factor);
-            statusCheck(factor.status);
+            statusCheck(factor.status); // throws on failure, meaning destructor is not called
         }
         FType factor;
 
@@ -132,11 +142,7 @@ private:
 
         void statusCheck() const { statusCheck(factor.status); }
 
-        ~FactorizationWrapper() {
-            // Note: this is skipped if the factor was not successfully created.
-            // Is this really what we want?
-            SparseCleanup(factor);
-        }
+        ~FactorizationWrapper() { SparseCleanup(factor); }
     };
 
     using SFWrap = FactorizationWrapper<SparseOpaqueSymbolicFactorization>;

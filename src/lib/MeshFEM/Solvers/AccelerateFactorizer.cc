@@ -4,7 +4,7 @@ AccelerateFactorizer::AccelerateFactorizer() {
     ensureApple();
 #ifdef __APPLE__
     m_opts.control = SparseDefaultControl;
-    m_opts.orderMethod = SparseOrderMetis; // TODO: support different orderings (e.g., SparseOrderMetis)
+    m_opts.orderMethod = SparseOrderMetis;
     m_opts.order                = nullptr;
     m_opts.ignoreRowsAndColumns = nullptr;
     m_opts.reportError          = nullptr;
@@ -118,6 +118,7 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
         }
         A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
         m_blockEntryForReducedBlockEntry.swap(m_entryForReducedEntry);
+        m_entryForReducedEntry.clear();
         reducedRowForRow_block.swap(m_reducedRowForRow);
 
         // `m_initRowColRemoval` has now stored the pinned **block** variable
@@ -144,6 +145,24 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
     else {
         A_reduced = m_initRowColRemoval(mat, pinnedVars);
         reducedRowForRow_block = m_reducedRowForRow;
+    }
+
+    if (orderingMethod == OrderingMethod::AMD) {
+        m_opts.orderMethod = SparseOrderAMD;
+        m_opts.order       = nullptr;
+    }
+    else if (orderingMethod == OrderingMethod::Metis) {
+        m_opts.orderMethod = SparseOrderMetis;
+        m_opts.order       = nullptr;
+    }
+    else if (orderingMethod == OrderingMethod::CholmodAMD) {
+        throw std::runtime_error("CholmodAMD not implemented yet");
+    }
+    else if (orderingMethod == OrderingMethod::Nesdis) {
+        throw std::runtime_error("Nesdis not implemented yet");
+    }
+    else {
+        throw std::runtime_error("Unexpected ordering method");
     }
 
     m_setUpperTriangleCSC(*A_reduced);
