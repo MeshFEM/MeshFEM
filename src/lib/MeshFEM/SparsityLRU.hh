@@ -54,7 +54,7 @@ struct SparsityLRU {
         }
 
         m_S.nz = back;
-        m_S.Ai.resize(back);
+        m_S.Ai.conservativeResize(back);
         m_entryAge.resize(back);
     }
 
