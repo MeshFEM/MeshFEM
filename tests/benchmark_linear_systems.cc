@@ -17,9 +17,20 @@
 #include <MeshFEM/Solvers/MatrixRecorder.hh>
 
 #include <glob.h>
+#include <cstdlib>
 
-void benchmark_method(const std::string &method, const std::string &directory, size_t tbb_threads, size_t repeats) {
-    set_max_num_tbb_threads(tbb_threads);
+void benchmark_method(const std::string &method, const std::string &directory, size_t num_threads, size_t repeats) {
+    const bool tbb_threading = method.substr(0, 10) == "catamari";
+    const size_t    omp_threads = tbb_threading ? 1 : num_threads;
+    const size_t veclib_threads = tbb_threading ? 1 : num_threads;
+    const size_t    mkl_threads = tbb_threading ? 1 : num_threads;
+
+    // Also set environment variables to control OpenMP/Accelerate threading.
+    setenv("OMP_NUM_THREADS",        std::to_string(   omp_threads).c_str(), 1);
+    setenv("VECLIB_MAXIMUM_THREADS", std::to_string(veclib_threads).c_str(), 1);
+    setenv("MKL_NUM_THREADS",        std::to_string(   mkl_threads).c_str(), 1);
+
+    set_max_num_tbb_threads(num_threads);
 
 // #if __linux__
 //     PinningObserver core_binder;
@@ -39,12 +50,12 @@ void benchmark_method(const std::string &method, const std::string &directory, s
         // it will be applied to "catamari_nesdis", "catamari_legacy", and "catamari_left".
         if (method == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
-        if (method == "catamari_amd")
+        if (method.substr(0, 12) == "catamari_amd")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
-        if (method == "catamari_metis")
+        if (method.substr(0, 14) == "catamari_metis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
 #if MESHFEM_WITH_SCOTCH
-        if (method == "catamari_scotch")
+        if (method.substr(0, 15) == "catamari_scotch")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Scotch;
             if (method.size() > 15) cf->scotchSettings.parse(method.substr(15));
 #endif
@@ -58,6 +69,14 @@ void benchmark_method(const std::string &method, const std::string &directory, s
         auto af = std::make_unique<AccelerateFactorizer>();
         if (method.substr(method.size() - 8) == "_noblock")
             af->setUseBlockAccel(false);
+        if (method.substr(0, 19) == "accelerate_amd")
+            af->orderingMethod = AccelerateFactorizer::OrderingMethod::AMD;
+        else if (method.substr(0, 20) == "accelerate_metis")
+            af->orderingMethod = AccelerateFactorizer::OrderingMethod::Metis;
+        else if (method.substr(0, 22) == "accelerate_cholmodamd")
+            af->orderingMethod = AccelerateFactorizer::OrderingMethod::CholmodAMD;
+        else if (method.substr(0, 20) == "accelerate_nesdis")
+            af->orderingMethod = AccelerateFactorizer::OrderingMethod::Nesdis;
         factorizer = std::move(af);
     }
     else if (method == "pardiso") {
@@ -158,7 +177,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
 
 int main(int argc, const char *argv[]) {
     if (argc < 4 || argc > 5) {
-        std::cout << "Usage: " << argv[0] << " method tbb_threads matrix_directory [numeric_repeats]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " method num_threads matrix_directory [numeric_repeats]" << std::endl;
         std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, catamari_left[_noblock], catamari_right[_noblock], pardiso, accelerate[_noblock]}" << std::endl;
         exit(-1);
     }
@@ -166,7 +185,7 @@ int main(int argc, const char *argv[]) {
     size_t repeats = 1;
     if (argc == 5) repeats = std::stoi(argv[4]);
 
-    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* tbb_threads = */ std::stoi(argv[2]), repeats);
+    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), repeats);
 
     return 0;
 }
