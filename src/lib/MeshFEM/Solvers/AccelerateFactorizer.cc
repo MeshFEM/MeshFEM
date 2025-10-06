@@ -80,6 +80,7 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
     BENCHMARK_SCOPED_TIMER_SECTION timer("AccelerateFactorizer.m_symbolicFactorizationImpl<" + std::to_string(m_blockSize) + ">");
     ensureApple();
 
+#ifdef __APPLE__
     const SuiteSparseMatrix *A_reduced;
     std::vector<SuiteSparse_long> reducedRowForRow_block;
 
@@ -168,7 +169,6 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
     m_setUpperTriangleCSC(*A_reduced);
     m_reducedSizeScalar = static_cast<int>(m_A_csc.n * m_blockSize);
 
-#ifdef __APPLE__
     BENCHMARK_SCOPED_TIMER_SECTION sftimer("SparseFactor call");
 
     m_numfactor.reset();
