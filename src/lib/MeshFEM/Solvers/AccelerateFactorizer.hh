@@ -10,6 +10,10 @@
 #include <stdexcept>
 #include <vector>
 
+extern "C" {
+#include <cholmod.h>
+}
+
 struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase {
     enum class OrderingMethod {
         Metis, AMD, Nesdis, CholmodAMD
@@ -89,6 +93,16 @@ struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase
 
     OrderingMethod orderingMethod = OrderingMethod::Metis;
 
+    bool storeOrdering = false;
+    const VecX_T<int> getPermutation() const { return m_customOrder; }
+
+#ifdef __APPLE__
+    virtual ~AccelerateFactorizer() {
+        if (m_c) cholmod_l_finish(m_c.get());
+        if (m_c_int) cholmod_finish(m_c_int.get());
+    }
+#endif
+
 private:
     // The row/col-removed matrix that is actually factorized.
     SuiteSparseMatrix m_A_csc; // mirrors A_transpose role in Pardiso version
@@ -154,6 +168,10 @@ private:
 
     // Control options
     SparseSymbolicFactorOptions m_opts;
+
+    std::unique_ptr<cholmod_common> m_c, m_c_int; // Used for Cholmod's ordering routines
+    VecX_T<double> m_valuesDummy; // Needed to run `cholmod_l_nested_dissection` without values in certain cases.
+    VecX_T<int> m_customOrder;
 #endif
 
     void m_setUpperTriangleCSC(const SuiteSparseMatrix &A_reduced);

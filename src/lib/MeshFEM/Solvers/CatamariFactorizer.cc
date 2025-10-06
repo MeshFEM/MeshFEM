@@ -20,6 +20,8 @@
 #include "ScotchOrdering.hh"
 #endif
 
+#include "accelerate_ordering.hh"
+
 #if CATAMARI_FINEGRAINED_TIMERS
 #include <filesystem>
 #endif
@@ -415,6 +417,16 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         double sym_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - sym_fact_start).count();
         if (orderingMethod == OrderingMethod::Adaptive)
             adaptiveOrdering.recordSymbolic(sym_fact_duration);
+    }
+    else if (orderingMethod == OrderingMethod::AccelerateMetis) {
+        auto perm = compute_accelerate_ordering(*A_reduced);
+        catamari::SymmetricOrdering ordering;
+        ordering.permutation        .Resize(A_reduced->m);
+        ordering.inverse_permutation.Resize(A_reduced->m);
+        for (int i = 0; i < A_reduced->m; ++i)
+            ordering.permutation[i] = perm[i];
+        quotient::InvertPermutation(ordering.permutation, &ordering.inverse_permutation);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
     else if (orderingMethod == OrderingMethod::Scotch) {
 #if MESHFEM_WITH_SCOTCH

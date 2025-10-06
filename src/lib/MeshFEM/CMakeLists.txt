@@ -93,6 +93,7 @@ add_library(MeshFEM SHARED
         Solvers/PardisoFactorizer.cc
         Solvers/AccelerateFactorizer.cc
         Solvers/MatrixRecorder.cc
+        Solvers/accelerate_ordering.cc
 
         algorithms/get_element_components.hh
         algorithms/remove_if_index.hh

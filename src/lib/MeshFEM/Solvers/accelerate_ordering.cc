@@ -1,0 +1,11 @@
+#include "accelerate_ordering.hh"
+#include "AccelerateFactorizer.hh"
+
+VecX_T<int> compute_accelerate_ordering(const SuiteSparseMatrix &A, AccelerateSparseOrder order) {
+    AccelerateFactorizer af;
+    af.storeOrdering = true;
+    af.factorizeSymbolic(A, std::vector<size_t>());
+    VecX_T<int> perm = af.getPermutation();
+    if (perm.size() != A.m) throw std::runtime_error("Accelerate returned permutation of wrong size");
+    return perm;
+}
