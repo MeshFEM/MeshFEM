@@ -94,7 +94,14 @@ struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase
     OrderingMethod orderingMethod = OrderingMethod::Metis;
 
     bool storeOrdering = false;
-    const VecX_T<int> getPermutation() const { return m_customOrder; }
+    const VecX_T<int> getPermutation() const {
+        ensureApple();
+#if __APPLE__
+        return m_customOrder;
+#else
+        return VecX_T<int>();
+#endif
+    }
 
 #ifdef __APPLE__
     virtual ~AccelerateFactorizer() {

@@ -20,7 +20,7 @@
 #include <cstdlib>
 
 void benchmark_method(const std::string &method, const std::string &directory, size_t num_threads, size_t repeats) {
-    const bool tbb_threading = method.substr(0, 10) == "catamari";
+    const bool tbb_threading = method.substr(0, 8) == "catamari";
     const size_t    omp_threads = tbb_threading ? 1 : num_threads;
     const size_t veclib_threads = tbb_threading ? 1 : num_threads;
     const size_t    mkl_threads = tbb_threading ? 1 : num_threads;
@@ -29,7 +29,12 @@ void benchmark_method(const std::string &method, const std::string &directory, s
     setenv("OMP_NUM_THREADS",        std::to_string(   omp_threads).c_str(), 1);
     setenv("VECLIB_MAXIMUM_THREADS", std::to_string(veclib_threads).c_str(), 1);
     setenv("MKL_NUM_THREADS",        std::to_string(   mkl_threads).c_str(), 1);
+    if (tbb_threading)
+        setenv("MKL_THREADING_LAYER", "SEQUENTIAL", 1);
+    else
+        setenv("MKL_THREADING_LAYER", "GNU", 1);
 
+    // set_max_num_tbb_threads(tbb_threading ? num_threads : 1);
     set_max_num_tbb_threads(num_threads);
 
 // #if __linux__
