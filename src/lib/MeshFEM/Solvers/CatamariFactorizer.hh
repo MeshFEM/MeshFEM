@@ -135,12 +135,14 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
 
+    void setCollectIndefinitenessStats(bool collect);
+    void writeSupernodeStats(const std::string &path) const;
     void writeSolveTimers() const override;
 
 #if defined(MESHFEM_WITH_SCOTCH)
     struct ScotchSettings {
         SCOTCH_Num stratFlag = SCOTCH_STRATDEFAULT;
-        double imbalanceRatio = 0.01;
+        double imbalanceRatio = -1; // fully default
 
         // Parse the suffix of the method string passed to, e.g., `benchmark_linear_systems`.
         // This is either empty or of the form `_quality_0.01` or `_speed_0.01`.

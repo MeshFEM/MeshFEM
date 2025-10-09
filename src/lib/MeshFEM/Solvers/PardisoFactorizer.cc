@@ -60,7 +60,7 @@ void PardisoFactorizer::m_pardisoFactorization(int phase) {
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("pardiso call phase " + std::to_string(phase));
 #ifdef MESHFEM_WITH_MKL_PARDISO
-    iparm[26] = 1;
+    // iparm[26] = 1; // Validate matrix
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
 	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
             iparm.data(), &msglvl, &ddum, &ddum, &error);
@@ -80,6 +80,7 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     iparm[1] = 2;
 #if MESHFEM_WITH_MKL_PARDISO
     // iparm[1] = 3; // use parallel nested dissection
+    // iparm[1] = 0; // use minimum degree
 #endif
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Symbolic Factorization");

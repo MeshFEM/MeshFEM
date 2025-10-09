@@ -245,6 +245,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
           .def("setUseLeftLooking", &CatF::setUseLeftLooking, py::arg("useLeftLooking"))
           .def("getUseBlockAccel", &CatF::getUseBlockAccel)
           .def("setUseBlockAccel", &CatF::setUseBlockAccel, py::arg("useBlockAccel"))
+          .def("setCollectIndefinitenessStats", &CatF::setCollectIndefinitenessStats, py::arg("collect") = true)
+          .def("writeSupernodeStats", &CatF::writeSupernodeStats, py::arg("path"));
           ;
 #endif
 

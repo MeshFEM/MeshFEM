@@ -19,13 +19,18 @@
 #include <glob.h>
 #include <cstdlib>
 
-void benchmark_method(const std::string &method, const std::string &directory, size_t num_threads, size_t repeats) {
-    const bool tbb_threading = method.substr(0, 8) == "catamari";
+// Record total amount of time spent in numeric factorization in a conveniently
+// accessible way to support the adaptive-repeats mode.
+double g_total_num_fact_duration = 0;
+size_t global_repeat = 0;
+
+void benchmark_method(std::string method, const std::string &directory, size_t num_threads, size_t repeats) {
+    const bool tbb_threading = (method.substr(0, 8) == "catamari") && !(method.substr(0, 13) == "catamari_left") && !(method.substr(0, 13) == "catamari_st");
     const size_t    omp_threads = tbb_threading ? 1 : num_threads;
     const size_t veclib_threads = tbb_threading ? 1 : num_threads;
     const size_t    mkl_threads = tbb_threading ? 1 : num_threads;
 
-    // Also set environment variables to control OpenMP/Accelerate threading.
+    // Also set environment variables to control OpenMP/MKL/Accelerate threading.
     setenv("OMP_NUM_THREADS",        std::to_string(   omp_threads).c_str(), 1);
     setenv("VECLIB_MAXIMUM_THREADS", std::to_string(veclib_threads).c_str(), 1);
     setenv("MKL_NUM_THREADS",        std::to_string(   mkl_threads).c_str(), 1);
@@ -33,6 +38,11 @@ void benchmark_method(const std::string &method, const std::string &directory, s
         setenv("MKL_THREADING_LAYER", "SEQUENTIAL", 1);
     else
         setenv("MKL_THREADING_LAYER", "GNU", 1);
+
+    if (method == "catamari_st") { // right-looking single threaded
+        method = "catamari_nesdis";
+        num_threads = 1;
+    }
 
     // set_max_num_tbb_threads(tbb_threading ? num_threads : 1);
     set_max_num_tbb_threads(num_threads);
@@ -51,8 +61,6 @@ void benchmark_method(const std::string &method, const std::string &directory, s
         std::unique_ptr<CatamariFactorizer> cf = std::make_unique<CatamariFactorizer>(method == "catamari_legacy");
         cf->setUseBlockAccel(method.substr(method.size() - 8) != "_noblock");
         cf->setUseLeftLooking(method.substr(0, 13) == "catamari_left");
-        // Note that `CatamariFactorizer::OrderingMethod::CholmodNesdis` is the default;
-        // it will be applied to "catamari_nesdis", "catamari_legacy", and "catamari_left".
         if (method == "catamari")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Catamari;
         if (method.substr(0, 12) == "catamari_amd")
@@ -61,6 +69,8 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
         if (method.substr(0, 19) == "catamari_accelerate")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::AccelerateMetis;
+        if (method.substr(0, 15) == "catamari_nesdis")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
 #if MESHFEM_WITH_SCOTCH
         if (method.substr(0, 15) == "catamari_scotch") {
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Scotch;
@@ -148,6 +158,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
 
         std::string numPath = directory + "/" + MatrixRecorder::numericMatrixFileName(counter);
         std::ifstream numFile(numPath);
+        std::vector<double> cleanse_data;
         if (numFile.good()) {
             // std::cout << numPath << std::endl;
             if (!factorizer->hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic))
@@ -155,8 +166,25 @@ void benchmark_method(const std::string &method, const std::string &directory, s
             auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
             for (size_t r = 0; r < repeats; ++r) {
                 try {
-                    factorizer->factorizeNumericWithShift(*H, 1e-4); // Shift needed for parametrization examples
-                    if (r > 0) continue; // Only verify in first pass
+                    // "Palette cleanser" to investigate higher speedup factors at high repeat count
+                    // (Swap in Identity matrix and re-factor)
+                    if (r > 0) {
+                        BENCHMARK_SCOPED_TIMER_SECTION timer("cleanse");
+                        cleanse_data.resize(H->Ax.size());
+                        H->Ax.swap(cleanse_data);
+                        H->setIdentity(/* preserveSparsity = */ true);
+                        factorizer->factorizeNumeric(*H);
+                        H->Ax.swap(cleanse_data);
+                    }
+
+                    double shift = 1e-8 * (H->trace() / H->numScalarCols());
+                    {
+                        ScopedExternalTimer aux_nfac_timer(g_total_num_fact_duration);
+                        factorizer->factorizeNumericWithShift(*H, shift); // Shift needed for parametrization examples
+                    }
+
+                    if ((global_repeat > 0) || (r > 0))
+                        continue; // Only verify in first pass
 
                     // Verify
                     b = H->apply(x_gt); // Generate a right-hand side consistent with the pin constraints
@@ -169,7 +197,7 @@ void benchmark_method(const std::string &method, const std::string &directory, s
                         std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
                 }
                 catch (const std::runtime_error &e) {
-                    std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
+                    if (r == 0 && (global_repeat == 0)) std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
                 }
             }
 
@@ -178,9 +206,6 @@ void benchmark_method(const std::string &method, const std::string &directory, s
 
         break; // Ran out of matrices...
     }
-
-    BENCHMARK_REPORT();
-    unset_max_num_tbb_threads();
 }
 
 int main(int argc, const char *argv[]) {
@@ -193,7 +218,28 @@ int main(int argc, const char *argv[]) {
     size_t repeats = 1;
     if (argc == 5) repeats = std::stoi(argv[4]);
 
+#if 0
     benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), repeats);
+#else
+    if (repeats >= 1) {
+        for (global_repeat = 0; global_repeat < repeats; ++global_repeat) {
+            benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1);
+        }
+    }
+    else {
+        // Adaptively repeat until the measured numeric factorization time is long enough to trust.
+        // (Important for small datasets.)
+        // Note: adaptive repetition should be done at the global level; if we do it per matrix, then
+        // the variable-speed factorization failures can bias the results.
+        while (g_total_num_fact_duration < 0.25) {
+            benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1);
+            ++global_repeat;
+        }
+    }
+#endif
+
+    BENCHMARK_REPORT();
+    unset_max_num_tbb_threads();
 
     return 0;
 }

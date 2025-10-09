@@ -553,7 +553,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
         std::string dirname = directory + "/" + std::to_string(counter++);
         std::filesystem::create_directory(dirname);
         m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);
-        m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
+        m_ldl->supernodal_factorization->WriteSupernodeStats(dirname + "/supernodes.txt");
     }
 #endif
 
@@ -581,6 +581,19 @@ double CatamariFactorizer::getFlopEstimate() const {
     return m_ldl->supernodal_factorization->EstimateTotalWork();
 }
 
+void CatamariFactorizer::setCollectIndefinitenessStats(bool collect) {
+    if (collect) {
+        if (!getUseLeftLooking() || !getUseBlockAccel()) std::cout << "WARNING: switching to BlockLeftLooking to support indefiniteness stats collection" << std::endl;
+        setUseLeftLooking(true);
+        setUseBlockAccel(true);
+    }
+    m_ldlControl->supernodal_control.record_indefinite_subtrees = collect;
+}
+
+void CatamariFactorizer::writeSupernodeStats(const std::string &path) const {
+    m_ldl->supernodal_factorization->WriteSupernodeStats(path);
+}
+
 void CatamariFactorizer::writeSolveTimers() const {
 #if CATAMARI_FINEGRAINED_TIMERS
     static std::string directory = "catamari_solve_timers";
@@ -597,7 +610,7 @@ void CatamariFactorizer::writeSolveTimers() const {
     std::string dirname = directory + "/" + std::to_string(counter++);
     std::filesystem::create_directory(dirname);
     m_ldl->supernodal_factorization->WriteFinegrainedSolveTimerStats(dirname);
-    m_ldl->supernodal_factorization->WriteSupernodeStats(dirname);
+    m_ldl->supernodal_factorization->WriteSupernodeStats(dirname + "/supernodes.txt");
     m_ldl->supernodal_factorization->ResetFinegrainedSolveTimerStats();
 #endif
 }
