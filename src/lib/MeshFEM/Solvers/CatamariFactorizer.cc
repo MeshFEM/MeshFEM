@@ -425,7 +425,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         ordering.permutation        .Resize(A_reduced->m);
         ordering.inverse_permutation.Resize(A_reduced->m);
         for (int i = 0; i < A_reduced->m; ++i)
-            ordering.inverse_permutation[i] = perm[i]; // Accelerate's permutation convention is the same as ours
+            ordering.permutation[i] = perm[i]; // Accelerate's permutation convention is the same as ours
         quotient::InvertPermutation(ordering.permutation, &ordering.inverse_permutation);
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
