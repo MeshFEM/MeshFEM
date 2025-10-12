@@ -180,6 +180,10 @@ endif()
 
 if (MESHFEM_WITH_IPC_TOOLKIT AND NOT TARGET ipc::toolkit)
     meshfem_download_ipc_toolkit()
+    # We hit ODR violations/alignment issues if ipc_toolkit is built with an incompatible `march` setting than MeshFEM.
+    # Specifically, we get a SEGFAULT when attempting an 32-byte aligned read from an unaligned address
+    # (copying from IPC's insufficiently aligned Eigen::MatrixXd into our aligned Eigen::MatrixXd).
+    set(IPC_TOOLKIT_WITH_SIMD ON)
     add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit)
 endif()
 
