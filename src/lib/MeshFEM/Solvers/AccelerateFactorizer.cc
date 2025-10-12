@@ -83,7 +83,6 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
 
 #ifdef __APPLE__
     const SuiteSparseMatrix *A_reduced;
-    std::vector<SuiteSparse_long> reducedRowForRow_block;
 
     if (m_blockSize > 1 && pinnedVars.size() > 0) {
         BENCHMARK_SCOPED_TIMER_SECTION bptimer("BlockCSC Pin Handling");
@@ -121,6 +120,7 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
         A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
         m_blockEntryForReducedBlockEntry.swap(m_entryForReducedEntry);
         m_entryForReducedEntry.clear();
+        std::vector<SuiteSparse_long> reducedRowForRow_block;
         reducedRowForRow_block.swap(m_reducedRowForRow);
 
         // `m_initRowColRemoval` has now stored the pinned **block** variable
@@ -144,10 +144,7 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
             }
         }
     }
-    else {
-        A_reduced = m_initRowColRemoval(mat, pinnedVars);
-        reducedRowForRow_block = m_reducedRowForRow;
-    }
+    else A_reduced = m_initRowColRemoval(mat, pinnedVars);
 
     if (storeOrdering) {
         m_customOrder.resize(A_reduced->m);
