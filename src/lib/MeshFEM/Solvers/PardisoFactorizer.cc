@@ -1,4 +1,5 @@
 #include "PardisoFactorizer.hh"
+#include "CholmodFactorizer.hh"
 
 #include <stdexcept>
 #include <tbb/partitioner.h>
@@ -64,12 +65,12 @@ void PardisoFactorizer::m_pardisoFactorization(int phase) {
     // iparm[26] = 1; // Validate matrix
     iparm[36] = (m_blockSize > 1) ? m_blockSize : 0; // Format for matrix storage
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
-	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
+	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), m_customOrder.data(), &nrhs,
             iparm.data(), &msglvl, &ddum, &ddum, &error);
 #else
     iparm[52] = (m_blockSize > 1) ? m_blockSize : 0; // IPARM(53) -- Block size
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
-	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
+	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), m_customOrder.data(), &nrhs,
             iparm.data(), &msglvl, &ddum, &ddum, &error, dparm.data());
 #endif
 
@@ -95,6 +96,8 @@ void PardisoFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const 
 
 void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
     const SuiteSparseMatrix *A_reduced;
+
+    BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Symbolic Factorization");
 
     if (m_blockSize > 1 && pinnedVars.size() > 0) {
         BENCHMARK_SCOPED_TIMER_SECTION bptimer("BlockCSC Pin Handling");
@@ -155,6 +158,8 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     else A_reduced = m_initRowColRemoval(mat, pinnedVars);
 
     iparm[0] = 1; // Use custom options.
+    iparm[4] = 0; // Default to Pardiso-provided ordering.
+
     if (orderingMethod == OrderingMethod::AMD) iparm[1] = 0;
     else if (orderingMethod == OrderingMethod::Metis) iparm[1] = 2;
     else if (orderingMethod == OrderingMethod::ParallelMetis) {
@@ -165,15 +170,60 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
 #endif
     }
     else if (orderingMethod == OrderingMethod::CholmodAMD) {
-        throw std::runtime_error("CholmodAMD ordering not implemented");
+        if (!m_c_int) {
+            m_c_int = std::make_unique<cholmod_common>();
+            cholmod_start(m_c_int.get());
+        }
+
+        BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_amd");
+        VecX_T<int> Ai_downcast, Ap_downcast;
+        Ai_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+        Ap_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+        auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, dummy_values_ptr(A_reduced->Ai.data(), A_reduced->Ai.size(), m_valuesDummy),
+                                                    Ai_downcast.data(), Ap_downcast.data());
+
+        VecX_T<int> iperm(A_reduced->m);
+        cholmod_amd(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0, iperm.data(), m_c_int.get());
+        m_customOrder = iperm.array() + 1; // Pardiso permutation array is 1-based
+
+        iparm[4] = 1; // Use user-provided permutation
     }
     else if (orderingMethod == OrderingMethod::CholmodNesdis) {
-        throw std::runtime_error("CholmodNesdis ordering not implemented");
+        if (!m_c_int) {
+            m_c_int = std::make_unique<cholmod_common>();
+            cholmod_start(m_c_int.get());
+        }
+
+        {
+            VecX_T<int> Ai_downcast, Ap_downcast;
+            Ai_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+            Ap_downcast = Eigen::Map<const VecX_T<SuiteSparse_long>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+            auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, dummy_values_ptr(A_reduced->Ai.data(), A_reduced->Ai.size(), m_valuesDummy),
+                                                        Ai_downcast.data(), Ap_downcast.data());
+
+            VecX_T<int> iperm(A_reduced->m);
+            VecX_T<int> CParent(A_reduced->m), CMember(A_reduced->m);
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_nested_dissection");
+                cholmod_nested_dissection(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0,
+                                          iperm.data(), CParent.data(), CMember.data(), m_c_int.get());
+            }
+            m_customOrder = iperm.array() + 1; // Pardiso permutation array is 1-based
+            m_valuesDummy.resize(0);
+        }
+
+        iparm[4] = 1; // Use user-provided permutation
     }
 
+    if (storeOrdering) {
+        if (iparm[4] != 0) throw std::runtime_error("storeOrdering can only be used with a Paridso-provided ordering method");
+        iparm[4] = 2; // Request `pardiso` to return the ordering.
+        m_customOrder.resize(A_reduced->m);
+    }
+
+    std::cout << "iparm[4] = " << iparm[4] << std::endl;
     std::cout << "iparm[1] = " << iparm[1] << std::endl;
 
-    BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Symbolic Factorization");
     // Pardiso expects the upper triangle of a matrix in CSR format, which
     // due to symmetry is the lower triangle of a CSC matrix.
     //
@@ -283,11 +333,11 @@ void PardisoFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys,
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Solve");
 #ifdef MESHFEM_WITH_MKL_PARDISO
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
-            &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
+            &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), m_customOrder.data(), &nrhs,
             iparm.data(), &msglvl, const_cast<double *>(b), x, &error);
 #else
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
-            &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
+            &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), m_customOrder.data(), &nrhs,
             iparm.data(), &msglvl, const_cast<double *>(b), x, &error, dparm.data());
 #endif
 
@@ -311,4 +361,7 @@ PardisoFactorizer::~PardisoFactorizer()  {
              &m_reducedSize, &ddum, /* ia = */ nullptr, /* ja = */ nullptr, &idum, &nrhs,
              iparm.data(), &msglvl, &ddum, &ddum, &error, dparm.data());
 #endif
+
+    if (m_c) cholmod_l_finish(m_c.get());
+    if (m_c_int) cholmod_finish(m_c_int.get());
 }

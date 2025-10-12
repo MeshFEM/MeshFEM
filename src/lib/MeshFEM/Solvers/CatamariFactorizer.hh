@@ -33,7 +33,7 @@ namespace catamari {
 
 struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     enum class OrderingMethod {
-        Catamari, CholmodNesdis, Metis, AMD, Adaptive, Scotch, AccelerateMetis
+        Catamari, CholmodNesdis, Metis, AMD, Adaptive, Scotch, AccelerateMetis, PardisoMetis, PardisoParallelMetis
     };
 
     // legacy: whether to use Jack Poulson's original implementation for comparison

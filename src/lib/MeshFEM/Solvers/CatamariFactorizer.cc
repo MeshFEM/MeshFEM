@@ -21,6 +21,7 @@
 #endif
 
 #include "accelerate_ordering.hh"
+#include "pardiso_ordering.hh"
 
 #if CATAMARI_FINEGRAINED_TIMERS
 #include <filesystem>
@@ -424,8 +425,18 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         ordering.permutation        .Resize(A_reduced->m);
         ordering.inverse_permutation.Resize(A_reduced->m);
         for (int i = 0; i < A_reduced->m; ++i)
-            ordering.permutation[i] = perm[i];
+            ordering.inverse_permutation[i] = perm[i]; // Accelerate's permutation convention is the same as ours
         quotient::InvertPermutation(ordering.permutation, &ordering.inverse_permutation);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+    }
+    else if ((orderingMethod == OrderingMethod::PardisoMetis) || (orderingMethod == OrderingMethod::PardisoParallelMetis)) {
+        auto perm = compute_pardiso_ordering(*A_reduced,  (orderingMethod == OrderingMethod::PardisoMetis) ? PardisoSparseOrder::Metis : PardisoSparseOrder::ParallelMetis);
+        catamari::SymmetricOrdering ordering;
+        ordering.permutation        .Resize(A_reduced->m);
+        ordering.inverse_permutation.Resize(A_reduced->m);
+        for (int i = 0; i < A_reduced->m; ++i)
+            ordering.inverse_permutation[i] = perm[i]; // Pardiso's permutation convention is the inverse of ours
+        quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
     }
     else if (orderingMethod == OrderingMethod::Scotch) {

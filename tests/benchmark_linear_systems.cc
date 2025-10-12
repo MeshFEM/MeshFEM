@@ -45,7 +45,6 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
         num_threads = 1;
     }
 
-    // set_max_num_tbb_threads(tbb_threading ? num_threads : 1);
     set_max_num_tbb_threads(num_threads);
 
 // #if __linux__
@@ -70,6 +69,10 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::Metis;
         if (method.substr(0, 19) == "catamari_accelerate")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::AccelerateMetis;
+        if (method.substr(0, 16) == "catamari_pardiso")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::PardisoMetis;
+        if (method.substr(0, 24) == "catamari_pardisoparallel")
+            cf->orderingMethod = CatamariFactorizer::OrderingMethod::PardisoParallelMetis;
         if (method.substr(0, 15) == "catamari_nesdis")
             cf->orderingMethod = CatamariFactorizer::OrderingMethod::CholmodNesdis;
 #if MESHFEM_WITH_SCOTCH
@@ -110,7 +113,7 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
             pf->orderingMethod = PardisoFactorizer::OrderingMethod::ParallelMetis;
         else if (method.substr(0, 18) == "pardiso_cholmodamd")
             pf->orderingMethod = PardisoFactorizer::OrderingMethod::CholmodAMD;
-        else if (method.substr(0, 14) == "pardiso_cholmodnesdis")
+        else if (method.substr(0, 21) == "pardiso_cholmodnesdis")
             pf->orderingMethod = PardisoFactorizer::OrderingMethod::CholmodNesdis;
         factorizer = std::move(pf);
     }

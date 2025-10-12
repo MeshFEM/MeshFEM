@@ -3,6 +3,10 @@
 
 #include "CholeskyFactorizerBase.hh"
 
+extern "C" {
+#include <cholmod.h>
+}
+
 // Based on PARDISO example:
 // https://www.pardiso-project.org/manual/pardiso_sym.cpp
 struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
@@ -73,6 +77,12 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
 
+    bool storeOrdering = false;
+    const VecX_T<int> getPermutation() const {
+        // Note: Pardiso's permutation array is 1-based...
+        return m_customOrder.array() - 1;
+    }
+
     OrderingMethod orderingMethod = OrderingMethod::Metis;
 
     ~PardisoFactorizer();
@@ -103,6 +113,10 @@ private:
     mutable double ddum = 0; // Double dummy
     mutable int    idum = 0; // Integer dummy
     mutable int    nrhs = 1; // Number of right-hand sides in the solve phase.
+                             //
+    std::unique_ptr<cholmod_common> m_c, m_c_int; // Used for Cholmod's ordering routines
+    VecX_T<double> m_valuesDummy; // Needed to run `cholmod_l_nested_dissection` without values in certain cases.
+    mutable VecX_T<int> m_customOrder;
 };
 
 #endif /* end of include guard: PARDISOFACTORIZER_HH */
