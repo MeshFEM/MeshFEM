@@ -1306,8 +1306,17 @@ struct CSCMatrix {
     void addDiagEntry(_Index i, const _Real2 &v) { Ax[findDiagEntry(i)] += v; }
 
     void addScaledIdentity(_Real v) {
-        for (_Index i = 0; i < m; ++i)
-            addDiagEntry(i, v);
+        BENCHMARK_SCOPED_TIMER_SECTION timer("addScaledIdentity");
+        if (m > 8192) {
+            tbb::parallel_for(tbb::blocked_range<_Index>(0, m), [this, v](const tbb::blocked_range<_Index> &r) {
+                for (_Index i = r.begin(); i < r.end(); ++i)
+                    addDiagEntry(i, v);
+            });
+        }
+        else {
+            for (_Index i = 0; i < m; ++i)
+                addDiagEntry(i, v);
+        }
     }
 
     template<class _InVector>

@@ -59,7 +59,7 @@ void AccelerateFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, con
     g_matrixRecorder.recordSymbolic(mat, pinnedVars);
 
     const bool blockFactorizationSupported = m_useBlockAccel && mat.uniformBlockSize();
-    if (blockFactorizationSupported) {
+    if (blockFactorizationSupported || mat.isScalar()) {
         m_blockSize = mat.maxBlockSize();
         m_symbolicFactorizationImpl((const SuiteSparseMatrix &) mat, pinnedVars);
     }

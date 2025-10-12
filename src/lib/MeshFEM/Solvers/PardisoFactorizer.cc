@@ -55,16 +55,19 @@ Eigen::ArrayXi fortranIndexArrayFromCIndexArray(const IdxVec &ivec) {
 
 void PardisoFactorizer::m_pardisoFactorization(int phase) {
     m_reducedSize = A_transpose.m;
+    m_reducedSizeScalar = A_transpose.m * m_blockSize;
 
     int error = 0;
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("pardiso call phase " + std::to_string(phase));
 #ifdef MESHFEM_WITH_MKL_PARDISO
     // iparm[26] = 1; // Validate matrix
+    iparm[36] = (m_blockSize > 1) ? m_blockSize : 0; // Format for matrix storage
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
 	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
             iparm.data(), &msglvl, &ddum, &ddum, &error);
 #else
+    iparm[52] = (m_blockSize > 1) ? m_blockSize : 0; // IPARM(53) -- Block size
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
 	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
             iparm.data(), &msglvl, &ddum, &ddum, &error, dparm.data());
@@ -74,18 +77,111 @@ void PardisoFactorizer::m_pardisoFactorization(int phase) {
         throw std::runtime_error("ERROR during factorization phase " + std::to_string(phase) + ": " + std::to_string(error));
 }
 
+void PardisoFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
+    g_matrixRecorder.recordSymbolic(mat, pinnedVars);
+
+    const bool blockFactorizationSupported = m_useBlockAccel && mat.uniformBlockSize();
+    if (blockFactorizationSupported || mat.isScalar()) {
+        m_blockSize = mat.maxBlockSize();
+        factorizeSymbolic((const SuiteSparseMatrix &) mat, pinnedVars);
+    }
+    else {
+        m_scalarHessian = mat.toScalar(/* sparsityOnly = */ true);
+        m_dataOffsetForScalarHessianLoc = mat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
+        m_blockSize = 1;
+        factorizeSymbolic(m_scalarHessian, pinnedVars);
+    }
+}
+
 void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
-    const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
-    iparm[0] = 1;
-    iparm[1] = 2;
+    const SuiteSparseMatrix *A_reduced;
+
+    if (m_blockSize > 1 && pinnedVars.size() > 0) {
+        BENCHMARK_SCOPED_TIMER_SECTION bptimer("BlockCSC Pin Handling");
+        // Check for partially pinned blocks, which currently require a scalar
+        // factorization fallback.
+
+        // Convert the scalar variable indices in `pinnedVars` to their
+        // corresponding block variable indices.
+        size_t numBlockVars = mat.n;
+        std::vector<bool> scalarFixedVarMask(numBlockVars * m_blockSize, false);
+        std::vector<size_t> pinnedBlockVars, scalarFixedVars;
+        std::vector<size_t> numComponentsPinned(numBlockVars); // how many scalar variables within each block have been pinned?
+        for (size_t i : pinnedVars) {
+            if (scalarFixedVarMask[i]) continue;
+            scalarFixedVarMask[i] = true;
+            scalarFixedVars.push_back(i);
+            size_t bi = i / m_blockSize;
+            if (++numComponentsPinned[bi] == 1) pinnedBlockVars.push_back(bi);
+        }
+        // Detect entries of `pinnedVars` that do not respect the block
+        // structure (i.e., that pin only part of a block); these will need to
+        // be handled specially.
+        for (size_t bi : pinnedBlockVars) {
+            if (numComponentsPinned[bi] != m_blockSize) {
+                std::cout << "WARNING: Partially-pinned block variables not yet implemented; falling back to scalar factorization" << std::endl;
+                const BlockCSCHessianBase &bmat = static_cast<const BlockCSCHessianBase &>(mat);
+                m_scalarHessian = bmat.toScalar(/* sparsityOnly = */ true);
+                m_dataOffsetForScalarHessianLoc = bmat.dataOffsetsForScalarCSCDataOffsets(m_scalarHessian);
+                m_blockSize = 1;
+                return factorizeSymbolic(m_scalarHessian, pinnedVars);
+            }
+        }
+        A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
+        std::vector<SuiteSparse_long> reducedRowForRow_block;
+        reducedRowForRow_block.swap(m_reducedRowForRow);
+
+        // `m_initRowColRemoval` has now stored the pinned **block** variable
+        // indices, whereas `m_fixedVars` should store **scalar** variable indices.
+        m_fixedVars.swap(scalarFixedVars);
+
+        if (!reducedRowForRow_block.empty()) {
+            // Upgrade `reducedRowForRow_block` to a scalar version as needed
+            // for the `solve` phase.
+            m_reducedRowForRow.resize(m_blockSize * mat.n);
+            for (size_t i = 0; i < reducedRowForRow_block.size(); ++i) {
+                SuiteSparse_long brr = reducedRowForRow_block[i];
+                if (brr == SuiteSparseMatrix::INDEX_NONE) {
+                    for (size_t c = 0; c < m_blockSize; ++c)
+                        m_reducedRowForRow[m_blockSize * i + c] = SuiteSparseMatrix::INDEX_NONE;
+                }
+                else {
+                    for (size_t c = 0; c < m_blockSize; ++c)
+                        m_reducedRowForRow[m_blockSize * i + c] = m_blockSize * brr + c;
+                }
+            }
+        }
+    }
+    else A_reduced = m_initRowColRemoval(mat, pinnedVars);
+
+    iparm[0] = 1; // Use custom options.
+    if (orderingMethod == OrderingMethod::AMD) iparm[1] = 0;
+    else if (orderingMethod == OrderingMethod::Metis) iparm[1] = 2;
+    else if (orderingMethod == OrderingMethod::ParallelMetis) {
 #if MESHFEM_WITH_MKL_PARDISO
-    // iparm[1] = 3; // use parallel nested dissection
-    // iparm[1] = 0; // use minimum degree
+        iparm[1] = 3;
+#else
+        throw std::runtime_error("ParallelMetis ordering supported only with MKL Pardiso");
 #endif
+    }
+    else if (orderingMethod == OrderingMethod::CholmodAMD) {
+        throw std::runtime_error("CholmodAMD ordering not implemented");
+    }
+    else if (orderingMethod == OrderingMethod::CholmodNesdis) {
+        throw std::runtime_error("CholmodNesdis ordering not implemented");
+    }
+
+    std::cout << "iparm[1] = " << iparm[1] << std::endl;
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Symbolic Factorization");
     // Pardiso expects the upper triangle of a matrix in CSR format, which
     // due to symmetry is the lower triangle of a CSC matrix.
+    //
+    // Note that for block matries, since the source matrix holds upper-tri
+    // blocks in column major order--and Pardiso uses column-major order
+    // for blocks (within its BCSR)--we don't actually need to transpose
+    // any of the blocks themselves.
+    //
     // Get an integer-valued lower-triangular sparse matrix where each entry
     // holds the index of the source upper triangle entry that generated it.
     // BENCHMARK_START_TIMER_SECTION("Transpose");
@@ -97,7 +193,7 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     A_transpose.symmetry_mode = SuiteSparseMatrix::SymmetryMode::LOWER_TRIANGLE;
     A_transpose.Ai = std::move(Asp.Ai);
     A_transpose.Ap = std::move(Asp.Ap);
-    A_transpose.Ax.resize(Asp.nz);
+    A_transpose.Ax.resize(Asp.nz * m_blockSize * m_blockSize);
     A_transpose.nz = Asp.nz;
 
     if (m_entryForReducedEntry.size()) {
@@ -117,17 +213,41 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     m_factorizationType = FactorizationType::Symbolic;
 }
 
+void PardisoFactorizer::m_setValuesFromSource(const SuiteSparseMatrix &A, Real sigma) {
+    BENCHMARK_SCOPED_TIMER_SECTION timer("PardisoFactorizer.m_setValuesFromSource<" + std::to_string(m_blockSize) + ">");
+    tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
+        [&](const tbb::blocked_range<SuiteSparse_long> &r) {
+            for (SuiteSparse_long ii = r.begin(); ii < r.end(); ++ii) {
+                SuiteSparse_long src_loc = m_sourceEntry[ii];
+                if (m_dataOffsetForScalarHessianLoc.size()) src_loc = m_dataOffsetForScalarHessianLoc[src_loc];
+                if (m_blockSize == 1) A_transpose.Ax[ii] = A.Ax[src_loc];
+                else {
+                    Eigen::Map<Eigen::MatrixXd> dst_block(A_transpose.Ax.data() + ii * m_blockSize * m_blockSize, m_blockSize, m_blockSize);
+                    Eigen::Map<const Eigen::MatrixXd> src_block(A.Ax.data() + src_loc * m_blockSize * m_blockSize, m_blockSize, m_blockSize);
+                    dst_block = src_block;
+                }
+            }
+        });
+
+    if (sigma != 0) {
+        using _Index = SuiteSparse_long;
+        tbb::parallel_for(tbb::blocked_range<_Index>(0, A_transpose.n), [this, sigma](const tbb::blocked_range<_Index> &r) {
+            for (_Index j = r.begin(); j < r.end(); ++j) {
+                auto diag_block_loc = A_transpose.findDiagEntry(j);
+                assert(A_transpose.Ai[diag_block_loc] == j);
+                auto diag_scalar_loc = diag_block_loc * m_blockSize * m_blockSize;
+                Eigen::Map<Eigen::MatrixXd> diag_block(A_transpose.Ax.data() + diag_scalar_loc, m_blockSize, m_blockSize);
+                diag_block.diagonal().array() += sigma;
+            }
+        });
+    }
+}
+
 void PardisoFactorizer::factorizeNumeric(const SuiteSparseMatrix &A, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
 
-    static tbb::affinity_partitioner ap;
-    tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
-        [&](const tbb::blocked_range<SuiteSparse_long> &r) {
-            for (SuiteSparse_long ii = r.begin(); ii < r.end(); ++ii)
-                A_transpose.Ax[ii] = A.Ax[m_sourceEntry[ii]];
-        }, ap);
-
+    m_setValuesFromSource(A);
     m_pardisoFactorization(/* numeric factorization phase only */ 22);
     m_factorizationType = FactorizationType::Numeric;
 }
@@ -135,19 +255,10 @@ void PardisoFactorizer::factorizeNumeric(const SuiteSparseMatrix &A, bool /* isI
 void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, const SuiteSparseMatrix &B, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
-    if (sigma == 0) return factorizeNumeric(A);
+    throw std::runtime_error("AccelerateFactorizer::factorizeNumericWithShift with B not yet implemented (needs to implement data shuffling)");
 
     if ((B.m != A.m) || (B.n != A.n)) throw std::runtime_error("Unexpected input shape(s)");
     if (B.Ai.size() != A.Ai.size()) throw std::runtime_error("B must have the same sparsity pattern as A");
-
-    static tbb::affinity_partitioner ap;
-    tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
-        [&](const tbb::blocked_range<SuiteSparse_long> &r) {
-            for (SuiteSparse_long ii = r.begin(); ii < r.end(); ++ii) {
-                SuiteSparse_long src = m_sourceEntry[ii];
-                A_transpose.Ax[ii] = A.Ax[src] + sigma * B.Ax[src];
-            }
-        }, ap);
 
     m_pardisoFactorization(/* numeric factorization phase only */ 22);
     m_factorizationType = FactorizationType::Numeric;
@@ -156,13 +267,7 @@ void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Re
 void PardisoFactorizer::factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool /* isInTryCatch */) {
     assertFactorization(FactorizationType::Symbolic);
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Numeric Factorization");
-    static tbb::affinity_partitioner ap;
-    tbb::parallel_for(tbb::blocked_range<SuiteSparse_long>(0, A_transpose.nz),
-        [&](const tbb::blocked_range<SuiteSparse_long> &r) {
-            for (SuiteSparse_long ii = r.begin(); ii < r.end(); ++ii)
-                A_transpose.Ax[ii] = A.Ax[m_sourceEntry[ii]];
-        }, ap);
-    A_transpose.addScaledIdentity(sigma);
+    m_setValuesFromSource(A, sigma);
 
     m_pardisoFactorization(/* numeric factorization phase only */ 22);
     m_factorizationType = FactorizationType::Numeric;
@@ -173,17 +278,16 @@ void PardisoFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys,
     iparm[7] = 0; // No iterative refinement.
     iparm[5] = 0; // Do not solve in-place.
     int phase = 33;
-    int ncols = n_reduced();
 
     int error = 0;
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Solve");
 #ifdef MESHFEM_WITH_MKL_PARDISO
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
-            &ncols, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
+            &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
             iparm.data(), &msglvl, const_cast<double *>(b), x, &error);
 #else
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
-            &ncols, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
+            &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), &idum, &nrhs,
             iparm.data(), &msglvl, const_cast<double *>(b), x, &error, dparm.data());
 #endif
 

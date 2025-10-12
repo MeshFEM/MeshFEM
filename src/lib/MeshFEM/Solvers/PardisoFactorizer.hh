@@ -6,11 +6,15 @@
 // Based on PARDISO example:
 // https://www.pardiso-project.org/manual/pardiso_sym.cpp
 struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
+    enum class OrderingMethod {
+        Metis, AMD, ParallelMetis, CholmodNesdis, CholmodAMD
+    };
+
     PardisoFactorizer();
 
     // Size of the factorized matrix.
-    size_t m_reduced() const override { return m_reducedSize; }
-    size_t n_reduced() const override { return m_reducedSize; }
+    size_t m_reduced() const override { return m_reducedSizeScalar; }
+    size_t n_reduced() const override { return m_reducedSizeScalar; }
 
     using CholeskyFactorizerBase::factorizeSymbolic; // Don't shadow
     using CholeskyFactorizerBase::factorizeNumeric;
@@ -26,6 +30,22 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
     // Compute the numeric factorization of `A + sigma * I`, reusing the
     // symbolic factorization if it exists.
     void factorizeNumericWithShift(const SuiteSparseMatrix &A, Real sigma, bool isInTryCatch=false) override;
+
+    // This factorizer supports block matrices, so we must override these to avoid conversion to scalar.
+    void factorizeSymbolic(const BlockCSCHessianBase &H, const std::vector<size_t> &pinnedVars) override;
+    void factorizeSymbolic(const BlockCSCHessianBase &H) override { factorizeSymbolic(H, std::vector<size_t>()); }
+    void factorizeNumeric(const BlockCSCHessianBase &mat, bool isInTryCatch=false) override {
+        g_matrixRecorder.recordNumeric(mat);
+        factorizeNumeric((const SuiteSparseMatrix &)(mat), isInTryCatch);
+    }
+    void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, const SuiteSparseMatrix &B, bool isInTryCatch=false) override {
+        g_matrixRecorder.recordNumeric(A);
+        factorizeNumericWithShift((const SuiteSparseMatrix &)(A), sigma, B, isInTryCatch);
+    }
+    void factorizeNumericWithShift(const BlockCSCHessianBase &A, Real sigma, bool isInTryCatch=false) override {
+        g_matrixRecorder.recordNumeric(A);
+        factorizeNumericWithShift((const SuiteSparseMatrix &)(A), sigma, isInTryCatch);
+    }
 
     using CholeskyFactorizerBase::factorize; // Don't hide.
     void factorize(const SuiteSparseMatrix &mat, const std::vector<size_t> &fixedVars = std::vector<size_t>(), bool isInTryCatch = false) override {
@@ -50,6 +70,11 @@ struct MESHFEM_EXPORT PardisoFactorizer final : public CholeskyFactorizerBase {
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
 
+    void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
+    bool getUseBlockAccel() const { return m_useBlockAccel; }
+
+    OrderingMethod orderingMethod = OrderingMethod::Metis;
+
     ~PardisoFactorizer();
 private:
     Eigen::ArrayXi ia, ja;
@@ -63,8 +88,12 @@ private:
     mutable void *pt[64]; // Internal solver memory pointer
 
     int m_reducedSize = 0;
+    int m_reducedSizeScalar = 0;
+    bool m_useBlockAccel = true;
+    size_t m_blockSize = 1;
 
     void m_pardisoFactorization(int phase);
+    void m_setValuesFromSource(const SuiteSparseMatrix &Afull, Real sigma = 0.0);
 
     int mtype  = 2;  // We expect/only want to succeed on symmetric positive definite matrices.
     int maxfct = 1;  // Maximum number of numerical factorizations

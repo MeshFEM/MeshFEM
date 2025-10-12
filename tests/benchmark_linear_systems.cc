@@ -13,6 +13,7 @@
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 #include <MeshFEM/Solvers/CholmodFactorizer.hh>
 #include <MeshFEM/Solvers/AccelerateFactorizer.hh>
+#include "MeshFEM/Solvers/PardisoFactorizer.hh"
 #include <MeshFEM/Solvers/CatamariFactorizer.hh>
 #include <MeshFEM/Solvers/MatrixRecorder.hh>
 
@@ -87,18 +88,31 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
         auto af = std::make_unique<AccelerateFactorizer>();
         if (method.substr(method.size() - 8) == "_noblock")
             af->setUseBlockAccel(false);
-        if (method.substr(0, 19) == "accelerate_amd")
+        if (method.substr(0, 14) == "accelerate_amd")
             af->orderingMethod = AccelerateFactorizer::OrderingMethod::AMD;
-        else if (method.substr(0, 20) == "accelerate_metis")
+        else if (method.substr(0, 16) == "accelerate_metis")
             af->orderingMethod = AccelerateFactorizer::OrderingMethod::Metis;
-        else if (method.substr(0, 22) == "accelerate_cholmodamd")
+        else if (method.substr(0, 21) == "accelerate_cholmodamd")
             af->orderingMethod = AccelerateFactorizer::OrderingMethod::CholmodAMD;
-        else if (method.substr(0, 20) == "accelerate_nesdis")
+        else if (method.substr(0, 17) == "accelerate_nesdis")
             af->orderingMethod = AccelerateFactorizer::OrderingMethod::Nesdis;
         factorizer = std::move(af);
     }
-    else if (method == "pardiso") {
-        factorizer = make_cholesky_factorizer(CholeskyProvider::PARDISO);
+    else if (method.substr(0, 7) == "pardiso") {
+        auto pf = std::make_unique<PardisoFactorizer>();
+        if ((method.size() > 8) && method.substr(method.size() - 8) == "_noblock")
+            pf->setUseBlockAccel(false);
+        if (method.substr(0, 11) == "pardiso_amd")
+            pf->orderingMethod = PardisoFactorizer::OrderingMethod::AMD;
+        else if (method.substr(0, 13) == "pardiso_metis")
+            pf->orderingMethod = PardisoFactorizer::OrderingMethod::Metis;
+        else if (method.substr(0, 21) == "pardiso_parallelmetis")
+            pf->orderingMethod = PardisoFactorizer::OrderingMethod::ParallelMetis;
+        else if (method.substr(0, 18) == "pardiso_cholmodamd")
+            pf->orderingMethod = PardisoFactorizer::OrderingMethod::CholmodAMD;
+        else if (method.substr(0, 14) == "pardiso_cholmodnesdis")
+            pf->orderingMethod = PardisoFactorizer::OrderingMethod::CholmodNesdis;
+        factorizer = std::move(pf);
     }
     else throw std::runtime_error("Unknown method");
 
