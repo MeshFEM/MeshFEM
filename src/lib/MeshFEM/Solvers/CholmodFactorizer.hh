@@ -1,6 +1,16 @@
 #ifndef CHOLMODFACTORIZER_HH
 #define CHOLMODFACTORIZER_HH
 
+#if QUOTIENT_USE_64BIT
+#define CHOLMOD_USE_INT64
+#endif
+
+#ifdef CHOLMOD_USE_INT64
+#  define CHOLMOD_CALL(name) cholmod_l_##name
+#else
+#  define CHOLMOD_CALL(name) cholmod_##name
+#endif
+
 #if MESHFEM_WITH_CHOLMOD
 
 extern "C" {
@@ -62,7 +72,7 @@ struct CholmodSparseWrapper {
         auto choly = cholmod_dense_wrap_vector_ptr(n, y);
         double alpha[2] = { 1.0, 0.0 };
         double beta [2] = { 0.0, 0.0 }; // y = alpha * mat * x + beta * y_init
-        cholmod_l_sdmult(m_mat, transpose, alpha, beta, &cholx, &choly, m_c.get());
+        CHOLMOD_CALL(sdmult)(m_mat, transpose, alpha, beta, &cholx, &choly, m_c.get());
     }
 
     CholmodSparseWrapper &operator=(const CholmodSparseWrapper  &b) = delete;
@@ -75,7 +85,7 @@ struct CholmodSparseWrapper {
     bool exists() const { return m_mat != nullptr; }
     operator bool() const { return exists(); }
 
-    ~CholmodSparseWrapper() { if (exists()) cholmod_l_free_sparse(&m_mat, m_c.get()); }
+    ~CholmodSparseWrapper() { if (exists()) CHOLMOD_CALL(free_sparse)(&m_mat, m_c.get()); }
 private:
     size_t n;
     cholmod_sparse *m_mat;
@@ -123,7 +133,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
     CholmodFactorizer(bool forceSupernodal = false, bool force_ll = false, bool suppressWarnings = false) {
         m_c = std::make_shared<cholmod_common>();
-        cholmod_l_start(m_c.get());
+        CHOLMOD_CALL(start)(m_c.get());
 
 #ifdef TOO_LARGE_FOR_METIS
          // Use NESDIS since plain Metis is failing on large matrices.
@@ -185,12 +195,21 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     // Perform only the symbolic factorization for the given matrix `mat`.
     void factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) override {
         const SuiteSparseMatrix *A_reduced = m_initRowColRemoval(mat, pinnedVars);
+
+#ifdef CHOLMOD_USE_INT64
         auto A_cholmod = cholmod_sparse_view(*A_reduced);
-        // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
+#else
+        m_Ai_downcast = Eigen::Map<const VecX_T<std::decay_t<decltype(A_reduced->Ai[0])>>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+        m_Ap_downcast = Eigen::Map<const VecX_T<std::decay_t<decltype(A_reduced->Ap[0])>>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+        auto A_cholmod = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, const_cast_ptr(A_reduced->Ax.data()),
+                                             m_Ai_downcast.data(), m_Ap_downcast.data());
+#endif
+        // Note: the array `cholmat.x` apparently must be valid or cholmod_nested_dissection fails
         // (even though the Nested dissection algorithm should not be
         // looking at its entries...)
         if (A_reduced->isSparsityOnly())
             A_cholmod.x = dummy_values_ptr(A_reduced->Ai.data(), A_reduced->Ai.size(), m_valuesDummy);
+
         m_factorizeSymbolicImpl(A_cholmod);
         m_valuesDummy.resize(0);
     }
@@ -207,7 +226,11 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         assertFactorization(FactorizationType::Symbolic);
 
         const SuiteSparseMatrix &mat = *m_rowColRemoval(fullMat);
+#ifdef CHOLMOD_USE_INT64
         cholmod_sparse A = cholmod_sparse_view(mat);
+#else
+        cholmod_sparse A = cholmod_sparse_view(mat.m, mat.n, mat.nz, const_cast_ptr(mat.Ax.data()), m_Ai_downcast.data(), m_Ap_downcast.data());
+#endif
         if (m_L == nullptr) m_factorizeSymbolicImpl(A);
 
         // {
@@ -219,7 +242,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         // }
 
         if ((size_t(m_L->n) != size_t(mat.m)) || (size_t(m_L->n) != size_t(mat.n))) {
-            // Necessary, but not sufficient! Sparsity pattern must be a subset of original A's
+            // Necessary, but not sufficient! Sparsity pattern must match original A's
             throw std::runtime_error("Symbolic factorization does not match size of matrix passed to `factorize`: "
                     + std::to_string(m_L->n) + " vs " + std::to_string(mat.m) + ", " + std::to_string(mat.n));
         }
@@ -227,7 +250,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         BENCHMARK_START_TIMER("CHOLMOD Numeric Factorize");
         bool oldTryCatch = m_c->try_catch;
         m_c->try_catch = isInTryCatch;
-        int success = cholmod_l_factorize(&A, m_L, m_c.get());
+        int success = CHOLMOD_CALL(factorize)(&A, m_L, m_c.get());
         m_c->try_catch = oldTryCatch;
         BENCHMARK_STOP_TIMER("CHOLMOD Numeric Factorize");
         if (!success) throw std::runtime_error("Numeric factorization failed");
@@ -298,7 +321,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
 
         BENCHMARK_START_TIMER("CHOLMOD Solve");
         // Solve A x = b re-using the workspace vectors x, Y, and E
-        cholmod_l_solve2(chol_sys, m_L, &cholb, /* Bset = */ NULL, &cholx_ptr, /* Xset = */ NULL, &m_Y, &m_E, m_c.get());
+        CHOLMOD_CALL(solve2)(chol_sys, m_L, &cholb, /* Bset = */ NULL, &cholx_ptr, /* Xset = */ NULL, &m_Y, &m_E, m_c.get());
 
         if (cholx_ptr != &cholx) throw std::runtime_error("Cholmod reallocated x vector.");
 
@@ -311,8 +334,8 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     // Store a copy of the current factorization so that it can be applied again
     // even after updateFactorization is called.
     void stashFactorization() override {
-        if (m_L_stashed != nullptr) cholmod_l_free_factor(&m_L_stashed, m_c.get());
-        m_L_stashed = cholmod_l_copy_factor(m_L, m_c.get());
+        if (m_L_stashed != nullptr) CHOLMOD_CALL(free_factor)(&m_L_stashed, m_c.get());
+        m_L_stashed = CHOLMOD_CALL(copy_factor)(m_L, m_c.get());
     }
 
     bool hasStashedFactorization() const override { return m_L_stashed != nullptr; }
@@ -321,7 +344,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     void swapStashedFactorization() override { std::swap(m_L, m_L_stashed); }
 
     void clearStashedFactorization() override {
-        if (m_L_stashed) { cholmod_l_free_factor(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
+        if (m_L_stashed) { CHOLMOD_CALL(free_factor)(&m_L_stashed, m_c.get()); m_L_stashed = nullptr; }
     }
 
     // Get the (unpermuted) Cholesky factor L as a sparse matrix that can be applied
@@ -331,10 +354,10 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         // factorization m_L back into a symbolic one, which will break future solves.
         // So we operate on a copy of m_L.
         assertFactorization();
-        cholmod_factor *factorCopy = cholmod_l_copy_factor(m_L, m_c.get());
+        cholmod_factor *factorCopy = CHOLMOD_CALL(copy_factor)(m_L, m_c.get());
         if (factorCopy == nullptr) throw std::runtime_error("Factor copy failed");
-        auto result = CholmodSparseWrapper(m_L->n, cholmod_l_factor_to_sparse(factorCopy, m_c.get()), m_c);
-        cholmod_l_free_factor(&factorCopy, m_c.get());
+        auto result = CholmodSparseWrapper(m_L->n, CHOLMOD_CALL(factor_to_sparse)(factorCopy, m_c.get()), m_c);
+        CHOLMOD_CALL(free_factor)(&factorCopy, m_c.get());
         return result;
     }
 
@@ -343,7 +366,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     }
 
     void clearFactors() override {
-        if (m_L) { cholmod_l_free_factor(&m_L, m_c.get()); m_L = nullptr; }
+        if (m_L) { CHOLMOD_CALL(free_factor)(&m_L, m_c.get()); m_L = nullptr; }
         m_Ashift.reset();
         m_factorizationType = FactorizationType::None;
         clearStashedFactorization();
@@ -392,10 +415,10 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
     virtual ~CholmodFactorizer() {
         clearFactors();
 
-        if (m_Y) cholmod_l_free_dense(&m_Y, m_c.get());
-        if (m_E) cholmod_l_free_dense(&m_E, m_c.get());
+        if (m_Y) CHOLMOD_CALL(free_dense)(&m_Y, m_c.get());
+        if (m_E) CHOLMOD_CALL(free_dense)(&m_E, m_c.get());
 
-        cholmod_l_finish(m_c.get());
+        CHOLMOD_CALL(finish)(m_c.get());
     }
 
 private:
@@ -403,13 +426,17 @@ private:
     std::shared_ptr<cholmod_common> m_c;
     cholmod_factor *m_L = nullptr, *m_L_stashed = nullptr;
 
-    mutable cholmod_dense *m_Y = nullptr, *m_E = nullptr; // result/workspace for cholmod_l_solve2
-    Eigen::VectorXd m_valuesDummy; // Needed to run `cholmod_l_nested_dissection` without values.
+    mutable cholmod_dense *m_Y = nullptr, *m_E = nullptr; // result/workspace for cholmod_solve2
+    Eigen::VectorXd m_valuesDummy; // Needed to run `cholmod_nested_dissection` without values.
+
+#ifndef CHOLMOD_USE_INT64
+    Eigen::VectorXi m_Ai_downcast, m_Ap_downcast; // TODO: remove this when we make the BlockCSCHessian/assembly index type configurable match catamari::Int.
+#endif
 
     void m_factorizeSymbolicImpl(const cholmod_sparse &A) {
         BENCHMARK_START_TIMER("CHOLMOD Symbolic Factorize");
         clearFactors();
-        m_L = cholmod_l_analyze(const_cast<cholmod_sparse *>(&A), m_c.get());
+        m_L = CHOLMOD_CALL(analyze)(const_cast<cholmod_sparse *>(&A), m_c.get());
         m_factorizationType = FactorizationType::Symbolic;
         BENCHMARK_STOP_TIMER("CHOLMOD Symbolic Factorize");
     }

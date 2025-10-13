@@ -4,6 +4,9 @@
 #include <stdexcept>
 #include <tbb/partitioner.h>
 
+// TODO: match use of LP64 (the current int32_t * version) and ILP64 (the int64-t version)
+// to the integer type used for other solvers (currently configured by QUOTIENT_USE_64BIT/CATAMARI_INT64).
+// At least for MKL Pardiso, this should probably be done using a combination of MKL_INT and CMake configuration.
 #if MESHFEM_WITH_MKL_PARDISO
 #include <mkl_pardiso.h>
 #elif MESHFEM_WITH_PARDISO
