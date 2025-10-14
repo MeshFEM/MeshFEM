@@ -25,7 +25,7 @@
 double g_total_num_fact_duration = 0;
 size_t global_repeat = 0;
 
-void benchmark_method(std::string method, const std::string &directory, size_t num_threads, size_t repeats) {
+void benchmark_method(std::string method, const std::string &directory, size_t num_threads, size_t repeats, bool use_shift) {
     const bool tbb_threading = (method.substr(0, 8) == "catamari") && !(method.substr(0, 13) == "catamari_left") && !(method.substr(0, 13) == "catamari_st");
     const size_t    omp_threads = tbb_threading ? 1 : num_threads;
     const size_t veclib_threads = tbb_threading ? 1 : num_threads;
@@ -194,10 +194,14 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
                         H->Ax.swap(cleanse_data);
                     }
 
-                    double shift = 1e-8 * (H->trace() / H->numScalarCols());
-                    {
+                    if (use_shift) {
+                        double shift = 1e-8 * (H->trace() / H->numScalarCols());
                         ScopedExternalTimer aux_nfac_timer(g_total_num_fact_duration);
                         factorizer->factorizeNumericWithShift(*H, shift); // Shift needed for parametrization examples
+                    }
+                    else {
+                        ScopedExternalTimer aux_nfac_timer(g_total_num_fact_duration);
+                        factorizer->factorizeNumeric(*H); // Shift not used for contact examples
                     }
 
                     if ((global_repeat > 0) || (r > 0))
@@ -226,21 +230,23 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
 }
 
 int main(int argc, const char *argv[]) {
-    if (argc < 4 || argc > 5) {
-        std::cout << "Usage: " << argv[0] << " method num_threads matrix_directory [numeric_repeats]" << std::endl;
+    if (argc < 4 || argc > 6) {
+        std::cout << "Usage: " << argv[0] << " method num_threads matrix_directory [numeric_repeats] [use_shift]" << std::endl;
         std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, catamari_left[_noblock], catamari_right[_noblock], pardiso, accelerate[_noblock]}" << std::endl;
         exit(-1);
     }
 
     size_t repeats = 1;
-    if (argc == 5) repeats = std::stoi(argv[4]);
+    if (argc >= 5) repeats = std::stoi(argv[4]);
+    bool use_shift = true;
+    if (argc == 6) use_shift = std::stoi(argv[5]);
 
 #if 0
-    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), repeats);
+    benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), repeats, use_shift);
 #else
     if (repeats >= 1) {
         for (global_repeat = 0; global_repeat < repeats; ++global_repeat) {
-            benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1);
+            benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1, use_shift);
         }
     }
     else {
@@ -249,7 +255,7 @@ int main(int argc, const char *argv[]) {
         // Note: adaptive repetition should be done at the global level; if we do it per matrix, then
         // the variable-speed factorization failures can bias the results.
         while (g_total_num_fact_duration < 0.25) {
-            benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1);
+            benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1, use_shift);
             ++global_repeat;
         }
     }
