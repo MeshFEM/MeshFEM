@@ -377,7 +377,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                     // Note that only the entries corresponding to the
                     // "representative column" of each supernode are populated.
                     // By this, we mean the root of the "subtree" within
-                    // each node of the assembly tree./
+                    // each node of the assembly tree.
                     // In terms of the AMD output, these are the indices for
                     // which `Nv` is nonzero, and are the *last* column indices
                     // of each supernode.

@@ -18,6 +18,9 @@
 #include "ScotchOrdering.hh"
 #endif
 
+#include "accelerate_ordering.hh"
+#include "pardiso_ordering.hh"
+
 #if CATAMARI_FINEGRAINED_TIMERS
 #include <filesystem>
 #endif
@@ -79,6 +82,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         m_catamariConverter.reset();
     }
     m_catamariConverter = std::make_unique<CatamariConverter>(*A_reduced, /* block_size = */ 1, /* legacy = */ true, m_entryForReducedEntry);
+    using catamari::Int;
 
     if (orderingMethod == OrderingMethod::Catamari)
         m_ldl->Factor(m_catamariConverter->get(), *m_ldlControl);
@@ -103,7 +107,6 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
         catamari::SymmetricOrdering ordering;
         {
-            static_assert(sizeof(SuiteSparse_long) == sizeof(catamari::Int), "Mismatched integer type");
             ordering.inverse_permutation.Resize(A_reduced->m);
             auto cholmat = cholmod_sparse_view(*A_reduced);
             // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
@@ -113,9 +116,10 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
             // is to convert the matrix from upper-triangular to full format.
             // In the future, we should bypass this step since we already do the
             // conversion ourselves for Catamari.
-            cholmat.x = const_cast<double *>((const double *) A_reduced->Ai.data());
+            cholmat.x = dummy_values_ptr(A_reduced->Ai.data(), A_reduced->Ai.size(), m_valuesDummy);
 
             if (actualOrderingMethod == OrderingMethod::CholmodNesdis) {
+#if QUOTIENT_USE_64BIT
 #if 0 // Whether to downcast for ordering -- the difference in time seems negligible
                 if (!m_c_int) {
                     m_c_int = std::make_unique<cholmod_common>();
@@ -130,6 +134,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
                                                             Ai_downcast.data(), Ap_downcast.data());
                 iperm_downcast.resize(A_reduced->m);
+                catamari::Buffer<int> CParent(A_reduced->m), CMember(A_reduced->m);
                 cholmod_nested_dissection(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0,
                                             iperm_downcast.data(), (int *) CParent.Data(), (int *) CMember.Data(), m_c_int.get());
                 Eigen::Map<VecX_T<catamari::Int>>(ordering.inverse_permutation.Data(), A_reduced->m) = iperm_downcast.template cast<catamari::Int>();
@@ -139,13 +144,46 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
                                             (SuiteSparse_long *) ordering.inverse_permutation.Data(),
                                             CParent.Data(), CMember.Data(), m_c.get());
-                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
 #endif
+#else // !QUOTIENT_USE_64BIT
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_nested_dissection");
+                if (!m_c_int) {
+                    m_c_int = std::make_unique<cholmod_common>();
+                    cholmod_start(m_c_int.get());
+                }
+
+                // TODO: remove this when we make the BlockCSCHessian/assembly index type configurable match catamari::Int.
+                VecX_T<int> Ai_downcast = Eigen::Map<const VecX_T<std::decay_t<decltype(A_reduced->Ai[0])>>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+                VecX_T<int> Ap_downcast = Eigen::Map<const VecX_T<std::decay_t<decltype(A_reduced->Ap[0])>>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+                auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
+                                                            Ai_downcast.data(), Ap_downcast.data());
+                static_assert(std::is_same_v<catamari::Int, int>, "catamari::Int must be `int` here");
+                catamari::Buffer<Int> CParent(A_reduced->m), CMember(A_reduced->m);
+                cholmod_nested_dissection(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0,
+                                          ordering.inverse_permutation.Data(), CParent.Data(), CMember.Data(), m_c_int.get());
+
+#endif
+                quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
             }
             else if (actualOrderingMethod == OrderingMethod::Metis) {
+#if QUOTIENT_USE_64BIT
                 BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_metis");
                 cholmod_l_metis(&cholmat, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
                                 (SuiteSparse_long *) ordering.inverse_permutation.Data(), m_c.get());
+#else
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_metis");
+                if (!m_c_int) {
+                    m_c_int = std::make_unique<cholmod_common>();
+                    cholmod_start(m_c_int.get());
+                }
+
+                VecX_T<int> Ai_downcast = Eigen::Map<const VecX_T<std::decay_t<decltype(A_reduced->Ai[0])>>>(A_reduced->Ai.data(), A_reduced->Ai.size()).template cast<int>();
+                VecX_T<int> Ap_downcast = Eigen::Map<const VecX_T<std::decay_t<decltype(A_reduced->Ap[0])>>>(A_reduced->Ap.data(), A_reduced->Ap.size()).template cast<int>();
+                auto cholmat_downcast = cholmod_sparse_view(A_reduced->m, A_reduced->n, A_reduced->nz, cholmat.x,
+                                                            Ai_downcast.data(), Ap_downcast.data());
+                cholmod_metis(&cholmat_downcast, /* fset = */ nullptr, /* fsize = */ 0, /* postorder = */ true,
+                              ordering.inverse_permutation.Data(), m_c_int.get());
+#endif
                 quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
             }
             else if (actualOrderingMethod == OrderingMethod::AMD) {
@@ -153,10 +191,29 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 using ordering_index_type = int32_t;
                 const ordering_index_type n = A_reduced->m;
 
+                const auto &A = m_catamariConverter->get();
+
+#if 0 // Validation
+                {
+                    Eigen::VectorXi Ap(n + 1), Ai;
+
+                    for (ordering_index_type j = 0; j <= n; ++j)
+                        Ap[j] = A.RowEntryOffset(j);
+
+                    catamari::Int nz = A.NumEntries();
+                    Ai.resize(nz);
+                    for (catamari::Int ii = 0; ii < nz; ++ii)
+                        Ai[ii] = A.Entry(ii).column; // Catamari matrix is transposed!
+
+                    std::cout << "amd_valid: " << amd_valid(n, n, Ap.data(), Ai.data()) << std::endl;
+                }
+#endif
+
+                // TODO: verify symmetry? This probably isn't checked by amd_valid
+
                 // AMD_2 is passed only the off-diagonal entries of the *full* matrix (i.e., both upper and lower triangles).
                 // Furthermore, it needs some additional "elbow room" in the
                 // the row index array (the `cholmod_amd` wrapper allocates around 50%).
-                const auto &A = m_catamariConverter->get();
                 ordering_index_type padded_input_matrix_size = (A.NumEntries() - n) * 1.5;
 
                 VecX_T<ordering_index_type> Pe(n + 1), Nv(n), workspace;
@@ -186,8 +243,19 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 });
                 Pe[n] = Pe[n - 1] + Len[n - 1];
 
+                // for (ordering_index_type j = 0; j < n; ++j) {
+                //     if (Pe[j + 1] - Pe[j] != Len[j]) throw std::logic_error("column pointer error");
+                //     if (Len[j] <= 0) throw std::logic_error("Empty column");
+                // }
+                // if (A.NumEntries() - n != Pe[n]) throw std::logic_error("inconsistent nnz count");
+
+
                 {
-                    double *Control = nullptr; // Use AMD defaults.
+                    double Control[AMD_CONTROL];
+                    amd_defaults(Control);
+                    Control[AMD_DENSE] = -1; // Disable dense-node pruning; this could slow down the ordering, but ensures we get a valid assembly tree (e.g., passing the sanity check below).
+                    // TODO: support the sparse assembly forest + dense border produced if we let amd_2's dense row detection kick in?
+
                     double Info [AMD_INFO];
                     BENCHMARK_SCOPED_TIMER_SECTION t2("amd_2");
                     // amd_l2(n, Pe.data(), Iw, Len, padded_input_matrix_size, Pe[n], Nv.data(), iperm, perm, Head, Elen,
@@ -195,7 +263,11 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                     amd_2(n, Pe.data(), Iw, Len, padded_input_matrix_size, Pe[n], Nv.data(), iperm, perm, Head, Elen,
                           Degree, Wi, Control, Info);
 
+                    // for (int i = 0; i < AMD_INFO; ++i)
+                    //     std::cout << "Info[" << i << "] = " << Info[i] << std::endl;
                 }
+
+                if (Nv.cwiseMax(0).sum() != n) throw std::logic_error("amd_2 failed sanity check: Nv doesn't sum to n (" + std::to_string(Nv.cwiseMax(0).sum()) + " vs " + std::to_string(n) + ")");
 
                 ordering.permutation.Resize(n);
                 tbb::parallel_for(tbb::blocked_range<ordering_index_type>(0, n), [&](const tbb::blocked_range<ordering_index_type> &r) {
@@ -218,7 +290,6 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 // is generally different from the supernodal assembly tree
                 // consisting of fundamental supernodes).
                 {
-                    using catamari::Int;
 
                     // Record which supernode contains column `j` of L.
                     // Note that only the entries corresponding to the
@@ -242,6 +313,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                     }
 
                     OffsetScan(ordering.supernode_sizes, &ordering.supernode_offsets);
+                    if (ordering.supernode_offsets[num_supernodes] != n)
+                        throw std::logic_error("Bad amd_2 result: supernodes fail to span all columns");
 
                     // Convert the assembly tree from AMD's `Pe` array into `ordering.assembly_forest.parents`.
                     // Note that, when `j` is the start of a supernode, `Pe[j]`
@@ -291,6 +364,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 #endif
             }
             else throw std::runtime_error("Unknown orderingMethod");
+
+            m_valuesDummy.resize(0);
         }
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
 
@@ -298,14 +373,34 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         if (orderingMethod == OrderingMethod::Adaptive)
             adaptiveOrdering.recordSymbolic(sym_fact_duration);
     }
+    else if (orderingMethod == OrderingMethod::AccelerateMetis) {
+        auto perm = compute_accelerate_ordering(*A_reduced);
+        catamari::SymmetricOrdering ordering;
+        ordering.permutation        .Resize(A_reduced->m);
+        ordering.inverse_permutation.Resize(A_reduced->m);
+        for (int i = 0; i < A_reduced->m; ++i)
+            ordering.permutation[i] = perm[i]; // Accelerate's permutation convention is the same as ours
+        quotient::InvertPermutation(ordering.permutation, &ordering.inverse_permutation);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
+    }
+    else if ((orderingMethod == OrderingMethod::PardisoMetis) || (orderingMethod == OrderingMethod::PardisoParallelMetis)) {
+        auto perm = compute_pardiso_ordering(*A_reduced,  (orderingMethod == OrderingMethod::PardisoMetis) ? PardisoSparseOrder::Metis : PardisoSparseOrder::ParallelMetis);
+        catamari::SymmetricOrdering ordering;
+        ordering.permutation        .Resize(A_reduced->m);
+        ordering.inverse_permutation.Resize(A_reduced->m);
+        for (int i = 0; i < A_reduced->m; ++i)
+            ordering.inverse_permutation[i] = perm[i]; // Pardiso's permutation convention is the inverse of ours
+        quotient::InvertPermutation(ordering.inverse_permutation, &ordering.permutation);
+        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
+    }
     else if (orderingMethod == OrderingMethod::Scotch) {
 #if MESHFEM_WITH_SCOTCH
         catamari::SymmetricOrdering ordering;
         ordering.permutation        .Resize(A_reduced->m);
         ordering.inverse_permutation.Resize(A_reduced->m);
 
-        Eigen::Map<VecX_T<SuiteSparse_long>> perm(ordering.permutation.Data(), A_reduced->m);
-        Eigen::Map<VecX_T<SuiteSparse_long>> iperm(ordering.inverse_permutation.Data(), A_reduced->m);
+        Eigen::Map<VecX_T<catamari::Int>> perm(ordering.permutation.Data(), A_reduced->m);
+        Eigen::Map<VecX_T<catamari::Int>> iperm(ordering.inverse_permutation.Data(), A_reduced->m);
 
         scotch_ordering(*A_reduced, perm, iperm, scotchSettings.stratFlag, scotchSettings.imbalanceRatio);
 
