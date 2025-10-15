@@ -30,10 +30,10 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
     const bool tbb_threading = (method.substr(0, 8) == "catamari") && !(method.substr(0, 13) == "catamari_left") && !(method.substr(0, 13) == "catamari_st");
 #else
     const bool tbb_threading = false; // Legacy Catamari uses OpenMP rather than TBB! Make sure it's still parallelized.
+#endif
     const size_t    omp_threads = tbb_threading ? 1 : num_threads;
     const size_t veclib_threads = tbb_threading ? 1 : num_threads;
     const size_t    mkl_threads = tbb_threading ? 1 : num_threads;
-#endif
 
     // Also set environment variables to control OpenMP/MKL/Accelerate threading.
     setenv("OMP_NUM_THREADS",        std::to_string(   omp_threads).c_str(), 1);
