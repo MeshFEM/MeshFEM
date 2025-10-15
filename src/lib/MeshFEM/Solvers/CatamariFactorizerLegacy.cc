@@ -438,7 +438,10 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Numeric Factorize");
     auto &cm = m_catamariConverter->convert(A.Ax.data(), m_dataOffsetForScalarHessianLoc, std::forward<Args>(args)...);
 
-    result = m_ldl->RefactorWithFixedSparsityPattern(cm);
+    {
+        BENCHMARK_SCOPED_TIMER_SECTION timer2("Catamari Numeric Call");
+        result = m_ldl->RefactorWithFixedSparsityPattern(cm);
+    }
 
     double num_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - num_fact_start).count();
 
