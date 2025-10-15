@@ -531,7 +531,7 @@ private:
             if (t.suppressSparsity) continue;
             if (t.sparsityUpdateFrequency() == SUF::NEVER) {
                 // Only rebuild the "static" part when the terms might have been invalidated.
-                if (force) { m_hessianSparsityStaticPart.mergeSparsityPattern(t.hessianSparsityPattern()); std::cout << "Building static term sparsity pattern" << std::endl; }
+                if (force) { m_hessianSparsityStaticPart.mergeSparsityPattern(t.hessianSparsityPattern()); /* std::cout << "Building static term sparsity pattern" << std::endl; */ }
                 else if (t.sparsityPatternChanged) throw std::logic_error("Term with a sparsity pattern update frequency of NEVER reported a change.");
             }
             else if (t.sparsityUpdateFrequency() == SUF::SOMETIMES) {

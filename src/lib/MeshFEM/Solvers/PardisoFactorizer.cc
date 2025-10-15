@@ -49,7 +49,7 @@ PardisoFactorizer::PardisoFactorizer() {
         throw std::runtime_error("[Pardiso] Set environment OMP_NUM_THREADS to 1");
     }
     iparm[2] = num_procs;
-    std::cout << "num_procs: " << iparm[2] << std::endl;
+    // std::cout << "num_procs: " << iparm[2] << std::endl;
 }
 
 template<class IdxVec>
@@ -224,8 +224,8 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
         m_customOrder.resize(A_reduced->m);
     }
 
-    std::cout << "iparm[4] = " << iparm[4] << std::endl;
-    std::cout << "iparm[1] = " << iparm[1] << std::endl;
+    // std::cout << "iparm[4] = " << iparm[4] << std::endl;
+    // std::cout << "iparm[1] = " << iparm[1] << std::endl;
 
     // Pardiso expects the upper triangle of a matrix in CSR format, which
     // due to symmetry is the lower triangle of a CSC matrix.
