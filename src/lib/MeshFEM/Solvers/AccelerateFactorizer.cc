@@ -228,7 +228,7 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
     m_setUpperTriangleCSC(*A_reduced);
     m_reducedSizeScalar = static_cast<int>(m_A_csc.n * m_blockSize);
 
-    BENCHMARK_SCOPED_TIMER_SECTION sftimer("SparseFactor call");
+    BENCHMARK_SCOPED_TIMER_SECTION sftimer("SparseFactor Call");
 
     m_numfactor.reset();
     m_symfactor.reset();
