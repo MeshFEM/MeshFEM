@@ -273,10 +273,29 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 using ordering_index_type = int32_t;
                 const ordering_index_type n = A_reduced->m;
 
+                const auto &A = m_catamariConverter->get();
+
+#if 0 // Validation
+                {
+                    Eigen::VectorXi Ap(n + 1), Ai;
+
+                    for (ordering_index_type j = 0; j <= n; ++j)
+                        Ap[j] = A.RowEntryOffset(j);
+
+                    catamari::Int nz = A.NumEntries();
+                    Ai.resize(nz);
+                    for (catamari::Int ii = 0; ii < nz; ++ii)
+                        Ai[ii] = A.Entry(ii).column; // Catamari matrix is transposed!
+
+                    std::cout << "amd_valid: " << amd_valid(n, n, Ap.data(), Ai.data()) << std::endl;
+                }
+#endif
+
+                // TODO: verify symmetry? This probably isn't checked by amd_valid
+
                 // AMD_2 is passed only the off-diagonal entries of the *full* matrix (i.e., both upper and lower triangles).
                 // Furthermore, it needs some additional "elbow room" in the
                 // the row index array (the `cholmod_amd` wrapper allocates around 50%).
-                const auto &A = m_catamariConverter->get();
                 ordering_index_type padded_input_matrix_size = (A.NumEntries() - n) * 1.5;
 
                 VecX_T<ordering_index_type> Pe(n + 1), Nv(n), workspace;
@@ -306,8 +325,19 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                 });
                 Pe[n] = Pe[n - 1] + Len[n - 1];
 
+                // for (ordering_index_type j = 0; j < n; ++j) {
+                //     if (Pe[j + 1] - Pe[j] != Len[j]) throw std::logic_error("column pointer error");
+                //     if (Len[j] <= 0) throw std::logic_error("Empty column");
+                // }
+                // if (A.NumEntries() - n != Pe[n]) throw std::logic_error("inconsistent nnz count");
+
+
                 {
-                    double *Control = nullptr; // Use AMD defaults.
+                    double Control[AMD_CONTROL];
+                    amd_defaults(Control);
+                    Control[AMD_DENSE] = -1; // Disable dense-node pruning; this could slow down the ordering, but ensures we get a valid assembly tree (e.g., passing the sanity check below).
+                    // TODO: support the sparse assembly forest + dense border produced if we let amd_2's dense row detection kick in?
+
                     double Info [AMD_INFO];
                     BENCHMARK_SCOPED_TIMER_SECTION t2("amd_2");
                     // amd_l2(n, Pe.data(), Iw, Len, padded_input_matrix_size, Pe[n], Nv.data(), iperm, perm, Head, Elen,
@@ -315,7 +345,11 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                     amd_2(n, Pe.data(), Iw, Len, padded_input_matrix_size, Pe[n], Nv.data(), iperm, perm, Head, Elen,
                           Degree, Wi, Control, Info);
 
+                    // for (int i = 0; i < AMD_INFO; ++i)
+                    //     std::cout << "Info[" << i << "] = " << Info[i] << std::endl;
                 }
+
+                if (Nv.cwiseMax(0).sum() != n) throw std::logic_error("amd_2 failed sanity check: Nv doesn't sum to n (" + std::to_string(Nv.cwiseMax(0).sum()) + " vs " + std::to_string(n) + ")");
 
                 ordering.permutation.Resize(n);
                 tbb::parallel_for(tbb::blocked_range<ordering_index_type>(0, n), [&](const tbb::blocked_range<ordering_index_type> &r) {
@@ -343,7 +377,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                     // Note that only the entries corresponding to the
                     // "representative column" of each supernode are populated.
                     // By this, we mean the root of the "subtree" within
-                    // each node of the assembly tree.
+                    // each node of the assembly tree./
                     // In terms of the AMD output, these are the indices for
                     // which `Nv` is nonzero, and are the *last* column indices
                     // of each supernode.
@@ -361,6 +395,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
                     }
 
                     OffsetScan(ordering.supernode_sizes, &ordering.supernode_offsets);
+                    if (ordering.supernode_offsets[num_supernodes] != n)
+                        throw std::logic_error("Bad amd_2 result: supernodes fail to span all columns");
 
                     // Convert the assembly tree from AMD's `Pe` array into `ordering.assembly_forest.parents`.
                     // Note that, when `j` is the start of a supernode, `Pe[j]`
