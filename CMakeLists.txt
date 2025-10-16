@@ -28,7 +28,8 @@ if (NOT TARGET MeshFEM)
     add_subdirectory(${THIRD_PARTY_DIR}/MeshFEM)
 endif()
 
-if (NOT TARGET TinyAD)
+option(INCLUDE_TINYAD "Whether to include TinyAD and build associated bindings" ON)
+if (INCLUDE_TINYAD AND NOT TARGET TinyAD)
     add_subdirectory(${THIRD_PARTY_DIR}/TinyAD)
 endif()
 
