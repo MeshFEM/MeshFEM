@@ -261,6 +261,7 @@ int main(int argc, const char *argv[]) {
         while (g_total_num_fact_duration < 0.25) {
             benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1, use_shift);
             ++global_repeat;
+            if (g_total_num_fact_duration == 0.0) break; // Avoid an infinite loop on empty matrix directories...
         }
     }
 #endif
