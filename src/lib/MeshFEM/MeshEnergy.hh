@@ -106,6 +106,7 @@ struct MeshEnergyBase : public NewtonObjectiveTerm {
     virtual ~MeshEnergyBase() { }
 
     bool useXBasedProjection = false;
+    double elementHessianShift = 0.0;
 private:
     virtual MaterialBase &m_getMaterial(size_t ei) = 0;
 };
@@ -196,6 +197,23 @@ struct MeshEnergy : public MeshEnergyBase {
 
     void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
+        if (elementHessianShift != 0.0) {
+            // This mode is only intended for apples-to-apples comparison
+            // against the Composite Majorization codebase, which addresses
+            // Hessian rank deficiency by adding a small, fixed multiple of the identity to
+            // each element Hessian.
+            if (useXBasedProjection && projectionMask)
+                throw std::runtime_error("Combining x-based projection with elementHessianShift not supported");
+            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
+                typename Element::Hessian H_e;
+                if constexpr (Element::CachesDeformedQuantities)
+                     H_e = elements[ei].hessian(weight, projectionMask);
+                else H_e = elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+                H_e.diagonal().array() += elementHessianShift;
+                return H_e;
+            }, [this](size_t ei) { return stencils[ei].blockVars; });
+        }
+
         if (!useXBasedProjection || !projectionMask) {
             // Use projection implemented by the element itself (e.g., F-based projection)
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {

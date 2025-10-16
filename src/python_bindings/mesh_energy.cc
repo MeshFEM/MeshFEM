@@ -90,7 +90,8 @@ PYBIND11_MODULE(mesh_energy, m)
     py::class_<MeshEnergyBase, NewtonObjectiveTermBase, std::shared_ptr<MeshEnergyBase>>(m, "MeshEnergyBase")
         .def("materialForElement", &MeshEnergyBase::materialForElement, py::arg("ei"), py::return_value_policy::reference_internal)
         .def("numElements", &MeshEnergyBase::numElements)
-        .def_readwrite("useXBasedProjection", &MeshEnergyBase::useXBasedProjection)
+        .def_readwrite("useXBasedProjection", &MeshEnergyBase::useXBasedProjection, "Whether to apply brute-force eigendecomposition-based x-based projection")
+        .def_readwrite("elementHessianShift", &MeshEnergyBase::elementHessianShift, "Whether to add a small multiple of the identity to each element Hessian (for comparison against the Composite Majorization codebase)")
         ;
 
     using DSHEMat = DiscreteShellHingeEnergy<double>::MaterialProperties;
