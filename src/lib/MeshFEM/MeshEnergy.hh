@@ -106,6 +106,7 @@ struct MeshEnergyBase : public NewtonObjectiveTerm {
     virtual ~MeshEnergyBase() { }
 
     bool useXBasedProjection = false;
+    double xBasedProjectionClampEps = 0.0;
     double elementHessianShift = 0.0;
 private:
     virtual MaterialBase &m_getMaterial(size_t ei) = 0;
@@ -236,8 +237,8 @@ struct MeshEnergy : public MeshEnergyBase {
                 else
                     H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
                 Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e.transpose()); // WARNING: uses *lower* triangle, while we compute upper triangle!
-                if (Hes.eigenvalues()[0] >= 0.0) return H_e; // sorted increasing
-                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                if (Hes.eigenvalues()[0] >= xBasedProjectionClampEps) return H_e; // sorted increasing
+                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(xBasedProjectionClampEps).asDiagonal() * Hes.eigenvectors().transpose();
             };
 
             assembler().assembleHessian(H, elements.size(), getProjectedHessian, [this](size_t ei) { return stencils[ei].blockVars; });
