@@ -104,7 +104,8 @@ def getBDdataOnNormalizedCircle(m):
 
 # read mesh and scale down vertices
 def read_mesh(mesh_path : str):
-    m_ori = mesh.Mesh(mesh_path)
+    import param_utils
+    m_ori = param_utils.load(mesh_path) # supports loading, e.g., `input.msh.xz`
     vertices_ori = m_ori.vertices()
     elements_ori = m_ori.elements()
     mesh_area_ori = (m_ori.elementVolumes()).sum()
