@@ -39,6 +39,7 @@ struct SimpleElasticSolid : public NewtonObjectiveTermBase {
         return summation_parallel([&](size_t ei) { return m_elements[ei].energy(extractLocalVars(ei, x)); }, m_elements.size());
     }
 
+    // g += weight * ∇E
     void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
         const VXd &x = m_vars->getVars();
         m_assembler.assembleGradient(g, m_elements.size(),
@@ -46,10 +47,13 @@ struct SimpleElasticSolid : public NewtonObjectiveTermBase {
                 [&](size_t ei) { return getStencil(ei); });
     }
 
-    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
+    // H += weight * ∂^2E/∂x^2
+    void accumulateHessian(Real weight, NewtonHessian &H, bool project = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("SimpleElasticSolid.hessian" + std::string(project ? " (projected)" : ""));
+
         const VXd &x = m_vars->getVars();
         m_assembler.assembleHessian(H, m_elements.size(),
-                [&](size_t ei) { return m_elements[ei].hessian(weight, projectionMask, extractLocalVars(ei, x)); },
+                [&](size_t ei) { return m_elements[ei].hessian(weight, project, extractLocalVars(ei, x)); },
                 [&](size_t ei) { return getStencil(ei); });
     };
 
