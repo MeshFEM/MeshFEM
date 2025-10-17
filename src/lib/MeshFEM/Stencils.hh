@@ -50,6 +50,9 @@ struct StaticStencil {
     }
 
     BlockVars blockVars;
+
+protected:
+    StaticStencil() { } // Uninitialized!
 };
 
 namespace detail {
@@ -84,7 +87,7 @@ template<size_t K, size_t Deg, size_t N>
 struct ElementStencil : public UniformStencil<Simplex::numNodes(K, Deg), N> {
     using Base = UniformStencil<Simplex::numNodes(K, Deg), N>;
 
-    template<class Mesh>
+    template<class Mesh, enable_if_models_concept_t<Concepts::ElementMesh, Mesh, int> = 0>
     ElementStencil(const Mesh &m, size_t ei)
         : Base(m.template elementNodeIndices<int>(ei)) { }
 
@@ -95,6 +98,17 @@ struct ElementStencil : public UniformStencil<Simplex::numNodes(K, Deg), N> {
         // Remap the variable indices.
         for (size_t i = 0; i < Base::blockVars.size(); ++i)
             Base::blockVars[i] = var(Base::blockVars[i]);
+    }
+
+    // We also allow construction from an element node table stored in an Eigen matrix.
+    template<class Derived>
+    ElementStencil(const Eigen::MatrixBase<Derived> &E, size_t ei)
+        : Base() // Uninitialized!
+    {
+        static_assert(std::is_integral_v<typename Derived::Scalar>,            "ElementStencil: element node table must have integral type");
+        static_assert(Derived::ColsAtCompileTime == Simplex::numNodes(K, Deg), "ElementStencil: element node table has wrong number of columns");
+        for (size_t i = 0; i < Base::blockVars.size(); ++i)
+            Base::blockVars[i] = E(ei, i);
     }
 };
 

@@ -13,7 +13,9 @@ struct SolidElement;
 template<class Psi_in>
 struct SolidMaterial : public MaterialBase {
     using Psi_F = std::conditional_t<Psi_in::EDType == EDensityType::FBased, Psi_in, EnergyDensityFBasedFromCBased<Psi_in, Psi_in::N>>;
-    using Psi = AutoHessianProjection<Psi_F>;
+    using Psi = Psi_F; // AutoHessianProjection<Psi_F>; // TODO: re-enable once
+                       // AutoHessianProjection implements a check for
+                       // already-implemented analytical Hessian projection.
 
     SolidMaterial() { }
     SolidMaterial(const Psi_in &psi) : psi(psi) { }
@@ -51,6 +53,15 @@ struct SolidElement : public ElementBase<SolidElement<Deg, Psi, EData>> {
         : Base(ei, materials), m_edata(*(m.element(ei))) {
     }
 
+    // Construct without a FEMMesh, using an indexed element set mesh
+    // representation of the rest state (i.e., an igl-style (V, F) array pair).
+    template<class VDerived, class FDerived, class E = EData, typename = std::enable_if_t<!std::is_reference_v<E>>> // Hack to hide this when EData is a reference type that must be bound.
+    SolidElement(size_t ei, const Eigen::MatrixBase<VDerived> &V, const Eigen::MatrixBase<FDerived> &F, MaterialAssignment<Material> &materials)
+        : Base(ei, materials) {
+        m_edata.embed(V, F, ei);
+    }
+
+    // For future shape optimization support:
     // void setRestConfiguration(const LocalVars &X) {
     // }
 
