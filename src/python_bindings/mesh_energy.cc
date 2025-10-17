@@ -112,10 +112,10 @@ PYBIND11_MODULE(mesh_energy, m)
     bindParametrizationMeshEnergy<                      SymmetricDirichlet<double, 2> >(m, detail);
     bindParametrizationMeshEnergy<        SymmetricDirichletDerivativeFree<double, 2> >(m, detail);
 
-    // Bind solid element mesh energies
-    using NHE3D = NeoHookeanEnergy<double, 3>;
-    bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("Solid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("Solid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("Solid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("Solid", m, detail);
+    // // Bind solid element mesh energies
+    // using NHE3D = NeoHookeanEnergy<double, 3>;
+    // bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("Solid", m, detail);
+    // bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("Solid", m, detail);
+    // bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("Solid", m, detail);
+    // bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("Solid", m, detail);
 }
