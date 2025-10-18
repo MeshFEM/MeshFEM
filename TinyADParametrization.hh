@@ -184,7 +184,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         }
 
         BENCHMARK_START_TIMER_SECTION("Hessian Evaluation");
-        auto [f, g, H_proj] = func.eval_with_hessian_proj(x, 0.0);
+        auto [f, g, H_proj] = func.eval_with_hessian_proj(x);
         BENCHMARK_STOP_TIMER_SECTION("Hessian Evaluation");
         
         double g_norm = g.norm();
@@ -194,30 +194,8 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         energy_history.push_back(f);
         grad_norm_history.push_back(g_norm);
 
-        double hessian_shift = 1e-08;
-        int max_try = 10;
-        VXd d;
-        d.setZero(g.size());
         BENCHMARK_START_TIMER_SECTION("Linear Solve");
-        for (int attempt = 1; attempt <= max_try; ++attempt)
-        {
-            try
-            {
-                d = TinyADParametrization::newton_direction(g, H_proj, solver, hessian_shift);
-                break;
-            }
-            catch(const std::exception& e)
-            {
-                std::cerr << "Attempt " << attempt << " failed: " << e.what() << std::endl;
-                if (attempt < max_try) {
-                    std::cerr << "Scaling hessian_shift to " << (10 * hessian_shift) << std::endl;
-                    hessian_shift *= 10.0;
-                } else {
-                    // If max_try is reached, throw the exception
-                    throw std::runtime_error("Max number of attempts reached without success.");
-                }
-            }
-        }
+        VXd d = TinyADParametrization::newton_direction(g, H_proj, solver);
         BENCHMARK_STOP_TIMER_SECTION("Linear Solve");
 
         double directional_derivative = 2 * TinyAD::newton_decrement(d, g);
@@ -229,7 +207,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         
         VXd x_old = x;
         BENCHMARK_START_TIMER_SECTION("Line Search");
-        x = TinyAD::line_search(x, d, f, g, func, 1.0, 0.5, 64, 1e-4);
+        x = TinyAD::line_search(x, d, f, g, func);
         BENCHMARK_STOP_TIMER_SECTION("Line Search");
 
         // Get the machine epsilon for double
