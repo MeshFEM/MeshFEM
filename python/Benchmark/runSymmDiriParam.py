@@ -96,6 +96,14 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
             linsys_solve_time = benchmark_dict['linear_solve_time'] + symbolic_factorize_time + numeric_factorize_time
             hessian_eval_time = benchmark_dict['hessian_eval_time']
 
+        elif hessian_proj_option in ['MeshFEM_TAD']:
+            # two method in matching baseline methods
+            obj_arr, time_arr, grad_norm_arr, benchmark_dict, hessian_stats = helper_funcs.runSYDParam_matchBaseline(m, hessian_proj_option)
+            symbolic_factorize_time = benchmark.totalTime('Catamari Symbolic Factorize$', d=benchmark_dict)
+            numeric_factorize_time = benchmark.totalTime('Catamari Numeric Factorize$', d=benchmark_dict)
+            linsys_solve_time = benchmark.totalTime('CholeskyFactorizerBase.solve$', d=benchmark_dict) + symbolic_factorize_time + numeric_factorize_time
+            hessian_eval_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=benchmark_dict) + benchmark.totalTime('NewtonMultiobjectiveProblem.gradient$', d=benchmark_dict)
+
         else:
             # get solver options str f"MeshFEM{n}"
             name_tuple = SolverOptionEnum.optionNames(hessian_proj_option)
@@ -162,6 +170,8 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option, hessian_shi
     if hessian_proj_option == 'TinyAD':  helper_funcs.runSymmds_TinyAD(m, uvsave_path=folder_dir)
     elif hessian_proj_option == 'SLIM':  helper_funcs.runSLIM(model_name, model_path, uvsave_path=folder_dir)
     elif hessian_proj_option == 'CompMajor':  helper_funcs.runCompMajor(model_name, model_path, uvsave_path=folder_dir)
+    elif hessian_proj_option in ['MeshFEM_TAD']:
+        helper_funcs.runSYDParam_matchBaseline(m, hessian_proj_option, uvsave_path=folder_dir)
     else:                                
         name_tuple = SolverOptionEnum.optionNames(hessian_proj_option)
         helper_funcs.runSYDParam(m, name_tuple[0], name_tuple[1], name_tuple[2], name_tuple[3], name_tuple[4], hessian_shift=hessian_shift, uvsave_path=folder_dir)
@@ -180,7 +190,7 @@ def main():
     hessian_proj_option = sys.argv[4]
     save_uv_option = sys.argv[5]
 
-    if (hessian_proj_option not in ['TinyAD', 'CompMajor', 'SLIM']) and (not SolverOptionEnum.is_valid_solver_option(hessian_proj_option)):
+    if (hessian_proj_option not in ['TinyAD', 'CompMajor', 'SLIM', 'MeshFEM_TAD']) and (not SolverOptionEnum.is_valid_solver_option(hessian_proj_option)):
         print("[Error] Usage of <hessian_proj_option>:  ['TinyAD', 'CompMajor', 'SLIM', 'MeshFEM0'~'MeshFEM15']")
         sys.exit(1)
     

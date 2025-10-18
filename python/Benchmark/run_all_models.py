@@ -136,7 +136,7 @@ def validate_hessian_options(values):
     if numOptions != len(set(values)):  raise argparse.ArgumentTypeError("Duplicated values in your hessian_options list.")
 
     # each option should be case-sensitive
-    valid_hessian_option_list = ['MeshFEM', 'TinyAD', 'SLIM', 'CompMajor']
+    valid_hessian_option_list = ['MeshFEM', 'TinyAD', 'SLIM', 'CompMajor', 'MeshFEM_TAD']
     for i in range(numOptions):
         if values[i] not in valid_hessian_option_list:
             raise argparse.ArgumentTypeError(f"Invalid value for hessian_options: '{values[i]}'. Must be one of {valid_hessian_option_list}.")
@@ -257,7 +257,7 @@ def main():
     print(f"Using Save UV Option: {args.save_uv_option}")
     print(f"Using Hessian Options: {hessian_option_list}")
     print(f"Using Thread Numbers: {thread_num_list}")
-    print(f"Using hessian shift in MeshFEM: {args.MeshFEM_hessian_shift}")
+    print(f"Using hessian shift in MeshFEMVariants: {args.MeshFEM_hessian_shift}")
 
     # Call your main functions
     run_all_models(
