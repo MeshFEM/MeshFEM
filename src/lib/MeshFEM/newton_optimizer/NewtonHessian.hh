@@ -250,8 +250,9 @@ struct MESHFEM_EXPORT NewtonHessian {
 
     template<typename index_type = int>
     Eigen::SparseMatrix<double, 0, index_type>
-    toEigen() const {
+    toEigen(bool upperTriangleOnly = true) const {
         auto H_scalar = toScalar();
+        if (!upperTriangleOnly) H_scalar = H_scalar.toSymmetryMode(SuiteSparseMatrix::SymmetryMode::NONE);
         using src_index_type = typename decltype(H_scalar)::index_type;
         using map = Eigen::Map<const Eigen::SparseMatrix<double, 0, index_type>>;
         if constexpr (std::is_same_v<index_type, src_index_type>) {

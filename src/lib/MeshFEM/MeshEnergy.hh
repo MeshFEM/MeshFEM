@@ -236,9 +236,10 @@ struct MeshEnergy : public MeshEnergyBase {
                     H_e = elements[ei].hessian(weight, /* projectionMask = */ false);
                 else
                     H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
+
                 Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e.transpose()); // WARNING: uses *lower* triangle, while we compute upper triangle!
                 if (Hes.eigenvalues()[0] >= xBasedProjectionClampEps) return H_e; // sorted increasing
-                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(xBasedProjectionClampEps).asDiagonal() * Hes.eigenvectors().transpose();
+                return (Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(xBasedProjectionClampEps).asDiagonal() * Hes.eigenvectors().transpose()).eval();
             };
 
             assembler().assembleHessian(H, elements.size(), getProjectedHessian, [this](size_t ei) { return stencils[ei].blockVars; });
