@@ -27,8 +27,7 @@ using V3d   = Eigen::Vector3d;
 using VXd   = Eigen::VectorXd;
 using M2d   = Eigen::Matrix<Real, 2, 2>;
 
-
-void writeMatrixToFile(const Eigen::MatrixXd& matrix, const std::string& filepath, const std::string& filename) {
+inline void writeMatrixToFile(const Eigen::MatrixXd& matrix, const std::string& filepath, const std::string& filename) {
     // Combine the directory path and the filename
     std::filesystem::path fullPath = std::filesystem::path(filepath) / filename;
 
@@ -75,76 +74,91 @@ Eigen::VectorX<PassiveT> newton_direction(
     return d;
 }
 
+struct TinyADParamSD {
+    TinyADParamSD(const Mesh &mesh) {
+        const size_t nn = mesh.numNodes();
+        const size_t num_ele = mesh.numElements();
 
-MESHFEM_EXPORT
-std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>
-symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double convergence_eps=1e-2, 
-                    bool saveUV = false, const std::string& filepath = "") 
-{
-    const size_t nn = mesh.numNodes();
-    const size_t num_ele = mesh.numElements();
-    if (size_t(uv_init.rows()) != nn) throw std::runtime_error("Invalid uv initialization size");
+        // pre-compute triangle rest shapes in local coordinate systems
+        rest_shapes.resize(num_ele);
+        for (const auto e : mesh.elements()) {
+            // Get 3D vertex positions
+            V3d ar_3d = e.node(0)->p;
+            V3d br_3d = e.node(1)->p;
+            V3d cr_3d = e.node(2)->p;
 
-    size_t numCompoents = uv_init.cols();
-    NDMap result(nn, numCompoents);
+            // Set up local 2D coordinate system
+            V3d n = (br_3d - ar_3d).cross(cr_3d - ar_3d);
+            V3d b1 = (br_3d - ar_3d).normalized();
+            V3d b2 = n.cross(b1).normalized();
 
-    // pre-compute triangle rest shapes in local coordinate systems
-    std::vector<M2d> rest_shapes(num_ele);
-    for (const auto e : mesh.elements()) {
-        // Get 3D vertex positions
-        V3d ar_3d = e.node(0)->p;
-        V3d br_3d = e.node(1)->p;
-        V3d cr_3d = e.node(2)->p;
+            // Express a,b,c in local 2D coordinate system
+            V2d ar_2d(0.0, 0.0);
+            V2d br_2d((br_3d - ar_3d).dot(b1), 0.0);
+            V2d cr_2d((cr_3d - ar_3d).dot(b1), (cr_3d - ar_3d).dot(b2));
 
-        // Set up local 2D coordinate system
-        V3d n = (br_3d - ar_3d).cross(cr_3d - ar_3d);
-        V3d b1 = (br_3d - ar_3d).normalized();
-        V3d b2 = n.cross(b1).normalized();
+            // save 2-by-2 matrix with edge vectors as columns
+            rest_shapes[e.index()] = TinyAD::col_mat(br_2d - ar_2d, cr_2d - ar_2d);
+        }
 
-        // Express a,b,c in local 2D coordinate system
-        V2d ar_2d(0.0, 0.0);
-        V2d br_2d((br_3d - ar_3d).dot(b1), 0.0);
-        V2d cr_2d((cr_3d - ar_3d).dot(b1), (cr_3d - ar_3d).dot(b2));
-
-        // save 2-by-2 matrix with edge vectors as columns
-        rest_shapes[e.index()] = TinyAD::col_mat(br_2d - ar_2d, cr_2d - ar_2d);
-    }
-
-    // set up function with 2D vertex positions as variables.
-    TinyAD::EvalSettings eval_settings;
+        // set up function with 2D vertex positions as variables.
+        TinyAD::EvalSettings eval_settings;
 #ifdef _OPENMP
-    eval_settings.n_threads = omp_get_max_threads();
+        eval_settings.n_threads = omp_get_max_threads();
 #else
-    eval_settings.n_threads = 1;
+        eval_settings.n_threads = 1;
 #endif
 
-    auto func = TinyAD::scalar_function<2>(TinyAD::range(nn), eval_settings); // hack around of TinyAD's thread of modification
+        std::cout << "Creating TinyAD scalar function with " << eval_settings.n_threads << " threads." << std::endl;
+        func = TinyAD::scalar_function<2>(TinyAD::range(nn), eval_settings); // hack around of TinyAD's thread of modification
 
-    // Add objective term per face. Each connecting 3 vertiecs.
-    func.add_elements<3>(TinyAD::range(num_ele), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
-    {
-        // Evaluate element using either double or TinyAD::Double
-        using T = TINYAD_SCALAR_TYPE(element);
+        // Add objective term per face. Each connecting 3 vertiecs.
+        func.add_elements<3>(TinyAD::range(num_ele), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
+        {
+            // Evaluate element using either double or TinyAD::Double
+            using T = TINYAD_SCALAR_TYPE(element);
 
-        // Get variable 2D vertex positions
-        Eigen::Index f_idx = element.handle;
-        Eigen::Vector2<T> a = element.variables(mesh.element(f_idx).vertex(0).index());
-        Eigen::Vector2<T> b = element.variables(mesh.element(f_idx).vertex(1).index());
-        Eigen::Vector2<T> c = element.variables(mesh.element(f_idx).vertex(2).index());
+            // Get variable 2D vertex positions
+            Eigen::Index f_idx = element.handle;
+            Eigen::Vector2<T> a = element.variables(mesh.element(f_idx).vertex(0).index());
+            Eigen::Vector2<T> b = element.variables(mesh.element(f_idx).vertex(1).index());
+            Eigen::Vector2<T> c = element.variables(mesh.element(f_idx).vertex(2).index());
 
-        // Triangle flipped?
-        Eigen::Matrix2<T> M = TinyAD::col_mat(b - a, c - a);
-        if (M.determinant() <= 0.0)
-            return (T)INFINITY;
-        
-        // Get constant 2D rest shape of f
-        M2d Mr = rest_shapes[f_idx];
-        double A = 0.5 * Mr.determinant();
+            // Triangle flipped?
+            Eigen::Matrix2<T> M = TinyAD::col_mat(b - a, c - a);
+            if (M.determinant() <= 0.0)
+                return (T)INFINITY;
 
-        // Computer symmetric Dirichlet energy
-        Eigen::Matrix2<T> J = M * Mr.inverse();
-        return 0.5 * A * (J.squaredNorm() + J.inverse().squaredNorm());
-    });
+            // Get constant 2D rest shape of f
+            M2d Mr = rest_shapes[f_idx];
+            double A = 0.5 * Mr.determinant();
+
+            // Computer symmetric Dirichlet energy
+            Eigen::Matrix2<T> J = M * Mr.inverse();
+            return 0.5 * A * (J.squaredNorm() + J.inverse().squaredNorm());
+        });
+    }
+
+    std::vector<M2d> rest_shapes;
+    std::decay_t<decltype(TinyAD::scalar_function<2>(TinyAD::range(0)))> func;
+    // TinyAD::ScalarFunction<2, double, size_t> func;
+};
+
+inline
+std::tuple<double, VXd, Eigen::SparseMatrix<double>>
+symmdsParamTinyADEvalFGH(const Mesh &mesh, const VXd &x, bool project, Real proj_eps) {
+    TinyADParamSD tad_sd(mesh);
+    if (project) return tad_sd.func.eval_with_hessian_proj(x, proj_eps);
+    else         return tad_sd.func.eval_with_derivatives(x);
+}
+
+inline
+std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>
+symmdsParamTinyAD(const Mesh &mesh, const NDMap &uv_init, int max_iters=1000, double convergence_eps=1e-2,
+                    bool saveUV = false, const std::string& filepath = "", double proj_eps = TinyAD::default_hessian_projection_eps)
+{
+    TinyADParamSD tad_sd(mesh);
+    auto &func = tad_sd.func;
 
     // Assemble inital x vector from P matrix.
     // x_from_data(...) takes a lambda function that maps
@@ -159,17 +173,17 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
     std::vector<double> iter_time_history;
     std::vector<double> step_norm_history;
     std::vector<double> dir_der_history;
-    auto start_timer = std::chrono::high_resolution_clock::now();
+    auto start_timer = std::chrono::steady_clock::now();
 
     // Projected Newton
     // TinyAD::LinearSolver solver;
     TinyAD::LinearSolver<double, Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>> solver;
-    NDMap uv_temp(nn, numCompoents);
+    NDMap uv_temp(mesh.numNodes(), 2);
     bool lineSearchFail = false;
     for (int i = 0; i < max_iters; ++i)
     {
         BENCHMARK_START_TIMER_SECTION("Newton Iterations");
-        auto now_timer = std::chrono::high_resolution_clock::now();
+        auto now_timer = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed = now_timer - start_timer;
         iter_time_history.push_back(elapsed.count());
 
@@ -184,13 +198,13 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
         }
 
         BENCHMARK_START_TIMER_SECTION("Hessian Evaluation");
-        auto [f, g, H_proj] = func.eval_with_hessian_proj(x);
+        auto [f, g, H_proj] = func.eval_with_hessian_proj(x, proj_eps);
         BENCHMARK_STOP_TIMER_SECTION("Hessian Evaluation");
-        
+
         double g_norm = g.norm();
         TINYAD_DEBUG_OUT("Energy in iteration " << i << ": " << f);
         TINYAD_DEBUG_OUT("Gradient Norm in iteration " << i << ": " << g_norm);
-        
+
         energy_history.push_back(f);
         grad_norm_history.push_back(g_norm);
 
@@ -204,7 +218,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
 
         if (g_norm < convergence_eps)
             break;
-        
+
         VXd x_old = x;
         BENCHMARK_START_TIMER_SECTION("Line Search");
         x = TinyAD::line_search(x, d, f, g, func);
@@ -219,7 +233,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
 
         BENCHMARK_STOP_TIMER_SECTION("Newton Iterations");
     }
-    auto final_timer = std::chrono::high_resolution_clock::now();
+    auto final_timer = std::chrono::steady_clock::now();
 
     //TINYAD_DEBUG_OUT("Final energy: " << func.eval(x));
     auto final_obj_grad = func.eval_with_gradient(x);
@@ -227,7 +241,7 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
     double final_grad_norm = (std::get<1>(final_obj_grad)).norm();
     TINYAD_DEBUG_OUT("Final energy: " << final_obj);
     TINYAD_DEBUG_OUT("Final gradient norm: " << final_grad_norm);
-    
+
     energy_history.push_back(final_obj);
     grad_norm_history.push_back(final_grad_norm);
     std::chrono::duration<double> elapsed_final = final_timer - start_timer;
@@ -246,16 +260,116 @@ symmdsParamTinyAD(const Mesh &mesh, NDMap &uv_init, int max_iters=1000, double c
     // Write final x vector to P matrix.
     // x_to_data(...) takes a lambda function that writes the final value
     // of each variable (Eigen::Vector2d) back to our P matrix.
+    NDMap result(mesh.numNodes(), 2);
     func.x_to_data(x, [&] (int v_idx, const V2d& p) {
         result.row(v_idx) = p;
     });
 
-    return std::tuple<NDMap, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>(result, energy_history, grad_norm_history, iter_time_history, step_norm_history, dir_der_history);
+    return std::make_tuple(result, energy_history, grad_norm_history, iter_time_history, step_norm_history, dir_der_history);
 }
 
+} // namespace TinyADParametrization
 
+
+////////////////////////////////////////////////////////////////////////////////
+// "Hybrid" MeshFEM/TAD implementation for debugging differences.
+// Use MeshFEM's energy/gradient/Hessian evaluation with the Newton
+// framework of the TinyAD example.
+////////////////////////////////////////////////////////////////////////////////
+#include <MeshFEM/MeshEnergy.hh>
+#include "DirichletEnergy.hh"
+
+template<class Mesh>
+std::tuple<Eigen::MatrixXd, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>
+paramTADMeshFEMHybrid(std::shared_ptr<Mesh> mesh, const Eigen::MatrixXd &uv_init, int max_iters=1000, double convergence_eps=1e-2,
+                    double proj_eps = TinyAD::default_hessian_projection_eps)
+{
+    using VXd = Eigen::VectorXd;
+
+    using Vars = NodalVars<2>;
+    using Stencil = ElementStencil</* K = */ 2, /* Deg = */ 1, /* N = */ 2>;
+
+    auto vars = std::make_shared<Vars>(*mesh);
+    MeshEnergy<Mesh, Vars, Stencil, SymDirichletParamElementTADCompare<double>> me(mesh, vars);
+    me.useXBasedProjection = true;
+    me.xBasedProjectionClampEps = proj_eps;
+    me.elementHessianShift = 0.0;
+    std::cout << "Starting Parametrization using MeshFEM/TinyAD Hybrid with max iters = " << max_iters
+              << ", convergence eps = " << convergence_eps
+              << ", proj eps = " << proj_eps << std::endl;
+
+    std::vector<double> energy_history;
+    std::vector<double> grad_norm_history;
+    std::vector<double> iter_time_history;
+    std::vector<double> step_norm_history;
+    std::vector<double> dir_der_history;
+
+    auto start_timer = std::chrono::steady_clock::now();
+
+    {
+        Eigen::Matrix<double, Eigen::Dynamic, 2, Eigen::RowMajor> uv_rm = uv_init;
+        vars->setVars(Eigen::Map<const VXd>(uv_rm.data(), uv_rm.size()));
+    }
+    std::cout << "Initial Energy: " << me.objective() << std::endl;
+
+    // Projected Newton
+    TinyAD::LinearSolver<double, Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>> solver;
+
+    bool lineSearchFail = false;
+    for (int i = 0; i < max_iters; ++i) {
+        BENCHMARK_START_TIMER_SECTION("Newton Iterations");
+        auto now_timer = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed = now_timer - start_timer;
+        iter_time_history.push_back(elapsed.count());
+
+        auto H_proj = me.hessian(/* project = */ true).toEigen(/* upperTriangleOnly = */ false);
+
+        VXd g = me.gradient();
+
+        double g_norm = g.norm();
+        double f = me.objective();
+        std::cout << i << '\t' << f << '\t' << g_norm;
+        energy_history.push_back(f);
+        grad_norm_history.push_back(g_norm);
+
+        BENCHMARK_START_TIMER_SECTION("Linear Solve");
+        VXd d = TinyADParametrization::newton_direction(g, H_proj, solver);
+        BENCHMARK_STOP_TIMER_SECTION("Linear Solve");
+
+        double directional_derivative = 2 * TinyAD::newton_decrement(d, g);
+        step_norm_history.push_back(d.norm());
+        dir_der_history.push_back(directional_derivative);
+
+        if (g_norm < convergence_eps) break;
+
+        VXd x = vars->getVars();
+        VXd x_old = x;
+
+        BENCHMARK_START_TIMER_SECTION("Line Search");
+        x = TinyAD::line_search(x, d, f, g,
+                [&](const VXd &x_new) {
+                    vars->setVars(x_new);
+                    return me.objective();
+                });
+        std::cout << std::endl;
+
+        BENCHMARK_STOP_TIMER_SECTION("Line Search");
+
+        if (x.isApprox(x_old, std::numeric_limits<double>::epsilon())) {
+            TINYAD_WARNING("Line Search Fails. Optimization Ends.");
+            break;
+        }
+
+        BENCHMARK_STOP_TIMER_SECTION("Newton Iterations");
+    }
+    auto final_timer = std::chrono::steady_clock::now();
+
+    energy_history.push_back(me.objective());
+    grad_norm_history.push_back(me.gradient().norm());
+    std::chrono::duration<double> elapsed_final = final_timer - start_timer;
+    iter_time_history.push_back(elapsed_final.count());
+
+    return std::make_tuple(vars->getVars(), energy_history, grad_norm_history, iter_time_history, step_norm_history, dir_der_history);
 }
-
-
 
 #endif /* end of include guard: TINYADPARAMETRIZATION_HH */

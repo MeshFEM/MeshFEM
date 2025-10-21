@@ -26,4 +26,7 @@ PYBIND11_MODULE(dirichlet_demo, m)
 
     using ME3 = MeshEnergy<Mesh, Vars, Stencil, SymDirichletParamElementAD<double>>;
     bindMeshEnergy<ME3>("param_symdirichlet_element_ad", m, detail);
+
+    using ME4 = MeshEnergy<Mesh, Vars, Stencil, SymDirichletParamElementTADCompare<double>>;
+    bindMeshEnergy<ME4>("param_symdirichlet_element_tad_compare", m, detail);
 }

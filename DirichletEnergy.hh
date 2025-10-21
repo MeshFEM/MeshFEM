@@ -149,7 +149,6 @@ using DirichletParamElementAD = AutodiffElement<DirichletElementEnergy<Real_>>;
 ////////////////////////////////////////////////////////////////////////////////
 template<typename Real_>
 struct SymDirichletElementEnergy {
-    static std::string name() { return "DirichletParamElementAD"; }
     using LocalVars = TriCornerUVs<Real_>;
 
     template<class Mesh>
@@ -178,10 +177,64 @@ struct SymDirichletElementEnergy {
     }
 
 private:
-    Mat2_T<Real> m_EtE_inv_A, m_EtE_A;
+    Mat2_T<Real_> m_EtE_inv_A, m_EtE_A;
+};
+
+// Match the TinyAD example as closely as possible.
+template<typename Real_>
+struct SymDirichletElementTADCompare {
+    using LocalVars = TriCornerUVs<Real_>;
+    using V2d = Eigen::Matrix<Real_, 2, 1>;
+    using V3d = Eigen::Matrix<Real_, 3, 1>;
+
+    template<class Mesh>
+    SymDirichletElementTADCompare(size_t ei, const Mesh &m) {
+        auto e = m.element(ei);
+        // Get 3D vertex positions
+        V3d ar_3d = e.node(0)->p;
+        V3d br_3d = e.node(1)->p;
+        V3d cr_3d = e.node(2)->p;
+
+        // Set up local 2D coordinate system
+        V3d n = (br_3d - ar_3d).cross(cr_3d - ar_3d);
+        V3d b1 = (br_3d - ar_3d).normalized();
+        V3d b2 = n.cross(b1).normalized();
+
+        // Express a,b,c in local 2D coordinate system
+        V2d ar_2d(0.0, 0.0);
+        V2d br_2d((br_3d - ar_3d).dot(b1), 0.0);
+        V2d cr_2d((cr_3d - ar_3d).dot(b1), (cr_3d - ar_3d).dot(b2));
+
+        // save 2-by-2 matrix with edge vectors as columns
+        rest_shape << br_2d - ar_2d, cr_2d - ar_2d;
+    }
+
+    template<class LVars>
+    typename LVars::Scalar eval(const LVars &x) const {
+        using ADScalar = typename LVars::Scalar;
+        Mat2_T<ADScalar> M;
+        M.col(0) = x.row(1) - x.row(0);
+        M.col(1) = x.row(2) - x.row(0);
+
+        // Triangle flipped?
+        if (M.determinant() <= 0.0) return ADScalar(std::numeric_limits<double>::infinity());
+
+        // Get constant 2D rest shape of f
+        double A = 0.5 * rest_shape.determinant();
+
+        // Compute symmetric Dirichlet energy
+        Mat2_T<ADScalar> J = M * rest_shape.inverse().eval().template cast<ADScalar>();
+        return 0.5 * A * (J.squaredNorm() + J.inverse().squaredNorm());
+    }
+
+private:
+    Mat2_T<Real_> rest_shape;
 };
 
 template<typename Real_>
 using SymDirichletParamElementAD = AutodiffElement<SymDirichletElementEnergy<Real_>>;
+
+template<typename Real_>
+using SymDirichletParamElementTADCompare = AutodiffElement<SymDirichletElementTADCompare<Real_>>;
 
 #endif /* end of include guard: DIRICHLETENERGY_HH */
