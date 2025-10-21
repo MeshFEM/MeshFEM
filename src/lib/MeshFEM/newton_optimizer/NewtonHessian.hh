@@ -248,12 +248,20 @@ struct MESHFEM_EXPORT NewtonHessian {
         return H_ss->toScalar();
     }
 
-    using index_type = typename BlockCSCHessianBase::index_type;
+    template<typename index_type = int>
     Eigen::SparseMatrix<double, 0, index_type>
     toEigen() const {
         auto H_scalar = toScalar();
-        return Eigen::Map<const Eigen::SparseMatrix<double, 0, index_type>>(H_scalar.m, H_scalar.n, H_scalar.nz,
-                                                    H_scalar.Ap.data(), H_scalar.Ai.data(), H_scalar.Ax.data());
+        using src_index_type = typename decltype(H_scalar)::index_type;
+        using map = Eigen::Map<const Eigen::SparseMatrix<double, 0, index_type>>;
+        if constexpr (std::is_same_v<index_type, src_index_type>) {
+            return map(H_scalar.m, H_scalar.n, H_scalar.nz, H_scalar.Ap.data(), H_scalar.Ai.data(), H_scalar.Ax.data());
+        }
+        else {
+            VecX_T<index_type> Ai_cast = H_scalar.Ai.template cast<index_type>();
+            VecX_T<index_type> Ap_cast = Eigen::Map<VecX_T<src_index_type>>(H_scalar.Ap.data(), H_scalar.Ap.size()).template cast<index_type>();
+            return map(H_scalar.m, H_scalar.n, H_scalar.nz, Ap_cast.data(), Ai_cast.data(), H_scalar.Ax.data());
+        }
     }
 
     friend void swap(NewtonHessian &A, NewtonHessian &B) {

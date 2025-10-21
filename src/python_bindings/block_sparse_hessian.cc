@@ -100,7 +100,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("validate", &NH::validate)
         .def("isSparsityOnly", &NH::isSparsityOnly)
         .def("toScalar", &NH::toScalar)
-        .def("toSciPy", &NH::toEigen) // Eigen matrices are automatically converted to SciPy CSC matrices by pybind11
+        .def("toSciPy", &NH::toEigen<int>) // Eigen matrices are automatically converted to SciPy CSC matrices by pybind11
         .def("apply", &NH::apply)
 
         .def("addDiag", &NH::addDiag, py::arg("d"))
