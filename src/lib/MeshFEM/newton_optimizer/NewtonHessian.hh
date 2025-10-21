@@ -86,6 +86,8 @@
 #include <MeshFEM/BlockCSCHessian.hh>
 #include <MeshFEM/Utilities/load_dense_matrix.hh>
 
+#include <Eigen/Sparse>
+
 struct WorkingSet;
 
 struct MESHFEM_EXPORT NewtonHessian {
@@ -244,6 +246,14 @@ struct MESHFEM_EXPORT NewtonHessian {
         if (H_ss->vars().numDenseVars() > 0) throw std::runtime_error("Cannot convert Hessian with dense variables to sparse scalar form");
         if (low_rank_rank() > 0)             throw std::runtime_error("Cannot convert Hessian with low-rank term to sparse scalar form");
         return H_ss->toScalar();
+    }
+
+    using index_type = typename BlockCSCHessianBase::index_type;
+    Eigen::SparseMatrix<double, 0, index_type>
+    toEigen() const {
+        auto H_scalar = toScalar();
+        return Eigen::Map<const Eigen::SparseMatrix<double, 0, index_type>>(H_scalar.m, H_scalar.n, H_scalar.nz,
+                                                    H_scalar.Ap.data(), H_scalar.Ai.data(), H_scalar.Ax.data());
     }
 
     friend void swap(NewtonHessian &A, NewtonHessian &B) {
