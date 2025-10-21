@@ -386,7 +386,6 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
         return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict, hessian_stats
 
 
-
 def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, uvsave_path=None):
     '''
     function to perform symmetric dirichlet parameterization using MeshFEM matching two baseline methods: CM and TinyAD
@@ -438,9 +437,19 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, uvsa
         param.useXBasedProjection = True  # X-based
         param.xBasedProjectionClampEps = 1e-9
         param.elementHessianShift = 0
+    elif baseline_str == 'MeshFEM_CM':
+        symmdiri_energy = energy.SymmetricDirichlet(2) # Analytical Derivatives
+        symmdiri_energy.useAbsProjection = False # Clamp
+        param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
+        param.useXBasedProjection = False  # F-based
+        param.elementHessianShift = 1e-6 
     else:  raise RuntimeError(f"[MeshFEM Matching Baseline] {baseline_str} is not a valid option!")
 
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
+    if baseline_str == 'MeshFEM_CM':
+        prob.initialFeasibleStepLengthComputer = flip_avoiding_step_length.FlipAvoidingStepLength(m.elements())
+        prob.initialFeasibleStepLengthComputer.backoffFactor = 0.8    # in accordance to Composite Majorization
+
     if uvsave_path is None:  prob.setCustomIterationCallback(customCallback)
     else:
         if not os.path.exists(uvsave_path):

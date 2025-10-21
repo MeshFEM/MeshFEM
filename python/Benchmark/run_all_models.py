@@ -136,7 +136,7 @@ def validate_hessian_options(values):
     if numOptions != len(set(values)):  raise argparse.ArgumentTypeError("Duplicated values in your hessian_options list.")
 
     # each option should be case-sensitive
-    valid_hessian_option_list = ['MeshFEM', 'TinyAD', 'SLIM', 'CompMajor', 'MeshFEM_TAD']
+    valid_hessian_option_list = ['MeshFEM', 'TinyAD', 'SLIM', 'CompMajor', 'MeshFEM_TAD', 'MeshFEM_CM']
     for i in range(numOptions):
         if values[i] not in valid_hessian_option_list:
             raise argparse.ArgumentTypeError(f"Invalid value for hessian_options: '{values[i]}'. Must be one of {valid_hessian_option_list}.")
