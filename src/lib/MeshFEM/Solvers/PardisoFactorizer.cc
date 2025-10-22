@@ -38,6 +38,7 @@ PardisoFactorizer::PardisoFactorizer() {
     pardisoinit (pt,  &mtype, &solver, iparm.data(), dparm.data(), &error);
 #endif
 
+#ifndef MESHFEM_WITH_MKL_PARDISO
     char *var = getenv("OMP_NUM_THREADS");
     int num_procs = 1;
     if (var != NULL)
@@ -50,11 +51,29 @@ PardisoFactorizer::PardisoFactorizer() {
     }
     iparm[2] = num_procs;
     // std::cout << "num_procs: " << iparm[2] << std::endl;
+#endif
 }
 
 template<class IdxVec>
 Eigen::ArrayXi fortranIndexArrayFromCIndexArray(const IdxVec &ivec) {
     return Eigen::Map<const Eigen::Array<std::decay_t<decltype(ivec[0])>, Eigen::Dynamic, 1>>(ivec.data(), ivec.size()).template cast<int>() + 1;
+}
+
+void PardisoFactorizer::m_pardisoRelease() {
+    if (m_factorizationType == FactorizationType::None) return;
+    int error = 0;
+    int phase = -1; // Release internal memory.
+#ifdef MESHFEM_WITH_MKL_PARDISO
+    pardiso (pt, &maxfct, &mnum, &mtype, &phase,
+             &m_reducedSize, &ddum, /* ia = */ nullptr, /* ja = */ nullptr, m_customOrder.data(), &nrhs,
+             iparm.data(), &msglvl, &ddum, &ddum, &error);
+#else
+    pardiso (pt, &maxfct, &mnum, &mtype, &phase,
+             &m_reducedSize, &ddum, /* ia = */ nullptr, /* ja = */ nullptr, m_customOrder.data(), &nrhs,
+             iparm.data(), &msglvl, &ddum, &ddum, &error, dparm.data());
+#endif
+
+    m_factorizationType = FactorizationType::None;
 }
 
 void PardisoFactorizer::m_pardisoFactorization(int phase) {
@@ -67,6 +86,14 @@ void PardisoFactorizer::m_pardisoFactorization(int phase) {
 #ifdef MESHFEM_WITH_MKL_PARDISO
     // iparm[26] = 1; // Validate matrix
     iparm[36] = (m_blockSize > 1) ? m_blockSize : 0; // Format for matrix storage
+
+    // {
+    //     static size_t counter = 0;
+    //     if (!iparm_file.is_open()) { iparm_file.open("iparm_" + std::to_string(counter++) + ".txt"); }
+    //     for (size_t i = 0; i < 64; ++i) iparm_file << iparm[i] << '\t';
+    //     iparm_file << std::endl;
+    // }
+
     pardiso(pt, &maxfct, &mnum, &mtype, &phase,
 	        &m_reducedSize, A_transpose.Ax.data(), ia.data(), ja.data(), m_customOrder.data(), &nrhs,
             iparm.data(), &msglvl, &ddum, &ddum, &error);
@@ -77,8 +104,25 @@ void PardisoFactorizer::m_pardisoFactorization(int phase) {
             iparm.data(), &msglvl, &ddum, &ddum, &error, dparm.data());
 #endif
 
+    // {
+    //     static size_t counter = 0;
+    //     if (!iparm_file.is_open()) { iparm_file.open("post_fact_iparm_" + std::to_string(counter++) + ".txt"); }
+    //     for (size_t i = 0; i < 64; ++i) iparm_file << iparm[i] << '\t';
+    //     iparm_file << std::endl;
+    // }
+
     if (error != 0)
         throw std::runtime_error("ERROR during factorization phase " + std::to_string(phase) + ": " + std::to_string(error));
+
+#if MESHFEM_WITH_MKL_PARDISO
+    // Work around apparent bug where the error code is not reported properly in
+    // block-accelerated + parallel mode: check for negative pivots.
+    // This seems related to the bug where `error = -13` is sometimes returned
+    // instead of `error = -4`.
+    if ((phase > 11) && (iparm[29] != 0))
+        throw std::runtime_error("Negative/zero pivots encountered in factorization phase " + std::to_string(phase) + " despite error report: " + std::to_string(error));
+#endif
+
 }
 
 void PardisoFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const std::vector<size_t> &pinnedVars) {
@@ -99,6 +143,8 @@ void PardisoFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, const 
 
 void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars) {
     const SuiteSparseMatrix *A_reduced;
+
+    m_pardisoRelease(); // This cleanup step is necessary to avoid spurious failures (encountered, e.g., in block mode with user-provided nesdis orderings)
 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Pardiso Symbolic Factorization");
 
@@ -261,7 +307,6 @@ void PardisoFactorizer::factorizeSymbolic(const SuiteSparseMatrix &mat, const st
     ia = fortranIndexArrayFromCIndexArray(A_transpose.Ap); // row pointers   (column pointers of transpose)
     ja = fortranIndexArrayFromCIndexArray(A_transpose.Ai); // column indices (row indices of transpose)
 
-    m_factorizationType = FactorizationType::None;
     m_pardisoFactorization(/* symbolic factorization phase only */ 11);
     m_factorizationType = FactorizationType::Symbolic;
 }
@@ -353,17 +398,7 @@ void PardisoFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys,
 }
 
 PardisoFactorizer::~PardisoFactorizer()  {
-    int error = 0;
-    int phase = -1; // Release internal memory.
-#ifdef MESHFEM_WITH_MKL_PARDISO
-    pardiso (pt, &maxfct, &mnum, &mtype, &phase,
-             &m_reducedSize, &ddum, /* ia = */ nullptr, /* ja = */ nullptr, &idum, &nrhs,
-             iparm.data(), &msglvl, &ddum, &ddum, &error);
-#else
-    pardiso (pt, &maxfct, &mnum, &mtype, &phase,
-             &m_reducedSize, &ddum, /* ia = */ nullptr, /* ja = */ nullptr, &idum, &nrhs,
-             iparm.data(), &msglvl, &ddum, &ddum, &error, dparm.data());
-#endif
+    m_pardisoRelease();
 
     if (m_c) cholmod_l_finish(m_c.get());
     if (m_c_int) cholmod_finish(m_c_int.get());

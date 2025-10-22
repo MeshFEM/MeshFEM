@@ -392,7 +392,12 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         // Cholmod stores these entries on the diagonal of "L"
         const size_t numCols = m_L->n;
         assert(numCols == n_reduced());
-        SuiteSparse_long *colPointers = (SuiteSparse_long *) m_L->p;
+#ifdef CHOLMOD_USE_INT64
+        using index_type = SuiteSparse_long;
+#else
+        using index_type = int;
+#endif
+        const index_type *colPointers = (index_type *) m_L->p;
         double *values = (double *) m_L->x;
         assert((colPointers != nullptr) && (values != nullptr));
         for (size_t j = 0; j < numCols; ++j) {

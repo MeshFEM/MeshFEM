@@ -93,6 +93,8 @@ private:
 
     std::vector<SuiteSparse_long> m_sourceEntry; // source entry for each entry in `A_transpose`.
 
+    std::ofstream iparm_file;
+
     mutable std::array<int, 64>    iparm{};
     mutable std::array<double, 64> dparm{};
     mutable void *pt[64]; // Internal solver memory pointer
@@ -102,6 +104,7 @@ private:
     bool m_useBlockAccel = true;
     size_t m_blockSize = 1;
 
+    void m_pardisoRelease(); // Clear all internal numeric/symbolic factorization data.
     void m_pardisoFactorization(int phase);
     void m_setValuesFromSource(const SuiteSparseMatrix &Afull, Real sigma = 0.0);
 

@@ -24,6 +24,7 @@
 // accessible way to support the adaptive-repeats mode.
 double g_total_num_fact_duration = 0;
 size_t global_repeat = 0;
+size_t g_posdef_count = 0, g_indef_count = 0;
 
 void benchmark_method(std::string method, const std::string &directory, size_t num_threads, size_t repeats, bool use_shift) {
 #ifndef MESHFEM_USE_LEGACY_CATAMARI
@@ -49,7 +50,7 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
         num_threads = 1;
     }
 
-    set_max_num_tbb_threads(num_threads);
+    set_max_num_tbb_threads(1);
 
 // #if __linux__
 //     PinningObserver core_binder;
@@ -208,8 +209,12 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
                         factorizer->factorizeNumeric(*H); // Shift not used for contact examples
                     }
 
+                    if (!factorizer->checkPosDef()) throw std::runtime_error("Non-positive definite matrix detected by checkPosDef");
+
                     if ((global_repeat > 0) || (r > 0))
                         continue; // Only verify in first pass
+
+                    ++g_posdef_count;
 
                     // Verify
                     b = H->apply(x_gt); // Generate a right-hand side consistent with the pin constraints
@@ -222,7 +227,10 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
                         std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
                 }
                 catch (const std::runtime_error &e) {
-                    if (r == 0 && (global_repeat == 0)) std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
+                    if (r == 0 && (global_repeat == 0)) {
+                        std::cerr << "Failed to factorize matrix " << counter << ": " << e.what() << std::endl;
+                        ++g_indef_count;
+                    }
                 }
             }
 
@@ -265,6 +273,8 @@ int main(int argc, const char *argv[]) {
         }
     }
 #endif
+
+    std::cout << "Posdef and indef matrices:\t" << g_posdef_count << "\t" << g_indef_count << std::endl;
 
     BENCHMARK_REPORT();
     unset_max_num_tbb_threads();
