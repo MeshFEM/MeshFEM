@@ -90,7 +90,9 @@ PYBIND11_MODULE(mesh_energy, m)
     py::class_<MeshEnergyBase, NewtonObjectiveTermBase, std::shared_ptr<MeshEnergyBase>>(m, "MeshEnergyBase")
         .def("materialForElement", &MeshEnergyBase::materialForElement, py::arg("ei"), py::return_value_policy::reference_internal)
         .def("numElements", &MeshEnergyBase::numElements)
-        .def_readwrite("useXBasedProjection", &MeshEnergyBase::useXBasedProjection)
+        .def_readwrite("useXBasedProjection",      &MeshEnergyBase::useXBasedProjection,      "Whether to apply brute-force eigendecomposition-based x-based projection")
+        .def_readwrite("xBasedProjectionClampEps", &MeshEnergyBase::xBasedProjectionClampEps, "Eigenvalue clamping threshold for x-based projection (for comparison to TinyAD)")
+        .def_readwrite("elementHessianShift",      &MeshEnergyBase::elementHessianShift,      "Whether to add a small multiple of the identity to each element Hessian (for comparison against the Composite Majorization codebase)")
         ;
 
     using DSHEMat = DiscreteShellHingeEnergy<double>::MaterialProperties;
@@ -110,10 +112,10 @@ PYBIND11_MODULE(mesh_energy, m)
     bindParametrizationMeshEnergy<                      SymmetricDirichlet<double, 2> >(m, detail);
     bindParametrizationMeshEnergy<        SymmetricDirichletDerivativeFree<double, 2> >(m, detail);
 
-    // Bind solid element mesh energies
-    using NHE3D = NeoHookeanEnergy<double, 3>;
-    bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("Solid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("Solid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("Solid", m, detail);
-    bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("Solid", m, detail);
+    // // Bind solid element mesh energies
+    // using NHE3D = NeoHookeanEnergy<double, 3>;
+    // bindMeshEnergy<SolidMeshEnergy<1, NHE>, NHE>("Solid", m, detail);
+    // bindMeshEnergy<SolidMeshEnergy<2, NHE>, NHE>("Solid", m, detail);
+    // bindMeshEnergy<SolidMeshEnergy<1, NHE3D>, NHE3D>("Solid", m, detail);
+    // bindMeshEnergy<SolidMeshEnergy<2, NHE3D>, NHE3D>("Solid", m, detail);
 }

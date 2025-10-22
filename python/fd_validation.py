@@ -220,6 +220,14 @@ def hessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], inde
     plt.ylabel('Relative error')
     plt.xlabel('Step size')
 
+def gradHessConvergencePlot(obj, perturb=None, customArgs=None, fixedVars = [], epsilons=None):
+    fig = plt.figure(figsize=(10, 4))
+    plt.subplot(1, 2, 1)
+    gradConvergencePlot(obj, perturb, customArgs, fixedVars, epsilons=epsilons)
+    plt.subplot(1, 2, 2)
+    hessConvergencePlot(obj, perturb, customArgs, fixedVars, epsilons=epsilons)
+    plt.tight_layout()
+
 def block_hessian_error(obj, var_indices, va, vb, customArgs=None, eps=1e-6, perturb=None, testHessVec = False, hessVecPrecomp = None):
     '''
     Report the error in the (va, vb) block of the Hessian, where

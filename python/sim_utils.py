@@ -16,14 +16,16 @@ def getBBoxFaceRegion(obj, face, eps = 0.001):
     r.maxCorner[axis] = coordinate + eps
     return r
 
-def getBBoxVars(obj, face, displacementComponents = None, displacementsOnly = False, tol = 1e-8, restPos=True):
-    if displacementComponents is None: displacementComponents = range(obj.dimension)
+def getBBoxVars(obj, face, displacementComponents = None, displacementsOnly = False, tol = 1e-8, restPos=True, dimension=None):
+    mesh = obj if (hasattr(obj, 'nodes')) else obj.mesh() # also support using the mesh directly...
+    if dimension is None: dimension = mesh.embeddingDimension
+    if displacementComponents is None: displacementComponents = range(dimension)
     if (not isinstance(face, BBoxFace)): raise Exception('face must be an instance of BBoxFace')
+    X = mesh.nodes() if restPos else obj.getDeformedPositions()
     axis = np.abs(face.value) - 1
-    X = obj.mesh().nodes() if restPos else obj.getDeformedPositions()
     coords = X[:, axis]
     val = coords.min() if face.value < 0 else coords.max()
-    varIdxs = [obj.dimension * i + c for i in np.where(np.abs(coords - val) < tol)[0] for c in displacementComponents]
+    varIdxs = [dimension * i + c for i in np.where(np.abs(coords - val) < tol)[0] for c in displacementComponents]
     if (not displacementsOnly) and hasattr(obj, 'thetaOffset'):
         EX = obj.restEdgeMidpoints() if restPos else obj.edgeMidpoints()
         varIdxs.extend(obj.thetaOffset() + np.where(np.abs(EX[:, axis] - val) < tol)[0])

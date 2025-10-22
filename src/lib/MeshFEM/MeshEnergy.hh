@@ -106,6 +106,8 @@ struct MeshEnergyBase : public NewtonObjectiveTerm {
     virtual ~MeshEnergyBase() { }
 
     bool useXBasedProjection = false;
+    double xBasedProjectionClampEps = 0.0;
+    double elementHessianShift = 0.0;
 private:
     virtual MaterialBase &m_getMaterial(size_t ei) = 0;
 };
@@ -196,7 +198,28 @@ struct MeshEnergy : public MeshEnergyBase {
 
     void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
-        if (!useXBasedProjection || !projectionMask) {
+        using ElementHessian = typename Element::Hessian;
+        const bool needsXBasedProjection = useXBasedProjection && projectionMask;
+
+        if (elementHessianShift != 0.0) {
+            // This mode is intended only for apples-to-apples comparison
+            // against the Composite Majorization codebase, which addresses
+            // Hessian rank deficiency by adding a small, fixed multiple of the identity to
+            // each element Hessian.
+            if (needsXBasedProjection) throw std::runtime_error("Combining x-based projection with elementHessianShift not supported");
+
+            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
+                ElementHessian H_e;
+                if constexpr (Element::CachesDeformedQuantities)
+                     H_e = elements[ei].hessian(weight, projectionMask);
+                else H_e = elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+                H_e.diagonal().array() += weight * elementHessianShift;
+                return H_e;
+            }, [this](size_t ei) { return stencils[ei].blockVars; });
+            return;
+        }
+
+        if (!needsXBasedProjection) {
             // Use projection implemented by the element itself (e.g., F-based projection)
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
                 if constexpr (Element::CachesDeformedQuantities)
@@ -207,16 +230,16 @@ struct MeshEnergy : public MeshEnergyBase {
         }
         else {
             // Use a brute-force x-based projection
-            using ElementHessian = typename Element::Hessian;
             auto getProjectedHessian = [&](size_t ei) -> ElementHessian {
                 ElementHessian H_e;
                 if constexpr (Element::CachesDeformedQuantities)
                     H_e = elements[ei].hessian(weight, /* projectionMask = */ false);
                 else
                     H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
+
                 Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e.transpose()); // WARNING: uses *lower* triangle, while we compute upper triangle!
-                if (Hes.eigenvalues()[0] >= 0.0) return H_e; // sorted increasing
-                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                if (Hes.eigenvalues()[0] >= xBasedProjectionClampEps) return H_e; // sorted increasing
+                return (Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(xBasedProjectionClampEps).asDiagonal() * Hes.eigenvectors().transpose()).eval();
             };
 
             assembler().assembleHessian(H, elements.size(), getProjectedHessian, [this](size_t ei) { return stencils[ei].blockVars; });

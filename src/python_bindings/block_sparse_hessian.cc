@@ -80,13 +80,6 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("vars",          &BlockCSCHessianBase::vars, py::return_value_policy::reference_internal)
         ;
 
-    auto toScalar = [](const NewtonHessian &H) {
-        if (H.varStructure().numDenseVars() > 0) throw std::runtime_error("Cannot convert BlockCSCHessian with dense variables to scalar CSC format");
-        if (H.low_rank_rank() > 0)               throw std::runtime_error("Cannot convert BlockCSCHessian with low rank update to scalar CSC format");
-        if (!H.H_ss) throw std::runtime_error("No sparse part to convert");
-        return H.H_ss->toScalar();
-    };
-
     using NH = NewtonHessian;
     py::class_<NH>(m, "NewtonHessian")
         .def(py::init([](const std::string &path) { return NH::load(path); }), py::arg("path"))
@@ -106,18 +99,8 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
         .def("validate", &NH::validate)
         .def("isSparsityOnly", &NH::isSparsityOnly)
-        .def("toScalar", [&](const NH &H) { return toScalar(H); })
-        .def("toSciPy", [&](const NH &H) {
-                auto A = toScalar(H);
-                py::object matrix_type = py::module::import("scipy.sparse").attr("csc_matrix");
-                py::array data(A.Ax.size(), A.Ax.data());
-                py::array outerIndices(A.Ap.size(), A.Ap.data());
-                py::array innerIndices(A.Ai.size(), A.Ai.data());
-
-                return matrix_type(
-                    std::make_tuple(data, innerIndices, outerIndices),
-                    std::make_pair(A.m, A.n));
-            })
+        .def("toScalar", &NH::toScalar)
+        .def("toSciPy", &NH::toEigen<int>, py::arg("upperTriangleOnly") = true) // Eigen matrices are automatically converted to SciPy CSC matrices by pybind11
         .def("apply", &NH::apply)
 
         .def("addDiag", &NH::addDiag, py::arg("d"))

@@ -174,7 +174,7 @@ struct OptimizationVarStructure final : public OptimizationVarStructureBase {
 
     template <typename... Args>
     OptimizationVarStructure(Args... args)
-        : m_numBlocksPerType{{args...}}
+        : m_numBlocksPerType{{static_cast<size_t>(args)...}}
     {
         m_typeBlockOffsets[0] = 0;
         m_typeVarOffsets[0] = 0;

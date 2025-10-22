@@ -16,6 +16,7 @@
 
 #include <MeshFEM/MeshEnergy.hh>
 #include <MeshFEM/Elements/HingeElement.hh>
+#include <MeshFEM/Elements/SolidElement.hh>
 
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
@@ -137,5 +138,19 @@ struct MeshEnergyBinder {
 private:
     const std::string &m_name;
 };
+
+// Bind a single MeshEnergy instantiation using an automatically generated name.
+template<size_t Degree, typename Psi>
+auto bindSolidMeshEnergy(py::module &m, py::module &detail, bool bindConstructors = true) {
+    using ME = SolidMeshEnergy<Degree, Psi>;
+    return bindMeshEnergy<ME, Psi>(ME::name(), m, detail, bindConstructors);
+}
+
+// Bind a single MeshEnergy instantiation using a custom name
+template<size_t Degree, typename Psi>
+auto bindSolidMeshEnergy(const std::string &name, py::module &m, py::module &detail, bool bindConstructors = true) {
+    using ME = SolidMeshEnergy<Degree, Psi>;
+    return bindMeshEnergy<ME, Psi>(name, m, detail, bindConstructors);
+}
 
 #endif /* end of include guard: MESHENERGYBINDER_HH */
