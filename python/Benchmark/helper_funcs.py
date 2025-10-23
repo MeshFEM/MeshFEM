@@ -11,7 +11,7 @@ import subprocess
 import MeshFEM
 import mesh, mesh_energy, energy
 import parametrization, py_newton_optimizer, benchmark, flip_avoiding_step_length
-import tinyad_parametrization
+import tinyad_parametrization, dirichlet_demo
 import numpy as np
 import copy, time
 import igl
@@ -386,10 +386,13 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
         return np.array(obj_history), time_arr, np.array(grad_norm_history), bk_dict, hessian_stats
 
 
-def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, uvsave_path=None):
+def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clamp_eps=1e-9, uvsave_path=None):
     '''
     function to perform symmetric dirichlet parameterization using MeshFEM matching two baseline methods: CM and TinyAD
-    baseline_str: 'MeshFEM_CM' or 'MeshFEM_TAD'
+    baseline_str: 
+    'MeshFEM_CM':           MeshFEM Matching CompMajor, Always F-based projection, Flipavoid linesearch, per-element hessian shift = 1e-6
+    'MeshFEM_TAD_Fad':      MeshFEM Matching TinyAD, Always X-based projection, normal linesearch, Hessian clamping value = 1e-9, Standard F-autodiff
+    'MeshFEM_TAD_Xad':      MeshFEM Matching TinyAD but using x-autodiff using the same (inefficient) formulas from the TinyAD demo
     '''
     # Tutte Initialization
     obj_history = []
@@ -430,14 +433,19 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, uvsa
     uv_init = tutteInitialization(m, bdry_uv)
     uv.setVars(uv_init.ravel())
 
-    if baseline_str == 'MeshFEM_TAD':
+    if baseline_str == 'MeshFEM_TAD_Fad':
         symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)  # AutoDifferentiate
         symmdiri_energy.useAbsProjection = False  # Clamp
         param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
         param.useXBasedProjection = True  # X-based
-        param.xBasedProjectionClampEps = 1e-9
+        param.xBasedProjectionClampEps = clamp_eps
         param.elementHessianShift = 0
-    elif baseline_str == 'MeshFEM_CM':
+    elif baseline_str == 'MeshFEM_TAD_Xad':
+        param = dirichlet_demo.param_symdirichlet_element_tad_compare(m, uv)
+        param.useXBasedProjection = True  # X-based
+        param.xBasedProjectionClampEps = clamp_eps
+        param.elementHessianShift = 0
+    elif baseline_str in ['MeshFEM_CM', 'MeshFEM_CM_adp']:
         symmdiri_energy = energy.SymmetricDirichlet(2) # Analytical Derivatives
         symmdiri_energy.useAbsProjection = False # Clamp
         param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
@@ -446,7 +454,7 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, uvsa
     else:  raise RuntimeError(f"[MeshFEM Matching Baseline] {baseline_str} is not a valid option!")
 
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
-    if baseline_str == 'MeshFEM_CM':
+    if baseline_str in ['MeshFEM_CM', 'MeshFEM_CM_adp']:
         prob.initialFeasibleStepLengthComputer = flip_avoiding_step_length.FlipAvoidingStepLength(m.elements())
         prob.initialFeasibleStepLengthComputer.backoffFactor = 0.8    # in accordance to Composite Majorization
 
@@ -462,8 +470,13 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, uvsa
     opt = prob.optimizer()
     opt.options.niter = max_iter
     opt.options.gradTol = grad_tol
-    opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()  # Always project
-    if baseline_str == 'MeshFEM_TAD':
+    if baseline_str == 'MeshFEM_CM_adp':
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive() #COP2 Adaptive projection
+        opt.options.hessianProjectionController.numConsecutiveIndefiniteStepsBeforeEnable = 0
+        opt.options.hessianProjectionController.numProjectionStepsBeforeDisable = 2
+    else:
+        opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAlways()  # Always projection
+    if baseline_str in ['MeshFEM_TAD_Fad', 'MeshFEM_TAD_Xad']:
         # match linesearch parameters of TinyAD
         opt.options.backtrack_shrink_factor = 0.8
         opt.options.nbacktrack_iter = 64
