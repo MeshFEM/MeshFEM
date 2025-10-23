@@ -50,7 +50,7 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
         num_threads = 1;
     }
 
-    set_max_num_tbb_threads(1);
+    set_max_num_tbb_threads(num_threads);
 
 // #if __linux__
 //     PinningObserver core_binder;
