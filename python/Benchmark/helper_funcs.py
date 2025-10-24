@@ -18,7 +18,6 @@ import igl
 import csv
 
 from typing import NamedTuple
-import numpy as np
 from numpy.typing import NDArray
 
 def map_vertices_to_circle_area_normalized(V, F, bnd):
