@@ -9,13 +9,12 @@ import os, sys
 sys.path.append('../')
 import MeshFEM, mesh, benchmark
 import parallelism
-import numpy as np
 import pickle
-import helper_funcs
 import MeshFEMParamSolverEnum as SolverOptionEnum
 import warnings
 
 def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats=None):
+    import numpy as np
     if (obj_arr.shape[0] != time_arr.shape[0]):
         raise RuntimeWarning("[File] Array size mismatch of objective array and time array")
     if (obj_arr.shape[0] != grad_norm_arr.shape[0]):
@@ -43,6 +42,7 @@ def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats=
         print(f"[Others Stats] Successfully Write {arr_fn}, {dict_fn} in {save_dir}!")
 
 def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num, hessian_shift):
+    import helper_funcs
      # Print the parameters for confirmation
     print("-------------------------------------------------------------------------------------------------------------------")
     print(f"Running Symmetric Dirichelt Parametrization with the following parameters:")
@@ -132,6 +132,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
         print(f"Ended parametrization experiment {i + 1}/{repeat_num}.")
     
     outer_folder_dir = os.path.join(base_path, model_name, hessian_proj_option, thread_folder_name)
+    import numpy as np
     # save to txt file
     txt_fn = 'summary.txt'
     if hessian_proj_option == 'TinyAD':
@@ -153,6 +154,7 @@ def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thr
     print(f"[File] Successfully Write {txt_fn} in {outer_folder_dir}!")
 
 def recordUV(base_path, model_name, model_path, hessian_proj_option, hessian_shift):
+    import helper_funcs
     # Print the parameters for confirmation
     print("-------------------------------------------------------------------------------------------------------------------")
     print(f"Running Symmetric Dirichelt Parametrization Saving UV per-iteration with the following parameters:")
@@ -211,6 +213,8 @@ def main():
     if hessian_proj_option in ['TinyAD', 'SLIM', 'CompMajor']:
         if thread_num != 0: # not in default case
             os.environ['OMP_NUM_THREADS'] = str(thread_num)
+        os.environ['MKL_THREADING_LAYER'] = 'GNU'
+        print(f"[Debug] Check Threading: {os.environ['OMP_NUM_THREADS']}.")
     else:  
         os.environ['OMP_NUM_THREADS'] = '1'
         os.environ['MKL_THREADING_LAYER'] = 'SEQUENTIAL'
