@@ -367,7 +367,11 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
             m_valuesDummy.resize(0);
         }
-        m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
+
+        {
+            BENCHMARK_SCOPED_TIMER_SECTION t2("Catamari Factor Call with Ordering");
+            m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl);
+        }
 
         double sym_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - sym_fact_start).count();
         if (orderingMethod == OrderingMethod::Adaptive)

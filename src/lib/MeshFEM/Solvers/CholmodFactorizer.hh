@@ -153,6 +153,7 @@ struct CholmodFactorizer final : public CholeskyFactorizerBase {
         // NESDIS seems to give best performance...
         m_c->nmethods = 1;
         m_c->method[0].ordering = CHOLMOD_NESDIS;
+        // m_c->method[0].ordering = CHOLMOD_AMD;
         // m_c->method[0].ordering = CHOLMOD_METIS;
 #endif
 

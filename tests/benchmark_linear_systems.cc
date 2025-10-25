@@ -58,8 +58,16 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
 
     std::unique_ptr<CholeskyFactorizerBase> factorizer;
 
-    if (method == "cholmod") {
-        factorizer = make_cholesky_factorizer(CholeskyProvider::CHOLMOD);
+    if (method.substr(0,7) == "cholmod") {
+        std::unique_ptr<CholmodFactorizer> cf = std::make_unique<CholmodFactorizer>();
+        if (method == "cholmod_metis")
+            cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::Metis);
+        else if (method == "cholmod_amd")
+            cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::AMD);
+        else if ((method == "cholmod_nesdis") || (method == "cholmod"))
+            cf->setOrderingMethod(CholmodFactorizer::OrderingMethod::Nesdis);
+        else throw std::runtime_error("Unknown CHOLMOD ordering method");
+        factorizer = std::move(cf);
     }
     else if (method.substr(0, 8)  == "catamari") {
 #if MESHFEM_WITH_CATAMARI

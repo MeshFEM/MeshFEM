@@ -53,7 +53,10 @@ struct CatamariConverter {
 
         const SuiteSparseMatrix *Asp_ptr = &Asp_in;
         SuiteSparseMatrix A_scalar;
-        if (blockSize > 1) { A_scalar = expandSparsityPattern<>(Asp_in, blockSize); Asp_ptr = &A_scalar; }
+        if (blockSize > 1) {
+            BENCHMARK_SCOPED_TIMER_SECTION t2("Expand Sparsity Pattern");
+            A_scalar = expandSparsityPattern<>(Asp_in, blockSize); Asp_ptr = &A_scalar;
+        }
         const SuiteSparseMatrix &Asp = *Asp_ptr;
 
         // Convert upper-triangle sparsity pattern to a full symmetric sparsity
@@ -73,19 +76,26 @@ struct CatamariConverter {
                 A_full = Asp_ptr->toSymmetryModeImpl<SuiteSparse_long>(SuiteSparseMatrix::SymmetryMode::NONE, [](size_t ii) { return ii; });
             }
 
-            catamari::Buffer<catamari::MatrixEntry<typename SuiteSparseMatrix::value_type>> new_entries(A_full.nz);
-            parallel_for_range(A_full.n, [&](size_t j) {
-                for (SuiteSparse_long ii = A_full.Ap[j]; ii < A_full.Ap[j + 1]; ++ii) {
-                    SuiteSparse_long i = A_full.Ai[ii];
-                    new_entries[ii].row = j; // transpose: Catamari uses CSR storage
-                    new_entries[ii].column = i;
-                    // new_entries[ii].value = 1; // Value won't be referenced...
-                }
-            }, /* grain_size = */ 64, /* parallelism_threshold = */ 128);
+            catamari::Buffer<catamari::MatrixEntry<typename SuiteSparseMatrix::value_type>> new_entries;
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION t2("Entry Generation");
+                new_entries.Resize(A_full.nz);
+                parallel_for_range(A_full.n, [&](size_t j) {
+                    for (SuiteSparse_long ii = A_full.Ap[j]; ii < A_full.Ap[j + 1]; ++ii) {
+                        SuiteSparse_long i = A_full.Ai[ii];
+                        new_entries[ii].row = j; // transpose: Catamari uses CSR storage
+                        new_entries[ii].column = i;
+                        // new_entries[ii].value = 1; // Value won't be referenced...
+                    }
+                }, /* grain_size = */ 64, /* parallelism_threshold = */ 128);
+            }
 
 
 #ifdef MESHFEM_USE_LEGACY_CATAMARI
-            m_result.AddEntries(std::move(new_entries));
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION t2("Legacy AddEntries");
+                m_result.AddEntries(std::move(new_entries));
+            }
 #else
             catamari::Buffer<catamari::Int> row_entry_offsets(A_full.Ap.size());
             for (size_t i = 0; i < A_full.Ap.size(); ++i)
@@ -97,20 +107,33 @@ struct CatamariConverter {
         }
 
         if (legacy) {
-            // Determine where to find each entry of the Catamari matrix `m_result`
-            // within the scalar values array of the original input matrix (pre row-col removal).
-            m_sourceLocForCatamariInputEntry.assign(m_result.NumEntries(), -1);
-            for (catamari::Int j = 0; j < Asp.n; ++j) {
-                for (auto ii = Asp.Ap[j]; ii < Asp.Ap[j + 1]; ++ii) {
-                    catamari::Int i = Asp.Ai[ii];
-                    SuiteSparse_long loc = entryForReducedEntry.empty() ? ii : entryForReducedEntry[ii];
-                    m_sourceLocForCatamariInputEntry[m_result.EntryOffset(i, j)] = loc;
-                    if (i != j)
-                        m_sourceLocForCatamariInputEntry[m_result.EntryOffset(j, i)] = loc;
-                }
+            BENCHMARK_SCOPED_TIMER_SECTION t2("Legacy source lookup");
+            // // Determine where to find each entry of the Catamari matrix `m_result`
+            // // within the scalar values array of the original input matrix (pre row-col removal).
+            // m_sourceLocForCatamariInputEntry.assign(m_result.NumEntries(), -1);
+            // for (catamari::Int j = 0; j < Asp.n; ++j) {
+            //     for (auto ii = Asp.Ap[j]; ii < Asp.Ap[j + 1]; ++ii) {
+            //         catamari::Int i = Asp.Ai[ii];
+            //         SuiteSparse_long loc = entryForReducedEntry.empty() ? ii : entryForReducedEntry[ii];
+            //         m_sourceLocForCatamariInputEntry[m_result.EntryOffset(i, j)] = loc;
+            //         if (i != j)
+            //             m_sourceLocForCatamariInputEntry[m_result.EntryOffset(j, i)] = loc;
+            //     }
+            // }
+            // for (size_t ii = 0; ii < m_sourceLocForCatamariInputEntry.size(); ++ii) {
+            //     if (m_sourceLocForCatamariInputEntry[ii] < 0)
+            //         throw std::runtime_error("Missing source entry for full matrix entry");
+            //     auto loc = m_sourceReducedEntryForFullMatrixEntry[ii];
+            //     if (!entryForReducedEntry.empty()) loc = entryForReducedEntry[loc];
+            //     if (m_sourceLocForCatamariInputEntry[ii] != loc)
+            //         throw std::runtime_error("Source entry lookup mismatch");
+            // }
+            m_sourceLocForCatamariInputEntry.resize(m_result.NumEntries());
+            for (int i = 0; i < m_sourceLocForCatamariInputEntry.size(); ++i) {
+                auto loc = m_sourceReducedEntryForFullMatrixEntry[i];
+                if (!entryForReducedEntry.empty()) loc = entryForReducedEntry[loc];
+                m_sourceLocForCatamariInputEntry[i] = loc;
             }
-            for (SuiteSparse_long loc : m_sourceLocForCatamariInputEntry)
-                if (loc == -1) throw std::runtime_error("Missing source entry for full matrix entry");
         }
     }
     std::vector<SuiteSparse_long> m_sourceReducedEntryForFullMatrixEntry;
@@ -193,7 +216,7 @@ private:
 
     const bool m_legacy = false;
     SuiteSparseMatrix m_Asp; // For legacy mode only
-    std::vector<SuiteSparse_long> m_sourceLocForCatamariInputEntry; // For legacy mode only
+    VecX_T<catamari::Int> m_sourceLocForCatamariInputEntry; // For legacy mode only
 };
 
 #endif /* end of include guard: CATAMARICONVERTER_HH */
