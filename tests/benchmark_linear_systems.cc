@@ -17,6 +17,10 @@
 #include <MeshFEM/Solvers/CatamariFactorizer.hh>
 #include <MeshFEM/Solvers/MatrixRecorder.hh>
 
+#if MESHFEM_USE_LEGACY_CATAMARI
+#include <omp.h>
+#endif
+
 #include <glob.h>
 #include <cstdlib>
 
@@ -27,19 +31,21 @@ size_t global_repeat = 0;
 size_t g_posdef_count = 0, g_indef_count = 0;
 
 void benchmark_method(std::string method, const std::string &directory, size_t num_threads, size_t repeats, bool use_shift) {
-#ifndef MESHFEM_USE_LEGACY_CATAMARI
     const bool tbb_threading = (method.substr(0, 8) == "catamari") && !(method.substr(0, 13) == "catamari_left") && !(method.substr(0, 13) == "catamari_st");
-#else
-    const bool tbb_threading = false; // Legacy Catamari uses OpenMP rather than TBB! Make sure it's still parallelized.
-#endif
+
     const size_t    omp_threads = tbb_threading ? 1 : num_threads;
     const size_t veclib_threads = tbb_threading ? 1 : num_threads;
     const size_t    mkl_threads = tbb_threading ? 1 : num_threads;
 
     // Also set environment variables to control OpenMP/MKL/Accelerate threading.
+#ifndef MESHFEM_USE_LEGACY_CATAMARI
+    // See note below...
     setenv("OMP_NUM_THREADS",        std::to_string(   omp_threads).c_str(), 1);
+#endif
+
     setenv("VECLIB_MAXIMUM_THREADS", std::to_string(veclib_threads).c_str(), 1);
     setenv("MKL_NUM_THREADS",        std::to_string(   mkl_threads).c_str(), 1);
+
     if (tbb_threading)
         setenv("MKL_THREADING_LAYER", "SEQUENTIAL", 1);
     else
@@ -49,6 +55,21 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
         method = "catamari_nesdis";
         num_threads = 1;
     }
+
+#if MESHFEM_USE_LEGACY_CATAMARI
+    // Amazingly, setting the `OMP_NUM_THREADS` environment variables above
+    // has no effet on Linux + GOMP despite no OpenMP calls preceding them, nor any
+    // previous calls to `getenv`/`secure_getenv` querying this variable.
+    // Furthermore, calling `omp_get_max_threads` does not trigger a read of
+    // this environment variable. There are, however, many other `OMP_*`
+    // environment variables read by `getenv` by the `libgomp` initialization.
+    //
+    // The OpenMP specification *does* say that modifications to the
+    // environment variables after the program launches have no effect, so it
+    // must be caching the environment beforehand and/or accessing
+    // through a different mechanism from `getenv`. Weird.
+    omp_set_num_threads(num_threads);
+#endif
 
     set_max_num_tbb_threads(num_threads);
 
