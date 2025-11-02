@@ -597,6 +597,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
             std::cout << "Writing Catamari timers to " << directory << std::endl;
             std::cout << "To disable, set CATAMARI_FINEGRAINED_TIMERS to 0" << std::endl;
         }
+        std::cout << "Total numeric time for matrix " << counter << ":\t" << num_fact_duration << std::endl;
         std::string dirname = directory + "/" + std::to_string(counter++);
         std::filesystem::create_directory(dirname);
         m_ldl->supernodal_factorization->WriteFinegrainedTimerStats(dirname);

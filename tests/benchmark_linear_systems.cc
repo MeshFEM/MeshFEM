@@ -228,16 +228,16 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
             auto H = BlockCSCHessianBase::constructFromBinaryStream(numFile);
             for (size_t r = 0; r < repeats; ++r) {
                 try {
-                    // "Palette cleanser" to investigate higher speedup factors at high repeat count
-                    // (Swap in Identity matrix and re-factor)
-                    if (r > 0) {
-                        BENCHMARK_SCOPED_TIMER_SECTION timer("cleanse");
-                        cleanse_data.resize(H->Ax.size());
-                        H->Ax.swap(cleanse_data);
-                        H->setIdentity(/* preserveSparsity = */ true);
-                        factorizer->factorizeNumeric(*H);
-                        H->Ax.swap(cleanse_data);
-                    }
+                    // // "Palette cleanser" to investigate higher speedup factors at high repeat count
+                    // // (Swap in Identity matrix and re-factor)
+                    // if (r > 0) {
+                    //     BENCHMARK_SCOPED_TIMER_SECTION timer("cleanse");
+                    //     cleanse_data.resize(H->Ax.size());
+                    //     H->Ax.swap(cleanse_data);
+                    //     H->setIdentity(/* preserveSparsity = */ true);
+                    //     factorizer->factorizeNumeric(*H);
+                    //     H->Ax.swap(cleanse_data);
+                    // }
 
                     if (use_shift) {
                         double shift = 1e-8 * (H->trace() / H->numScalarCols());
@@ -292,7 +292,7 @@ int main(int argc, const char *argv[]) {
         exit(-1);
     }
 
-    size_t repeats = 1;
+    int repeats = 1;
     if (argc >= 5) repeats = std::stoi(argv[4]);
     bool use_shift = true;
     if (argc == 6) use_shift = std::stoi(argv[5]);
@@ -305,7 +305,7 @@ int main(int argc, const char *argv[]) {
             benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), 1, use_shift);
         }
     }
-    else {
+    else if (repeats == 0) {
         // Adaptively repeat until the measured numeric factorization time is long enough to trust.
         // (Important for small datasets.)
         // Note: adaptive repetition should be done at the global level; if we do it per matrix, then
@@ -315,6 +315,9 @@ int main(int argc, const char *argv[]) {
             ++global_repeat;
             if (g_total_num_fact_duration == 0.0) break; // Avoid an infinite loop on empty matrix directories...
         }
+    }
+    else if (repeats < 0) { // force a repeat of only the numeric factorization
+        benchmark_method(/* method = */ argv[1], /* directory = */ argv[3], /* num_threads = */ std::stoi(argv[2]), std::abs(repeats), use_shift);
     }
 #endif
 
