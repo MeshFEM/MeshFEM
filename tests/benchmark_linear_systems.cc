@@ -17,6 +17,8 @@
 #include <MeshFEM/Solvers/CatamariFactorizer.hh>
 #include <MeshFEM/Solvers/MatrixRecorder.hh>
 
+#include <MeshFEM/Solvers/pardiso_ordering.hh>
+
 #if MESHFEM_USE_LEGACY_CATAMARI
 #include <omp.h>
 #endif
@@ -69,6 +71,7 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
     // must be caching the environment beforehand and/or accessing
     // through a different mechanism from `getenv`. Weird.
     omp_set_num_threads(num_threads);
+    // set_max_num_tbb_threads(1); // to help verify OMP threading control is working in htop; in general we do want to mix TBB+OpenMP threading, though, to accelerate sparsity pattern preprocessing/value shuffling.
 #endif
 
     set_max_num_tbb_threads(num_threads);
@@ -198,6 +201,14 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
             }
             else { throw std::runtime_error("Failed to open pinned vars file corresponding to symbolic matrix " + std::to_string(counter)); }
             auto Hsp = BlockCSCHessianBase::constructFromBinaryStream(symFile);
+            // {
+            //     // This was to help diagnose `catamari_pardiso` symbolic factorization
+            //     // often being faster than `pardiso` itself, despite doing more work.
+            //     // Apparently this is a strange cold-cache effect.
+            //     BENCHMARK_SCOPED_TIMER_SECTION t2("Ordering timing");
+            //     auto perm = compute_pardiso_ordering(*Hsp, PardisoSparseOrder::Metis);
+            // }
+
             factorizer->factorizeSymbolic(*Hsp, pinnedVars);
 
             x_gt = Eigen::VectorXd::Random(Hsp->numScalarRows());
@@ -254,6 +265,10 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
                     // std::cout << "Forward relative error for system " << counter << ": " << relerror_forward << std::endl;
                     if (relerror_backward > 5e-5)
                         std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
+
+                    // for (size_t r_solve = 0; r_solve < 20; r_solve++)
+                    //     x = factorizer->solve(x);
+                    factorizer->writeSolveTimers();
                 }
                 catch (const std::runtime_error &e) {
                     if (r == 0 && (global_repeat == 0)) {
