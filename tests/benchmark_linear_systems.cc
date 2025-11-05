@@ -26,6 +26,15 @@
 #include <glob.h>
 #include <cstdlib>
 
+// A reimplementation of `std::isnan` that works under `-ffast-math`.
+inline bool isnan_bits(double x) {
+    uint64_t bits;
+    std::memcpy(&bits, &x, sizeof(bits));
+    uint64_t exp  = (bits >> 52) & 0x7FF;
+    uint64_t frac = bits & ((1ULL << 52) - 1);
+    return (exp == 0x7FF) && (frac != 0);
+}
+
 // Record total amount of time spent in numeric factorization in a conveniently
 // accessible way to support the adaptive-repeats mode.
 double g_total_num_fact_duration = 0;
@@ -263,7 +272,8 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
                     double relerror_backward = (b - b_recompute).norm() / b.norm();
                     // double relerror_forward = (x - x_gt).norm() / x_gt.norm();
                     // std::cout << "Forward relative error for system " << counter << ": " << relerror_forward << std::endl;
-                    if (relerror_backward > 5e-5)
+                    // std::cout << "relerror_backward: " << relerror_backward << std::endl;
+                    if ((relerror_backward > 5e-5) || isnan_bits(relerror_backward)) // The special second check is to get around broken `std::isnan` under `-ffast-math`; even !(relerror_backward < 5e-5) isn't working...
                         std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
 
                     // for (size_t r_solve = 0; r_solve < 20; r_solve++)

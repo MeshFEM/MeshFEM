@@ -135,6 +135,10 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
 
+    // For benchmarking comparisons: disable the use of block accelerations only for numeric factorization or solves.
+    bool disableBlockNFac  = false; // This is currently broken (due to index skipping in symbolic factorization?)
+    bool disableBlockSolve = false;
+
     void setCollectIndefinitenessStats(bool collect);
     void writeSupernodeStats(const std::string &path) const;
     void writeSolveTimers() const override;

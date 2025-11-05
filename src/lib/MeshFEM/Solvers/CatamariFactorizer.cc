@@ -564,7 +564,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
 
     catamari::SparseLDLResult<double> result;
     if (m_legacy) throw std::runtime_error("Partial legacy mode disabled; build with MESHFEM_USE_LEGACY_CATAMARI instead.");
-    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, m_useBlockAccel ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
+    else          result = m_ldl->RefactorWithFixedSparsityPattern(m_catamariConverter->conversionPlan, (m_useBlockAccel && !disableBlockNFac) ? m_blockSize : 1, A.Ax.data(), std::forward<Args>(args)...);
 
     double num_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - num_fact_start).count();
 
@@ -689,14 +689,16 @@ void CatamariFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys
         v.data = const_cast<Real *>(b);
 
         auto f = m_ldl->supernodal_factorization.get();
+
+        const catamari::Int solve_block_size = (m_useBlockAccel && !disableBlockSolve) ? m_blockSize : 1;
         if (f == nullptr) throw std::runtime_error("solveRawReduced: only supernodal factorizations are supported");
-        InversePermute(f->ordering_.inverse_permutation, v, &v_perm); // Note: InversePermute is faster than Permute due to contiguous writes avoiding false sharing.
+        InversePermute(solve_block_size, f->ordering_.inverse_permutation, v, &v_perm); // Note: InversePermute is faster than Permute due to contiguous writes avoiding false sharing.
 
         {
             BENCHMARK_SCOPED_TIMER_SECTION solveTimer("Catamari Solve");
 
             auto solve_start = std::chrono::steady_clock::now();
-            m_ldl->Solve(&v_perm, /* alreadyPermuted = */ true);
+            m_ldl->Solve(&v_perm, solve_block_size, /* alreadyPermuted = */ true);
             double solve_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - solve_start).count();
 
             if (orderingMethod == OrderingMethod::Adaptive)
@@ -706,7 +708,7 @@ void CatamariFactorizer::solveRawReduced(const Real *b, Real *x, CholeskySys sys
         catamari::BlasMatrixView<double> v_x = v_perm;
         v_x.data = x;
 
-        InversePermute(f->ordering_.permutation, v_perm, &v_x);
+        InversePermute(solve_block_size, f->ordering_.permutation, v_perm, &v_x);
     }
 }
 
@@ -727,7 +729,7 @@ void CatamariFactorizer::solveRawReducedInPlace(Real *bx, CholeskySys sys, bool 
     BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
 
     auto solve_start = std::chrono::steady_clock::now();
-    m_ldl->Solve(&v, alreadyPermuted);
+    m_ldl->Solve(&v, (m_useBlockAccel && !disableBlockSolve) ? m_blockSize : 1, alreadyPermuted);
     double solve_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - solve_start).count();
 
     if (orderingMethod == OrderingMethod::Adaptive)
@@ -755,7 +757,7 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
 
         {
             BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-            m_ldl->Solve(&v, /* alreadyPermuted = */ true);
+            m_ldl->Solve(&v, (m_useBlockAccel && !disableBlockSolve) ? m_blockSize : 1, /* alreadyPermuted = */ true);
         }
 #else
         v.width = 1;
@@ -763,7 +765,7 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
             v.data = X_scratch.col(i).data();
             {
                 BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-                m_ldl->Solve(&v, /* alreadyPermuted = */ true);
+                m_ldl->Solve(&v, (m_useBlockAccel && !disableBlockSolve) ? m_blockSize : 1, /* alreadyPermuted = */ true);
             }
         }
 #endif
