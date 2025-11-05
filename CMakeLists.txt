@@ -23,14 +23,15 @@ else()
     message(WARNING "OpenMP not found. Building without OpenMP support!")
 endif()
 
+option(INCLUDE_TINYAD "Whether to include TinyAD and build associated bindings" ON)
+
+if (INCLUDE_TINYAD) # If we want TinyAD, tell MeshFEM to download it
+    set(MESHFEM_FORCE_TINYAD_DOWNLOAD ON CACHE BOOL "" FORCE)
+endif()
+
 if (NOT TARGET MeshFEM)
     option(MESHFEM_ENABLE_BENCHMARKING "" ON)
     add_subdirectory(${THIRD_PARTY_DIR}/MeshFEM)
-endif()
-
-option(INCLUDE_TINYAD "Whether to include TinyAD and build associated bindings" ON)
-if (INCLUDE_TINYAD AND NOT TARGET TinyAD)
-    add_subdirectory(${THIRD_PARTY_DIR}/TinyAD)
 endif()
 
 # Color errors/warnings.
