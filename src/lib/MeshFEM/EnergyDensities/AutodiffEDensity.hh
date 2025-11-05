@@ -12,9 +12,14 @@
 #define AUTODIFFEDENSITY_HH
 
 #include <Eigen/Dense>
-#include <MeshFEM/AutomaticDifferentiation.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include "EnergyTraits.hh"
+
+#ifdef MESHFEM_WITH_TINYAD
+#include <TinyAD/Scalar.hh>
+#else // !MESHFEM_WITH_TINYAD
+#include <MeshFEM/AutomaticDifferentiation.hh>
+#endif // MESHFEM_WITH_TINYAD
 
 template<class Psi, typename Real_, size_t Dim_, EDensityType EDType_ = EDensityType::FBased>
 struct AutodiffEDensity : public Psi {
@@ -28,8 +33,13 @@ struct AutodiffEDensity : public Psi {
     using Matrix = Eigen::Matrix<Real, M, N>;
     using Hessian = Eigen::Matrix<Real, M * N, M * N>;
 
+#ifdef MESHFEM_WITH_TINYAD
+    using ADScalar  = TinyAD::Scalar<M * N, Real_, /* with_hessian = */ false>;
+    using AD2Scalar = TinyAD::Scalar<M * N, Real_, /* with_hessian = */  true>;
+#else // !MESHFEM_WITH_TINYAD
     using ADScalar  = Eigen::AutoDiffScalar<Eigen::Matrix<Real,     M * N, 1>>;
-    using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, M * N, 1>>;
+    using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, M * N, 1>>; // Use nested Eigen Autodiff type as a hack for second derivatives
+#endif // MESHFEM_WITH_TINYAD
 
     static std::string name() {
         if constexpr (has_name_method<Psi>::value) {
@@ -48,6 +58,29 @@ struct AutodiffEDensity : public Psi {
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
         if (elevel == EvalLevel::EnergyOnly) { m_energy = Psi::psi(F); }
+#ifdef MESHFEM_WITH_TINYAD
+        if (elevel == EvalLevel::Gradient) {
+            Eigen::Matrix<ADScalar, M, N> F_AD;
+            for (size_t j = 0; j < N; ++j) {
+                for (size_t i = 0; i < M; ++i)
+                    F_AD(i, j) = ADScalar(F(i, j), i + j * M);
+            }
+            ADScalar psi_AD = Psi::psi(F_AD);
+            m_energy = psi_AD.val;
+            m_denergy = Eigen::Map<const Matrix>(psi_AD.grad.data());
+        }
+        if (elevel >= EvalLevel::Hessian) {
+            Eigen::Matrix<AD2Scalar, M, N> F_AD2;
+            for (size_t j = 0; j < N; ++j) {
+                for (size_t i = 0; i < M; ++i)
+                    F_AD2(i, j) = AD2Scalar(F(i, j), i + j * M);
+            }
+
+            AD2Scalar psi_AD2 = Psi::psi(F_AD2);
+            m_energy   = psi_AD2.val;
+            m_denergy  = Eigen::Map<const Matrix>(psi_AD2.grad.data());
+            m_d2energy = Eigen::Map<const Hessian>(psi_AD2.Hess.data());
+#else // !MESHFEM_WITH_TINYAD
         if (elevel == EvalLevel::Gradient) {
             Eigen::Matrix<ADScalar, M, N> F_AD;
             for (size_t j = 0; j < N; ++j) {
@@ -88,6 +121,7 @@ struct AutodiffEDensity : public Psi {
                             m_d2energy(i + j * M, k + l * M) = psi_AD2.derivatives()[i + j * M].derivatives()[k + l * M];
                 }
             }
+#endif // MESHFEM_WITH_TINYAD
             if (projectionEnabled && (elevel != EvalLevel::HessianWithDisabledProjection)) {
                 using ESolver = Eigen::SelfAdjointEigenSolver<Hessian>;
                 // TODO: short-circuit in diagonally dominant case.

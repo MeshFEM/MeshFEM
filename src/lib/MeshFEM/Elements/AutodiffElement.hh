@@ -15,8 +15,13 @@
 
 #include "ElementBase.hh"
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
-#include <MeshFEM/AutomaticDifferentiation.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
+
+#ifdef MESHFEM_WITH_TINYAD
+#include <TinyAD/Scalar.hh>
+#else // !MESHFEM_WITH_TINYAD
+#include <MeshFEM/AutomaticDifferentiation.hh>
+#endif // MESHFEM_WITH_TINYAD
 
 template<class ElementEnergy>
 struct AutodiffElement;
@@ -60,8 +65,13 @@ struct AutodiffElement : public ElementBase<AutodiffElement<ElementEnergy>>, pri
     using Gradient = VecN_T<Real, NumLocalVars>;
     using Hessian  = Eigen::Matrix<Real, NumLocalVars, NumLocalVars>;
 
+#ifdef MESHFEM_WITH_TINYAD
+    using ADScalar  = TinyAD::Scalar<NumLocalVars, Real, /* with_hessian = */ false>;
+    using AD2Scalar = TinyAD::Scalar<NumLocalVars, Real, /* with_hessian = */  true>;
+#else // !MESHFEM_WITH_TINYAD
     using ADScalar  = Eigen::AutoDiffScalar<Eigen::Matrix<Real,     NumLocalVars, 1>>;
-    using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, NumLocalVars, 1>>;
+    using AD2Scalar = Eigen::AutoDiffScalar<Eigen::Matrix<ADScalar, NumLocalVars, 1>>; // Use nested Eigen Autodiff type as a hack for second derivatives
+#endif // MESHFEM_WITH_TINYAD
 
     static constexpr size_t flattened_index(size_t i, size_t j) {
         if constexpr (LocalVars::Options & Eigen::RowMajor)
@@ -74,6 +84,14 @@ struct AutodiffElement : public ElementBase<AutodiffElement<ElementEnergy>>, pri
 
     Gradient gradient(Real w, const LocalVars &x) const {
         Eigen::Matrix<ADScalar, LocalVars::RowsAtCompileTime, LocalVars::ColsAtCompileTime> x_AD;
+#ifdef MESHFEM_WITH_TINYAD
+        for (size_t j = 0; j < LocalVars::ColsAtCompileTime; ++j) {
+            for (size_t i = 0; i < LocalVars::RowsAtCompileTime; ++i)
+                x_AD(i, j) = ADScalar(x(i, j), flattened_index(i, j));
+        }
+        ADScalar e_AD = m_evalWrapper(x_AD);
+        return w * e_AD.grad;
+#else // !MESHFEM_WITH_TINYAD
         for (size_t j = 0; j < LocalVars::ColsAtCompileTime; ++j) {
             for (size_t i = 0; i < LocalVars::RowsAtCompileTime; ++i) {
                 x_AD(i, j).value() = x(i, j);
@@ -82,10 +100,19 @@ struct AutodiffElement : public ElementBase<AutodiffElement<ElementEnergy>>, pri
         }
         ADScalar e_AD = m_evalWrapper(x_AD);
         return w * e_AD.derivatives();
+#endif
     }
 
     Hessian hessian(Real w, bool /* project */, const LocalVars &x) const {
         Eigen::Matrix<AD2Scalar, LocalVars::RowsAtCompileTime, LocalVars::ColsAtCompileTime> x_AD2;
+#ifdef MESHFEM_WITH_TINYAD
+        for (size_t j = 0; j < LocalVars::ColsAtCompileTime; ++j) {
+            for (size_t i = 0; i < LocalVars::RowsAtCompileTime; ++i)
+                x_AD2(i, j) = AD2Scalar(x(i, j), flattened_index(i, j));
+        }
+
+        return w * m_evalWrapper(x_AD2).Hess;
+#else // !MESHFEM_WITH_TINYAD
         for (size_t j = 0; j < LocalVars::ColsAtCompileTime; ++j) {
             for (size_t i = 0; i < LocalVars::RowsAtCompileTime; ++i) {
                 x_AD2(i, j).value() = x(i, j);
@@ -105,6 +132,7 @@ struct AutodiffElement : public ElementBase<AutodiffElement<ElementEnergy>>, pri
                 H(i, j) = e_AD2.derivatives()[i].derivatives()[j];
         }
         return w * H;
+#endif
     }
 
 private:

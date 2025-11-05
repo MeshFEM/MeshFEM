@@ -263,3 +263,8 @@ if(MESHFEM_WITH_IPC_TOOLKIT)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_IPC_TOOLKIT)
     target_link_libraries(${PROJECT_NAME} PUBLIC ipc::toolkit)
 endif()
+
+if (MESHFEM_WITH_TINYAD)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TINYAD)
+    target_link_libraries(${PROJECT_NAME} PUBLIC TinyAD)
+endif()
