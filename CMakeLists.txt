@@ -99,6 +99,9 @@ option(MESHFEM_ADDRESS_SANITIZER     "Whether to use address sanitizer in Debug 
 option(MESHFEM_WITH_IPC_TOOLKIT      "Compile MeshFEM with Ipc_toolkit" ON)
 option(MESHFEM_WITH_TINYAD           "Whether to use the TinyAD `Scalar` type as the autodiff backend intead of (nested) Eigen" OFF)
 
+option(MESHFEM_FORCE_TINYAD_DOWNLOAD "Whether to force the download of TinyAD (on behalf of the parent project) even when not using TinyAD for MeshFEM's autodiff" OFF)
+mark_as_advanced(MESHFEM_FORCE_TINYAD_DOWNLOAD)
+
 if (MESHFEM_WITH_PARDISO AND MESHFEM_WITH_MKL_PARDISO)
     message( FATAL_ERROR "MESHFEM_WITH_PARDISO and MESHFEM_WITH_MKL_PARDISO are mutually exclusive.")
 endif()

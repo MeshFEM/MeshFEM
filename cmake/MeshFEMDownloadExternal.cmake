@@ -121,7 +121,7 @@ function(meshfem_download_ipc_toolkit)
     )
 endfunction()
 
-if (MESHFEM_WITH_TINYAD AND (NOT TARGET TinyAD))
+if ((MESHFEM_WITH_TINYAD OR MESHFEM_FORCE_TINYAD_DOWNLOAD) AND (NOT TARGET TinyAD))
     meshfem_download_project(TinyAD
         GIT_REPOSITORY https://github.com/patr-schm/TinyAD
         GIT_TAG 29417031c185b6dc27b6d4b684550d844459b735
