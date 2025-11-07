@@ -25,7 +25,7 @@ def getModelNameDict():
     modelNameDict['armchairDisc'] = 'armchair'
     modelNameDict['deformed_armadilloDisc'] = 'deformed-armadillo'
     modelNameDict['camille_hand100KDisc'] = 'camille-hand'
-    modelNameDict['bunnyBotsch'] = 'bunny2'
+    modelNameDict['bunnyBotschDisc'] = 'bunny2'
     modelNameDict['Superman_cut2'] = 'superman2'
     modelNameDict['Superman_cut3'] = 'superman3'
     modelNameDict['Superman_cut1'] = 'superman1'
