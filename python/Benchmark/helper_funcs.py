@@ -20,6 +20,35 @@ import csv
 from typing import NamedTuple
 from numpy.typing import NDArray
 
+import pickle
+from pathlib import Path
+from typing import Any, Dict, Mapping
+
+def save_dict(d: Mapping[str, Any], file: Path, compressed: bool = False) -> None:
+    """Save a mapping as a pickle (optionally gzip-compressed)."""
+    file = Path(file)
+    file.parent.mkdir(parents=True, exist_ok=True)
+
+    if compressed or file.suffix == ".gz":
+        import gzip
+        with gzip.open(file, "wb") as f:
+            pickle.dump(dict(d), f, protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        with open(file, "wb") as f:
+            pickle.dump(dict(d), f, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def load_dict(file: Path) -> Dict[str, Any]:
+    """Load and return a dict from a pickle (supports .gz)."""
+    file = Path(file)
+    if file.suffix == ".gz":
+        import gzip
+        with gzip.open(file, "rb") as f:
+            return pickle.load(f)
+    else:
+        with open(file, "rb") as f:
+            return pickle.load(f)
+
 def map_vertices_to_circle_area_normalized(V, F, bnd):
     """
     Python equivalent of the C++ function:
