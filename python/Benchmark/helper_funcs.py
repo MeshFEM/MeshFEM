@@ -739,7 +739,69 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         benchmark_dict['hessian_eval_time'] = np.sum(table_data["eval_hessian_time"]) + np.sum(table_data["eval_gradient_time"]) + np.sum(table_data["matrix_prep_time"])
         benchmark_dict['linear_solve_time'] = np.sum(table_data["solve_time"]) 
         return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
+
+def derivativeEvalTiming(m, method, derivative_type, projection_type, repeat=10) -> float:
+    '''
+    m:                    the mesh read in MeshFEM
+    method:               MeshFEM, TinyAD
+    derivative_type:      AN(Analytical), FAD, TAD
+    projection_type:      None, Fbased, Xbased
+    
+    return: per Eval timing
+    '''
+    
+    # First filter out some invalid combinations
+    if method == 'TinyAD' and projection_type == 'Fbased': raise RuntimeError('TinyAD method does not use Fbased projection!')
+    if method == 'MeshFEM' and derivative_type == 'TAD' and projection_type == 'Fbased': raise RuntimeError('MeshFEM using TAD-style do not support Fbased projection!')
+    
+    # initial Tutte Embedding
+    uv = mesh_energy.NodalVars(m, 2)
+    bdry_uv = getBDdataOnNormalizedCircle(m)
+    uv_init = tutteInitialization(m, bdry_uv)
+    uv.setVars(uv_init.ravel())
+    
+    total_time = -100  # For error debug
+    projectFlag = False
+    if projection_type == 'None':  projectFlag = False
+    elif projection_type in ['Fbased', 'Xbased']: projectFlag = True
+    else: raise RuntimeError(f"projection_type: {projection_type} not valid in {method}!")
+    
+    if method == 'TinyAD':
+        benchmark.reset()
+        for i in range(repeat):
+            f, g, H_proj = tinyad_parametrization.symmdsParamTinyADEvalFGH(m, uv_init.ravel(), project=projectFlag, proj_eps = 1e-9)
+        bcmk_dict = benchmark.to_dict()
+        total_time = benchmark.totalTime('symmdsParamTinyADEvalFGH', d=bcmk_dict)
+    elif method == 'MeshFEM':
+        if derivative_type == 'AN':
+            symmdiri_energy = energy.SymmetricDirichlet(2)
+            param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
+        elif derivative_type == 'FAD':
+            symmdiri_energy = energy.SymmetricDirichletDerivativeFree(2)  
+            param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
+        elif derivative_type == 'TAD':
+            param = dirichlet_demo.param_symdirichlet_element_tad_compare(m, uv)
+        else:  raise RuntimeError(f"derivative_type: {derivative_type} not valid in {method}!")
+            
+        if projection_type == 'Xbased':
+            param.useXBasedProjection = True  # X-based
+            param.xBasedProjectionClampEps = 1e-9
+        elif projection_type == 'Fbased':
+            param.useXBasedProjection = False
         
+        p = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
+        p.disableCaching = True
+        benchmark.reset()
+        for i in range(repeat):
+            p.gradient()
+            p.hessian(projectFlag)
+        bcmk_dict = benchmark.to_dict()
+        total_time = benchmark.totalTime('NewtonMultiobjectiveProblem.hessian$', d=bcmk_dict) + benchmark.totalTime('NewtonMultiobjectiveProblem.gradient$', d=bcmk_dict)
+        
+    else: raise RuntimeError(f"method: {method} not supported.")
+        
+    return total_time/repeat
+
 # Input Parameter:
 # numCISBE: numConsecutiveIndefiniteStepsBeforeEnable
 # numPSBD: numProjectionStepsBeforeDisable
