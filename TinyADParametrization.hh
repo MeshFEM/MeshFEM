@@ -148,6 +148,7 @@ inline
 std::tuple<double, VXd, Eigen::SparseMatrix<double>>
 symmdsParamTinyADEvalFGH(const Mesh &mesh, const VXd &x, bool project, Real proj_eps) {
     TinyADParamSD tad_sd(mesh);
+    BENCHMARK_SCOPED_TIMER_SECTION timer("symmdsParamTinyADEvalFGH");
     if (project) return tad_sd.func.eval_with_hessian_proj(x, proj_eps);
     else         return tad_sd.func.eval_with_derivatives(x);
 }
