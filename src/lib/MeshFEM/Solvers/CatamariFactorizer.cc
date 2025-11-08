@@ -748,6 +748,8 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
     v.width = nrhs;
     v.leading_dim = s;
 
+    catamari::Int solve_block_size = (m_useBlockAccel && !disableBlockSolve) ? m_blockSize : 1;
+
     if (hasFixedVars()) {
         Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> X_scratch;
         removeFixedEntries(B, X_scratch, /* permute = */ true);
@@ -757,7 +759,7 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
 
         {
             BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-            m_ldl->Solve(&v, (m_useBlockAccel && !disableBlockSolve) ? m_blockSize : 1, /* alreadyPermuted = */ true);
+            m_ldl->Solve(&v, solve_block_size, /* alreadyPermuted = */ true);
         }
 #else
         v.width = 1;
@@ -765,7 +767,7 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
             v.data = X_scratch.col(i).data();
             {
                 BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-                m_ldl->Solve(&v, (m_useBlockAccel && !disableBlockSolve) ? m_blockSize : 1, /* alreadyPermuted = */ true);
+                m_ldl->Solve(&v, solve_block_size, /* alreadyPermuted = */ true);
             }
         }
 #endif
@@ -776,7 +778,7 @@ void CatamariFactorizer::solveMultiRHS(const Eigen::Matrix<Real, Eigen::Dynamic,
         X = B;
         v.data = X.data();
         BENCHMARK_SCOPED_TIMER_SECTION timer("Catamari Solve");
-        m_ldl->Solve(&v, /* alreadyPermuted = */ false);
+        m_ldl->Solve(&v, solve_block_size, /* alreadyPermuted = */ false);
     }
 }
 
