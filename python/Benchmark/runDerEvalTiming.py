@@ -9,15 +9,13 @@ Created: 11/06/2025  10:23:38 PM
 
 import os, sys
 sys.path.append('../')
-import MeshFEM, mesh
-import parallelism
 import warnings
 from pathlib import Path
 
 DICT_FILE_NAME = "total_timing_dict.pkl.gz"
 
 def runEvalTiming(base_path, model_path, method, derivative_type, projection_type, thread_num, repeat):
-    import helper_funcs
+    from helper_funcs import read_mesh, derivativeEvalTiming, load_dict, save_dict
     model_name = Path(model_path).stem
     # Print the parameters for confirmation
     print("-------------------------------------------------------------------------------------------------------------------")
@@ -30,15 +28,15 @@ def runEvalTiming(base_path, model_path, method, derivative_type, projection_typ
     print(f"  Thread Number: {thread_num}")
     print(f"  Repeat: {repeat}")
 
-    m = helper_funcs.read_mesh(model_path) # read mesh from model_path
-    perEvalTiming = helper_funcs.derivativeEvalTiming(m, method, derivative_type, projection_type, repeat)
+    m = read_mesh(model_path) # read mesh from model_path
+    perEvalTiming = derivativeEvalTiming(m, method, derivative_type, projection_type, repeat)
 
     # Read Dict file and Update and Save
     dict_file_path = os.path.join(base_path, DICT_FILE_NAME)
-    total_timing_dict = helper_funcs.load_dict(dict_file_path)
+    total_timing_dict = load_dict(dict_file_path)
     method_key_str = f"{method}-{derivative_type}-{projection_type}"
     total_timing_dict[model_name][method_key_str][thread_num] = perEvalTiming
-    helper_funcs.save_dict(total_timing_dict, dict_file_path)
+    save_dict(total_timing_dict, dict_file_path)
 
     print(f"[Timing] Evaluation of {method} with {derivative_type} and {projection_type} on thread-{thread_num} done on {model_name}! perEval Timing: {perEvalTiming : .8f} seconds")
 
@@ -85,6 +83,8 @@ def main():
         os.environ['OMP_NUM_THREADS'] = str(thread_num)
         print(f"[Debug] Check Threading: {os.environ['OMP_NUM_THREADS']}.")
     else:
+        import MeshFEM
+        import parallelism
         os.environ['OMP_NUM_THREADS'] = '1'
         os.environ['MKL_THREADING_LAYER'] = 'SEQUENTIAL'
         os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
