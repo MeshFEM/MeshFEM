@@ -12,13 +12,12 @@ import MeshFEM
 import mesh, mesh_energy, energy
 import parametrization, py_newton_optimizer, benchmark, flip_avoiding_step_length
 import tinyad_parametrization, dirichlet_demo
-import numpy as np
+# import numpy as np
 import copy, time
-import igl
+# import igl
 import csv
 
 from typing import NamedTuple
-from numpy.typing import NDArray
 
 import pickle
 from pathlib import Path
@@ -50,6 +49,8 @@ def load_dict(file: Path) -> Dict[str, Any]:
             return pickle.load(f)
 
 def map_vertices_to_circle_area_normalized(V, F, bnd):
+    import igl
+    import numpy as np
     """
     Python equivalent of the C++ function:
 
@@ -116,6 +117,7 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
 
 
 def getBDdataOnUnitCircle(m):
+    import igl
     BV = m.boundaryVertices()
     bloop = m.boundaryLoops()[0][::-1]
     bdry_uv = igl.map_vertices_to_circle(m.vertices(), BV[bloop])
@@ -123,6 +125,8 @@ def getBDdataOnUnitCircle(m):
     return bdry_uv
 
 def getBDdataOnNormalizedCircle(m):
+    import igl
+    import numpy as np
     BV = m.boundaryVertices()
     bnd_loop = igl.boundary_loop(m.elements())
     bloop = np.searchsorted(BV, bnd_loop)
@@ -133,6 +137,7 @@ def getBDdataOnNormalizedCircle(m):
 # read mesh and scale down vertices
 def read_mesh(mesh_path : str):
     import param_utils
+    import numpy as np
     m_ori = param_utils.load(mesh_path) # supports loading, e.g., `input.msh.xz`
     vertices_ori = m_ori.vertices()
     elements_ori = m_ori.elements()
@@ -168,6 +173,7 @@ def delete_txt_files(folder_path):
             print(f"Failed to delete {file_path}: {e}")
 
 def processUVTXTs(source_path, to_path, txt_file_prefix_str, index_offset=0):
+    import numpy as np
     """
     Processes txt files in a given folder, converting them to raveled NumPy arrays
     and saving them as compressed .npz files. Deletes the original txt files after
@@ -226,6 +232,7 @@ def processUVTXTs(source_path, to_path, txt_file_prefix_str, index_offset=0):
         return False
 
 def parse_custom_csv(folder_path, csv_filename):  
+    import numpy as np
     """
     For processing Roi's Composite Majorization's stats recording csv file
     """
@@ -266,6 +273,8 @@ def parse_custom_csv(folder_path, csv_filename):
 
 # self-defined NamedTuple for hessian arrays
 class HessianStats(NamedTuple):
+    import numpy as np
+    from numpy.typing import NDArray
     projected:  NDArray[np.int_]
     shifted:    NDArray[np.float_]
     indefinite: NDArray[np.int_]
@@ -273,7 +282,7 @@ class HessianStats(NamedTuple):
 def runSYDParam(m, ProjectionStrategy, EigenvalueModification, 
                 ProjectionType, AutodiffSetting, SteplengthComputer,
                 max_iter=200, hessian_shift=1e-12, grad_tol=None, uvsave_path=None):
-    
+    import numpy as np
     obj_history = []
     time_history = []
     grad_norm_history = []
@@ -415,6 +424,7 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
 
 
 def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clamp_eps=1e-9, uvsave_path=None):
+    import numpy as np
     '''
     function to perform symmetric dirichlet parameterization using MeshFEM matching two baseline methods: CM and TinyAD
     baseline_str: 
@@ -556,7 +566,7 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
 
 
 def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
-
+    import numpy as np
     bdry_uv = getBDdataOnNormalizedCircle(m)
     uv_init = tutteInitialization(m, bdry_uv)
 
@@ -612,6 +622,7 @@ def runSLIM(model_name, model_path, thread_num=0, uvsave_path=None):
             print(f"Error during execution: {e}")
             sys.exit(1)
         # Now we want to read data from SLIM_TEMP_UV
+        import numpy as np
         obj_txt_path = os.path.join(TEMP_FILE_PATH, "obj_history.txt")
         obj_arr = np.loadtxt(obj_txt_path)
         grad_norm_txt_path = os.path.join(TEMP_FILE_PATH, "grad_norm_history.txt")
@@ -690,6 +701,7 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         
         # now we want to read data from CompMajor_TEMP_UV
         # read csv
+        import numpy as np
         csv_file_name = model_out_name + "_timing.csv"
         table_data, summary_stats = parse_custom_csv(UV_FILE_PATH, csv_file_name)
         obj_filename = 'obj_history.npy'
@@ -806,7 +818,7 @@ def derivativeEvalTiming(m, method, derivative_type, projection_type, repeat=10)
 # numCISBE: numConsecutiveIndefiniteStepsBeforeEnable
 # numPSBD: numProjectionStepsBeforeDisable
 def runSymmds_AdaptiveParameter(m, numCISBE, numPSBD, max_iter=200, hessian_shift=1e-5, grad_tol=None):
-
+    import numpy as np
     obj_history = []
     time_history = []
     grad_norm_history = []
