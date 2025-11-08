@@ -7,6 +7,7 @@ import argparse
 import subprocess
 import time
 from datetime import datetime
+from typing import List
 
 DICT_FILE_NAME = "total_timing_dict.pkl.gz"
 # Run almost every combinations below 
@@ -39,7 +40,7 @@ def writelog(result_path, model_files, method_list, thread_num_list, repeat_numb
         log_file.write(f"Thread Number List: {thread_num_list}\n")
         log_file.write(f"Repeat Number: {repeat_number}\n")
 
-def initialize_methodkey_in_dict(method_list, derivative_type_list, projection_type_list) -> list[str]:
+def initialize_methodkey_in_dict(method_list, derivative_type_list, projection_type_list) -> List[str]:
     method_key_list = []
     if 'MeshFEM' in method_list:
         for derivative_type in derivative_type_list:
