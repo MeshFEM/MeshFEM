@@ -174,28 +174,30 @@ symmdsParamTinyAD(const Mesh &mesh, const NDMap &uv_init, int max_iters=1000, do
     std::vector<double> iter_time_history;
     std::vector<double> step_norm_history;
     std::vector<double> dir_der_history;
-    auto start_timer = std::chrono::steady_clock::now();
-
     // Projected Newton
     // TinyAD::LinearSolver solver;
     TinyAD::LinearSolver<double, Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>>> solver;
     NDMap uv_temp(mesh.numNodes(), 2);
     bool lineSearchFail = false;
+    auto start_timer = std::chrono::steady_clock::now();
+    double nonessential_time = 0.0;
     for (int i = 0; i < max_iters; ++i)
     {
         BENCHMARK_START_TIMER_SECTION("Newton Iterations");
         auto now_timer = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed = now_timer - start_timer;
-        iter_time_history.push_back(elapsed.count());
+        iter_time_history.push_back(elapsed.count() - nonessential_time);
 
         // save UV file if the flag is set to be true
         if (saveUV){
+            auto t_save_uv = std::chrono::steady_clock::now();
             if (filepath.empty())  throw std::runtime_error("Empty filepath.");
             std::string uv_file_name = "uv_Eigen_Iter_" + std::to_string(i) + ".txt";
             func.x_to_data(x, [&] (int v_idx, const V2d& p) {
                 uv_temp.row(v_idx) = p;
             });
             writeMatrixToFile(uv_temp, filepath, uv_file_name);
+            nonessential_time += std::chrono::duration<double>(std::chrono::steady_clock::now() - t_save_uv).count();
         }
 
         BENCHMARK_START_TIMER_SECTION("Hessian Evaluation");
@@ -206,16 +208,20 @@ symmdsParamTinyAD(const Mesh &mesh, const NDMap &uv_init, int max_iters=1000, do
         TINYAD_DEBUG_OUT("Energy in iteration " << i << ": " << f);
         TINYAD_DEBUG_OUT("Gradient Norm in iteration " << i << ": " << g_norm);
 
+        auto t0 = std::chrono::steady_clock::now();
         energy_history.push_back(f);
         grad_norm_history.push_back(g_norm);
+        nonessential_time += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
         BENCHMARK_START_TIMER_SECTION("Linear Solve");
         VXd d = TinyADParametrization::newton_direction(g, H_proj, solver);
         BENCHMARK_STOP_TIMER_SECTION("Linear Solve");
 
+        auto t1 = std::chrono::steady_clock::now();
         double directional_derivative = 2 * TinyAD::newton_decrement(d, g);
         step_norm_history.push_back(d.norm());
         dir_der_history.push_back(directional_derivative);
+        nonessential_time += std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
 
         if (g_norm < convergence_eps)
             break;
@@ -246,7 +252,7 @@ symmdsParamTinyAD(const Mesh &mesh, const NDMap &uv_init, int max_iters=1000, do
     energy_history.push_back(final_obj);
     grad_norm_history.push_back(final_grad_norm);
     std::chrono::duration<double> elapsed_final = final_timer - start_timer;
-    iter_time_history.push_back(elapsed_final.count());
+    iter_time_history.push_back(elapsed_final.count() - nonessential_time);
 
     // save the last UV file
     if (saveUV){
