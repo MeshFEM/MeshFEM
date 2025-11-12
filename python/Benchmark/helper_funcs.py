@@ -292,19 +292,16 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
     directional_derivative_history = []
 
     def customCallback(prob, i):
-        it_time = time.perf_counter()
         obj_history.append(prob.energy())
-        time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
         # Record hessian_projected and hessian_shifted_amount_history as well in customCallback, assume recording time is less significant
         if i > 1:  
             hessian_projected_history.append(int(prob.hessianWasProjected))
             hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+        time_history.append(-benchmark.totalTime('Callback$') + time.perf_counter())
     
     def customSaveUVCallback(prob, i):
-        it_time = time.perf_counter()
         obj_history.append(prob.energy())
-        time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
         if i > 1:  
             hessian_projected_history.append(int(prob.hessianWasProjected))
@@ -313,6 +310,7 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
         uv_fn = 'uv_ravel_'+ 'iter_' + str(i-1)
         uv_arr = uv.getVars()
         np.savez_compressed(os.path.join(uvsave_path, uv_fn), arr=uv_arr)
+        time_history.append(-benchmark.totalTime('Callback$') + time.perf_counter())
     
     def customSaveStepDCallback(prob, step, directional_derivative):
         step_norm_history.append(np.linalg.norm(step))
@@ -391,7 +389,8 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
     hessian_shifted_arr = np.array(hessian_shifted_amount_history, dtype=float)
     hessian_indef_arr = np.array(cr.indefinite, dtype=int)
 
-    if uvsave_path is not None:      
+    if uvsave_path is not None:     
+        bk_dict = benchmark.to_dict() 
         obj_arr = np.array(obj_history)
         time_arr = np.array(time_history) - start_time
         grad_norm_arr = np.array(grad_norm_history)
@@ -407,6 +406,7 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
         hindef_filename = 'hessian_indefinite_history.npy'
         step_filename = 'step_size_history.npy'
         dd_filename = 'directional_derivative_history.npy'
+        benchmark_filename = 'benchmark_dict.pkl'
 
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
         np.save(os.path.join(uvsave_path, time_filename), time_arr)
@@ -416,7 +416,8 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
         np.save(os.path.join(uvsave_path, hindef_filename), hessian_indef_arr)
         np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
         np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
+        save_dict(bk_dict, os.path.join(uvsave_path, benchmark_filename))
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename}, {benchmark_filename} in {uvsave_path}.")
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
@@ -447,19 +448,16 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
     directional_derivative_history = []
 
     def customCallback(prob, i):
-        it_time = time.perf_counter()
         obj_history.append(prob.energy())
-        time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
         # Record hessian_projected and hessian_shifted_amount_history as well in customCallback, assume recording time is less significant
         if i > 1:  
             hessian_projected_history.append(int(prob.hessianWasProjected))
             hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
+        time_history.append(-benchmark.totalTime('Callback$') + time.perf_counter())
     
     def customSaveUVCallback(prob, i):
-        it_time = time.perf_counter()
         obj_history.append(prob.energy())
-        time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
         if i > 1:  
             hessian_projected_history.append(int(prob.hessianWasProjected))
@@ -468,6 +466,7 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
         uv_fn = 'uv_ravel_'+ 'iter_' + str(i-1)
         uv_arr = uv.getVars()
         np.savez_compressed(os.path.join(uvsave_path, uv_fn), arr=uv_arr)
+        time_history.append(-benchmark.totalTime('Callback$') + time.perf_counter())
     
     def customSaveStepDCallback(prob, step, directional_derivative):
         step_norm_history.append(np.linalg.norm(step))
@@ -545,6 +544,7 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
         # we saved uv coordinates per-iteration and hessian_projected_history
         step_size_arr = np.array(step_norm_history)
         dd_arr = np.array(directional_derivative_history)
+        bk_dict = benchmark.to_dict()
 
         obj_filename = 'obj_history.npy'
         time_filename = 'time_history.npy'
@@ -554,6 +554,7 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
         hindef_filename = 'hessian_indefinite_history.npy'
         step_filename = 'step_size_history.npy'
         dd_filename = 'directional_derivative_history.npy'
+        benchmark_filename = 'benchmark_dict.pkl'
 
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
         np.save(os.path.join(uvsave_path, time_filename), time_arr)
@@ -563,7 +564,8 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
         np.save(os.path.join(uvsave_path, hindef_filename), hessian_indef_arr)
         np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
         np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
+        save_dict(bk_dict, os.path.join(uvsave_path, benchmark_filename))
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename}, {benchmark_filename} in {uvsave_path}.")
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
@@ -583,6 +585,7 @@ def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
     benchmark.reset()
     if uvsave_path is not None:
         uv_opt, obj_history, grad_history, time_history, step_size_history, dd_history = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, True, uvsave_path)
+        bk_dict = benchmark.to_dict()
         # process all saved txt files into compressed npz files
         if not processUVTXTs(uvsave_path, uvsave_path, "uv_Eigen_Iter_"):  raise RuntimeError(f"[Error] In Process Eigen txts in {uvsave_path}.")
         obj_arr = np.array(obj_history)
@@ -596,13 +599,15 @@ def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
         grad_norm_filename = 'grad_norm_history.npy'
         step_filename = 'step_size_history.npy'
         dd_filename = 'directional_derivative_history.npy'
+        benchmark_filename = 'benchmark_dict.pkl'
 
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
         np.save(os.path.join(uvsave_path, time_filename), time_arr)
         np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
         np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
         np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
+        save_dict(bk_dict, os.path.join(uvsave_path, benchmark_filename))
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {step_filename}, {dd_filename}, {benchmark_filename} in {uvsave_path}.")
     else:
         uv_opt, obj_history, grad_history, time_history, step_size_history, dd_history  = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, False)
         bk_dict = benchmark.to_dict()
