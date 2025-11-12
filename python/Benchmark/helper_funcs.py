@@ -302,7 +302,9 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
             hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
     
     def customSaveUVCallback(prob, i):
+        it_time = time.perf_counter()
         obj_history.append(prob.energy())
+        time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
         if i > 1:  
             hessian_projected_history.append(int(prob.hessianWasProjected))
@@ -391,12 +393,14 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
 
     if uvsave_path is not None:      
         obj_arr = np.array(obj_history)
+        time_arr = np.array(time_history) - start_time
         grad_norm_arr = np.array(grad_norm_history)
         # we saved uv coordinates per-iteration and hessian_projected_history
         step_size_arr = np.array(step_norm_history)
         dd_arr = np.array(directional_derivative_history)
 
         obj_filename = 'obj_history.npy'
+        time_filename = 'time_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
         hp_filename = 'hessian_projected_history.npy'
         hs_filename = 'hessian_shifted_amount_history.npy'
@@ -405,13 +409,14 @@ def runSYDParam(m, ProjectionStrategy, EigenvalueModification,
         dd_filename = 'directional_derivative_history.npy'
 
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
+        np.save(os.path.join(uvsave_path, time_filename), time_arr)
         np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
         np.save(os.path.join(uvsave_path, hp_filename), hessian_projected_arr)
         np.save(os.path.join(uvsave_path, hs_filename), hessian_shifted_arr)
         np.save(os.path.join(uvsave_path, hindef_filename), hessian_indef_arr)
         np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
         np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
@@ -452,7 +457,9 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
             hessian_shifted_amount_history.append(prob.lastFactorizationShiftMagnitude)
     
     def customSaveUVCallback(prob, i):
+        it_time = time.perf_counter()
         obj_history.append(prob.energy())
+        time_history.append(it_time)
         grad_norm_history.append(np.linalg.norm(prob.gradient()))
         if i > 1:  
             hessian_projected_history.append(int(prob.hessianWasProjected))
@@ -533,12 +540,14 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
 
     if uvsave_path is not None:      
         obj_arr = np.array(obj_history)
+        time_arr = np.array(time_history) - start_time
         grad_norm_arr = np.array(grad_norm_history)
         # we saved uv coordinates per-iteration and hessian_projected_history
         step_size_arr = np.array(step_norm_history)
         dd_arr = np.array(directional_derivative_history)
 
         obj_filename = 'obj_history.npy'
+        time_filename = 'time_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
         hp_filename = 'hessian_projected_history.npy'
         hs_filename = 'hessian_shifted_amount_history.npy'
@@ -547,13 +556,14 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
         dd_filename = 'directional_derivative_history.npy'
 
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
+        np.save(os.path.join(uvsave_path, time_filename), time_arr)
         np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
         np.save(os.path.join(uvsave_path, hp_filename), hessian_projected_arr)
         np.save(os.path.join(uvsave_path, hs_filename), hessian_shifted_arr)
         np.save(os.path.join(uvsave_path, hindef_filename), hessian_indef_arr)
         np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
         np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {hp_filename}, {hs_filename}, {hindef_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
     else:
         bk_dict = benchmark.to_dict()
         time_arr = np.array(time_history) - start_time
@@ -576,20 +586,23 @@ def runSymmds_TinyAD(m, max_iter=200, grad_tol=2e-8, uvsave_path=None):
         # process all saved txt files into compressed npz files
         if not processUVTXTs(uvsave_path, uvsave_path, "uv_Eigen_Iter_"):  raise RuntimeError(f"[Error] In Process Eigen txts in {uvsave_path}.")
         obj_arr = np.array(obj_history)
+        time_arr = np.array(time_history)
         grad_norm_arr = np.array(grad_history)
         step_size_arr = np.array(step_size_history)
         dd_arr = np.array(dd_history)
 
         obj_filename = 'obj_history.npy'
+        time_filename = 'time_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
         step_filename = 'step_size_history.npy'
         dd_filename = 'directional_derivative_history.npy'
 
         np.save(os.path.join(uvsave_path, obj_filename), obj_arr)
+        np.save(os.path.join(uvsave_path, time_filename), time_arr)
         np.save(os.path.join(uvsave_path, grad_norm_filename), grad_norm_arr)
         np.save(os.path.join(uvsave_path, step_filename), step_size_arr)
         np.save(os.path.join(uvsave_path, dd_filename), dd_arr)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename}, {step_filename}, {dd_filename} in {uvsave_path}.")
     else:
         uv_opt, obj_history, grad_history, time_history, step_size_history, dd_history  = tinyad_parametrization.symmdsParamTinyAD(m, uv_init, max_iter, grad_tol, False)
         bk_dict = benchmark.to_dict()
@@ -704,9 +717,17 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         import numpy as np
         csv_file_name = model_out_name + "_timing.csv"
         table_data, summary_stats = parse_custom_csv(UV_FILE_PATH, csv_file_name)
+        iter_time_arr = table_data["step_time"] + table_data["linesearch_time"]
+        # process iter_time_arr based on step_time_arr
+        time_history_arr = np.zeros_like(iter_time_arr)  # accumulative iteration time
+        for i in range(1, len(iter_time_arr)):
+            time_history_arr[i] = np.sum(iter_time_arr[:i])
+
         obj_filename = 'obj_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
+        time_filename = 'time_history.npy'
         np.save(os.path.join(uvsave_path, obj_filename), table_data["objective_value"])
+        np.save(os.path.join(uvsave_path, time_filename), time_history_arr)
         np.save(os.path.join(uvsave_path, grad_norm_filename), table_data["gradient_norm"])
         # Process UV TXTs
         txt_prefix = model_out_name + "_Iter_"
@@ -714,7 +735,7 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
             # CompMajor's UV Saving starts from 1 (not saving the tutte initialized mesh)
             raise RuntimeError(f"[Error] In Process CompMajor UV txts in {UV_FILE_PATH}.")
         delete_txt_files(UV_FILE_PATH)
-        print(f"[File] Saved UV '.npz' files, {obj_filename}, {grad_norm_filename} in {uvsave_path}.")
+        print(f"[File] Saved UV '.npz' files, {obj_filename}, {time_filename}, {grad_norm_filename} in {uvsave_path}.")
         return 
     else:
         model_out_save_path = os.path.join(DATA_FILE_PATH, model_out_name)
