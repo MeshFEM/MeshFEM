@@ -165,8 +165,13 @@ def recordUV(base_path, model_name, model_path, hessian_proj_option, hessian_shi
 
     save_uv_folder_name = 'UVs' # create a folder name 'UVs'
     folder_dir = os.path.join(base_path, model_name, hessian_proj_option, save_uv_folder_name)
-    if not os.path.exists(folder_dir):  os.makedirs(folder_dir)
-    else:                               helper_funcs.delete_all_files_in_folder(folder_dir)  # clear all files in UV, might leave some old txts in last run
+    if not os.path.exists(folder_dir):  
+        os.makedirs(folder_dir)
+        print(f'[SAVE UV] Created {folder_dir} for saving UVs and related statistics for {model_name} using {hessian_proj_option}.')
+    else:                         
+        print(f'[SAVE UV] {folder_dir} already exists!')      
+        helper_funcs.delete_all_files_in_folder(folder_dir)  # clear all files in UV, might leave some old txts in last run
+        print(f'[SAVE UV] Deleted all old files in {folder_dir} for {model_name} using {hessian_proj_option}.')
 
     m = helper_funcs.read_mesh(model_path)
     if hessian_proj_option == 'TinyAD':  helper_funcs.runSymmds_TinyAD(m, uvsave_path=folder_dir)
