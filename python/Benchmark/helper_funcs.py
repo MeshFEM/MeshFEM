@@ -724,9 +724,8 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         table_data, summary_stats = parse_custom_csv(UV_FILE_PATH, csv_file_name)
         iter_time_arr = table_data["step_time"] + table_data["linesearch_time"]
         # process iter_time_arr based on step_time_arr
-        time_history_arr = np.zeros_like(iter_time_arr)  # accumulative iteration time
-        for i in range(1, len(iter_time_arr)):
-            time_history_arr[i] = np.sum(iter_time_arr[:i])
+        iter_time_arr = np.pad(iter_time_arr, [(1, 0)])
+        time_history_arr = np.cumsum(iter_time_arr)
 
         obj_filename = 'obj_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
@@ -764,10 +763,8 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         obj_arr = table_data["objective_value"]
         grad_norm_arr = table_data["gradient_norm"]
         iter_time_arr = table_data["step_time"] + table_data["linesearch_time"]
-        # process iter_time_arr based on step_time_arr
-        time_history_arr = np.zeros_like(iter_time_arr)  # accumulative iteration time
-        for i in range(1, len(iter_time_arr)):
-            time_history_arr[i] = np.sum(iter_time_arr[:i])
+        iter_time_arr = np.pad(iter_time_arr, [(1, 0)])
+        time_history_arr = np.cumsum(iter_time_arr)
         
         # construct dictionary benchmark_dict
         benchmark_dict = {}
