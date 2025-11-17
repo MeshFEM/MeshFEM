@@ -7,8 +7,6 @@ Created: 01/11/2025  11:03:50
 
 import os, sys
 sys.path.append('../')
-import MeshFEM, mesh, benchmark
-import parallelism
 import pickle
 import MeshFEMParamSolverEnum as SolverOptionEnum
 import warnings
@@ -42,6 +40,8 @@ def saveStats(save_dir, obj_arr, time_arr, grad_norm_arr, benchmark_dict, stats=
         print(f"[Others Stats] Successfully Write {arr_fn}, {dict_fn} in {save_dir}!")
 
 def recordStatistics(base_path, model_name, model_path, hessian_proj_option, thread_num, repeat_num, hessian_shift):
+    import MeshFEM
+    import benchmark
     import helper_funcs
      # Print the parameters for confirmation
     print("-------------------------------------------------------------------------------------------------------------------")
@@ -216,6 +216,8 @@ def main():
         os.environ['MKL_THREADING_LAYER'] = 'GNU'
         print(f"[Debug] Check Threading: {os.environ['OMP_NUM_THREADS']}.")
     else:  
+        import MeshFEM
+        import parallelism
         os.environ['OMP_NUM_THREADS'] = '1'
         os.environ['MKL_THREADING_LAYER'] = 'SEQUENTIAL'
         os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
