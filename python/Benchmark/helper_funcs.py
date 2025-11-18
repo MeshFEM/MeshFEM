@@ -701,7 +701,8 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
     DATA_FILE_PATH = "CompMajor_TEMP_DATA"
     if not os.path.exists(UV_FILE_PATH):  os.makedirs(UV_FILE_PATH)
     if not os.path.exists(DATA_FILE_PATH):  os.makedirs(DATA_FILE_PATH)
-
+    
+    import numpy as np
     if uvsave_path is not None: # SAVE UV AT EVERY ITERATION
         model_out_save_path = os.path.join(UV_FILE_PATH, model_out_name)
         cmd = [
@@ -719,7 +720,6 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         
         # now we want to read data from CompMajor_TEMP_UV
         # read csv
-        import numpy as np
         csv_file_name = model_out_name + "_timing.csv"
         table_data, summary_stats = parse_custom_csv(UV_FILE_PATH, csv_file_name)
         iter_time_arr = table_data["step_time"] + table_data["linesearch_time"]
