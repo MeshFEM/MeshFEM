@@ -764,16 +764,18 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         grad_norm_arr = table_data["gradient_norm"]
         iter_time_arr = table_data["step_time"] + table_data["linesearch_time"]
         iter_time_arr = np.pad(iter_time_arr, [(1, 0)])
-        time_history_arr = np.cumsum(iter_time_arr)
+        total_time_history_arr = np.cumsum(iter_time_arr)
+        time_history_arr = total_time_history_arr.copy()
         
         # construct dictionary benchmark_dict
         benchmark_dict = {}
         benchmark_dict['totalTime'] = summary_stats["total_time"]
+        benchmark_dict['total_time_history_arr'] = total_time_history_arr
         benchmark_dict['symbolic_fac_time'] = summary_stats["analyze_pattern_time"]
         benchmark_dict['numeric_fac_time'] = np.sum(table_data["factorization_time"]) 
         benchmark_dict['hessian_eval_time'] = np.sum(table_data["eval_hessian_time"]) + np.sum(table_data["eval_gradient_time"]) + np.sum(table_data["matrix_prep_time"])
         benchmark_dict['linear_solve_time'] = np.sum(table_data["solve_time"]) 
-        return obj_arr, time_history_arr, grad_norm_arr, benchmark_dict
+        return obj_arr, time_history_arr[:-1], grad_norm_arr, benchmark_dict
 
 def derivativeEvalTiming(m, method, derivative_type, projection_type, repeat=10) -> float:
     '''
