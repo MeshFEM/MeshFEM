@@ -726,6 +726,10 @@ def runCompMajor(model_name, model_path, uvsave_path=None):
         # process iter_time_arr based on step_time_arr
         iter_time_arr = np.pad(iter_time_arr, [(1, 0)])
         time_history_arr = np.cumsum(iter_time_arr)
+        # TODO: save the whole benchmark
+        symbolic_fac_time = summary_stats["analyze_pattern_time"]
+        for i in range(1, len(time_history_arr)):
+            time_history_arr[i] += symbolic_fac_time
 
         obj_filename = 'obj_history.npy'
         grad_norm_filename = 'grad_norm_history.npy'
