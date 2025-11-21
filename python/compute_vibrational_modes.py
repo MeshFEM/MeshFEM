@@ -42,7 +42,9 @@ def compute_vibrational_modes_from_matrices(H, fixedVars, n, sigma, M = None):
     These modes are computed after applying Dirichlet constraints on the variables in `fixedVars`
     (removing these rows/columns of the input matrices).
     """
-    if (fixedVars):
+    hasFixedVars = len(fixedVars) > 0
+    if hasFixedVars:
+        original_size = H.m
         H.rowColRemoval(fixedVars)
         if (isinstance(M, np.ndarray)): M = np.delete(M, fixedVars) # Lumped case
         elif (M is not None):           M.rowColRemoval(fixedVars)
@@ -55,9 +57,11 @@ def compute_vibrational_modes_from_matrices(H, fixedVars, n, sigma, M = None):
 
     if (M_scipy is None): lambdas, modes = eigsh(H_scipy, n,            sigma=sigma, which='LM')
     else:                 lambdas, modes = eigsh(H_scipy, n, M=M_scipy, sigma=sigma, which='LM')
+    
+    if not hasFixedVars: return lambdas, modes
 
-    full_modes = np.zeros((H.m, modes.shape[1]))
-    full_modes[np.delete(np.arange(H.m), fixedVars), :] = modes
+    full_modes = np.zeros((original_size, modes.shape[1]))
+    full_modes[np.delete(np.arange(original_size), fixedVars), :] = modes
 
     return lambdas, full_modes
 
