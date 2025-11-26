@@ -136,7 +136,9 @@ def validate_hessian_options(values):
     if numOptions != len(set(values)):  raise argparse.ArgumentTypeError("Duplicated values in your hessian_options list.")
 
     # each option should be case-sensitive
-    valid_hessian_option_list = ['MeshFEM', 'TinyAD', 'SLIM', 'CompMajor', 'MeshFEM_TAD_Fad', 'MeshFEM_TAD_Xad', 'MeshFEM_CM', 'MeshFEM_CM_adp']
+    valid_hessian_option_list = ['MeshFEM', 'TinyAD', 'SLIM', 'CompMajor', 
+                                 'MeshFEM_TAD_Fad', 'MeshFEM_TAD_Xad', 
+                                 'MeshFEM_CM', 'MeshFEM_CM_adp', 'MeshFEM_CM_adp_xbased']
     for i in range(numOptions):
         if values[i] not in valid_hessian_option_list:
             raise argparse.ArgumentTypeError(f"Invalid value for hessian_options: '{values[i]}'. Must be one of {valid_hessian_option_list}.")
@@ -274,7 +276,7 @@ def main():
 if __name__ == "__main__":
     print("Usage: python run_all_models.py <result_path> <modelbase_path> <save_uv_option> <hessian_options> <solver_varind_list> <threads> [<repeat>] [<MeshFEM_hessian_shift>]")
     # print("Supported Hessian Options: <Adaptive> <Always> <xbasedAlways> <AutoDiff> <AdaptiveAbs> <AutoDiffAbs> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
-    print("Supported Hessian Options: <MeshFEM+int(0~2^n)> <MeshFEM_TAD_Fad> <MeshFEM_TAD_Xad> <MeshFEM_CM> <MeshFEM_CM_adp> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
+    print("Supported Hessian Options: <MeshFEM+int(0~2^n)> <MeshFEM_TAD_Fad> <MeshFEM_TAD_Xad> <MeshFEM_CM> <MeshFEM_CM_adp> <MeshFEM_CM_adp_xbased> <TinyAD> <SLIM> <CompMajor> (Linux Only)")
     print("--------------------------------------------------------------------------------------------------------------------")
 
     main()

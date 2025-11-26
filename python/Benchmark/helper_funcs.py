@@ -435,6 +435,8 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
     function to perform symmetric dirichlet parameterization using MeshFEM matching two baseline methods: CM and TinyAD
     baseline_str: 
     'MeshFEM_CM':           MeshFEM Matching CompMajor, Always F-based projection, Flipavoid linesearch, per-element hessian shift = 1e-6
+    'MeshFEM_CM_adp':       MeshFEM_CM with C0P2 adaptive projection method
+    'MeshFEM_CM_adp_xbased': MeshFEM_CM_adp with Xbased Hessian projection
     'MeshFEM_TAD_Fad':      MeshFEM Matching TinyAD, Always X-based projection, normal linesearch, Hessian clamping value = 1e-9, Standard F-autodiff
     'MeshFEM_TAD_Xad':      MeshFEM Matching TinyAD but using x-autodiff using the same (inefficient) formulas from the TinyAD demo
     '''
@@ -489,16 +491,19 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
         param.useXBasedProjection = True  # X-based
         param.xBasedProjectionClampEps = clamp_eps
         param.elementHessianShift = 0
-    elif baseline_str in ['MeshFEM_CM', 'MeshFEM_CM_adp']:
+    elif baseline_str in ['MeshFEM_CM', 'MeshFEM_CM_adp', 'MeshFEM_CM_adp_xbased']:
         symmdiri_energy = energy.SymmetricDirichlet(2) # Analytical Derivatives
         symmdiri_energy.useAbsProjection = False # Clamp
         param = mesh_energy.Parametrization(m, uv, symmdiri_energy)
-        param.useXBasedProjection = False  # F-based
+        if baseline_str == 'MeshFEM_CM_adp_xbased':
+            param.useXBasedProjection = True # X-based
+        else:
+            param.useXBasedProjection = False  # F-based
         param.elementHessianShift = 1e-6 
     else:  raise RuntimeError(f"[MeshFEM Matching Baseline] {baseline_str} is not a valid option!")
 
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [param])
-    if baseline_str in ['MeshFEM_CM', 'MeshFEM_CM_adp']:
+    if baseline_str in ['MeshFEM_CM', 'MeshFEM_CM_adp', 'MeshFEM_CM_adp_xbased']:
         prob.initialFeasibleStepLengthComputer = flip_avoiding_step_length.FlipAvoidingStepLength(m.elements())
         prob.initialFeasibleStepLengthComputer.backoffFactor = 0.8    # in accordance to Composite Majorization
 
@@ -514,7 +519,7 @@ def runSYDParam_matchBaseline(m, baseline_str, max_iter=200, grad_tol=2e-8, clam
     opt = prob.optimizer()
     opt.options.niter = max_iter
     opt.options.gradTol = grad_tol
-    if baseline_str == 'MeshFEM_CM_adp':
+    if baseline_str in ['MeshFEM_CM_adp', 'MeshFEM_CM_adp_xbased']:
         opt.options.hessianProjectionController = py_newton_optimizer.HessianProjectionAdaptive() #COP2 Adaptive projection
         opt.options.hessianProjectionController.numConsecutiveIndefiniteStepsBeforeEnable = 0
         opt.options.hessianProjectionController.numProjectionStepsBeforeDisable = 2
