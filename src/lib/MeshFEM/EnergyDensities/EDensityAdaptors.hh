@@ -126,7 +126,7 @@ struct EnergyDensityCBasedFromFBased : public Psi_F {
 
     EnergyDensityCBasedFromFBased(const EnergyDensityCBasedFromFBased &) = default;
     EnergyDensityCBasedFromFBased(const EnergyDensityCBasedFromFBased &other, UninitializedDeformationTag &&)
-        : Base(other, UninitializedDeformationTag()), m_Finv(other.m_Finv) { }
+        : Base(static_cast<const Base &>(other), UninitializedDeformationTag()), m_Finv(other.m_Finv) { }
 
     // d psi / d E,     E := 0.5 (C - I)
     Matrix PK2Stress() const { return m_Finv * Base::denergy(); }
@@ -186,7 +186,7 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
     EnergyDensityFBasedMembraneFromFBased &operator=(const EnergyDensityFBasedMembraneFromFBased &) = default;
 
     EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &other, UninitializedDeformationTag &&)
-        : Base(other, UninitializedDeformationTag()), m_B(other.m_B) { }
+        : Base(static_cast<const Base &>(other), UninitializedDeformationTag()), m_B(other.m_B) { }
 
     static std::string name() { return Base::name() + std::string("Membrane"); }
 
@@ -435,7 +435,7 @@ struct AutoHessianProjection : Psi_F {
     AutoHessianProjection(const Base &b) : Base(b) { }
 
     AutoHessianProjection(const AutoHessianProjection &b, UninitializedDeformationTag &&)
-        : Base(b, UninitializedDeformationTag()), projectionEnabled(b.projectionEnabled) { }
+        : Base(static_cast<const Base &>(b), UninitializedDeformationTag()), projectionEnabled(b.projectionEnabled) { }
 
     using Base::energy;
     using Base::denergy;

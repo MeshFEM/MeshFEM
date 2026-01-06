@@ -567,4 +567,27 @@ applyFlattened4thOrderTensor(const Eigen::MatrixBase<FlattenedTensorDerived> &C,
     return result;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Helper functions to determine if a matrix is "numerically diagonal"
+////////////////////////////////////////////////////////////////////////////////
+// symmetric matrix version: references only upper triangular part
+template<class Derived>
+bool is_sym_mat_approx_diagonal(const Eigen::MatrixBase<Derived> &A, Real tol) {
+    // The following does not exist--at least with older Eigen versions :(
+    // Real odiag_norm_sq = A.template triangularView<Eigen::StrictlyUpper>().squaredNorm() * 2;
+    static_assert((Derived::RowsAtCompileTime == Derived::ColsAtCompileTime) && (Derived::RowsAtCompileTime <= 3) && (Derived::RowsAtCompileTime >= 2),
+                  "is_sym_mat_approx_diagonal: only for 2x2 or 3x3 square matrices");
+    Real odiag_norm_sq;
+    if constexpr (Derived::RowsAtCompileTime == 2)
+         odiag_norm_sq = 2 *  A(0, 1) * A(0, 1);
+    else odiag_norm_sq = 2 * (A(0, 1) * A(0, 1) + A(0, 2) * A(0, 2) + A(1, 2) * A(1, 2));
+    Real  diag_norm_sq = A.diagonal().squaredNorm();
+    return odiag_norm_sq < tol * tol * (diag_norm_sq + odiag_norm_sq);
+}
+
+template<class Derived>
+bool is_sym_mat_approx_diagonal(const Eigen::MatrixBase<Derived> &A) {
+    return is_sym_mat_approx_diagonal(A, std::numeric_limits<typename Derived::Scalar>::epsilon() * 100);
+}
+
 #endif

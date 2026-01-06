@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <array>
+#include <cassert>
 #include <type_traits>
 #include "unused.hh"
 typedef double Real;

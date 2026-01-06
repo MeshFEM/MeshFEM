@@ -49,7 +49,8 @@ struct AutodiffEDensity : public Psi {
         }
     }
 
-    AutodiffEDensity() { setDeformationGradient(Matrix::Identity()); }
+    template<typename... Args>
+    AutodiffEDensity(Args &&... args) : Psi(std::forward<Args>(args)...) { setDeformationGradient(Matrix::Identity()); }
     AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&)
         : Psi(other),
           useAbsProjection(other.useAbsProjection),
