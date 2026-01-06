@@ -123,8 +123,8 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     struct OrderingChoices {
         static constexpr OrderingMethod   primary_method = OrderingMethod::CholmodNesdis;
         static constexpr OrderingMethod alternate_method = OrderingMethod::AMD;
-        static constexpr double alternate_method_num_time_multiplier_estimate = 1.5; // AMD leads to a typical 1.3-1.5x slowdown on numeric factorization
-        static constexpr double alternate_method_sym_time_multiplier_estimate = 0.1; // but is 10x faster for symbolic factorization.
+        static constexpr double alternate_method_num_time_multiplier_estimate = 1.35; // AMD leads to a typical 1.35x slowdown on numeric factorization
+        static constexpr double alternate_method_sym_time_multiplier_estimate = 0.2; // but is ~5x faster for symbolic factorization (~10x faster for ordering)
     };
 
     mutable AdaptiveOrderingSelection<OrderingChoices> adaptiveOrdering; // mutable so that solve timings can be recorded

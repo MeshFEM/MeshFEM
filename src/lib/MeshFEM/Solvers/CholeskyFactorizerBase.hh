@@ -243,7 +243,7 @@ struct CholeskyFactorizerBase {
     void solve(const _Vec1 &b, _Vec2 &x, CholeskySys sys = CholeskySys::A) const {
         assertFactorization(sys);
         BENCHMARK_SCOPED_TIMER_SECTION timer("CholeskyFactorizerBase.solve");
-        assert(size_t(b.size()) == m());
+        if (size_t(b.size()) != m()) throw std::runtime_error("CholeskyFactorizerBase::solve: incorrect b size");
         x.resize(n());
         m_solveScratch.resize(n()); // always the full unreduced size to support swapping with `x`
 
@@ -268,7 +268,7 @@ struct CholeskyFactorizerBase {
 
     template<typename _Vec>
     _Vec solve(const _Vec &b, CholeskySys sys = CholeskySys::A) const {
-        assert(size_t(b.size()) == m());
+        if (size_t(b.size()) != m()) throw std::runtime_error("CholeskyFactorizerBase::solve: incorrect b size");
         _Vec x;
         solve(b, x, sys);
         return x;
