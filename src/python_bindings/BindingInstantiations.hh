@@ -26,6 +26,9 @@
 #include <MeshFEM/EnergyDensities/StVenantKirchhoff.hh>
 #include <MeshFEM/EnergyDensities/TensionFieldNeoHookean.hh>
 
+#include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
+#include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
+
 #include "MeshBindings.hh"
 
 namespace impl {
@@ -58,6 +61,11 @@ using StVenantKirchhoffEnergyHP = AutoHessianProjection<StVenantKirchhoffEnergy<
 template<typename _Real, size_t _N>
 using NeoHookeanEnergyHP = AutoHessianProjection<NeoHookeanEnergy<_Real, _N>>;
 
+template<template<typename, size_t> class Energy, class ESBinder>
+void generateElasticSolidBindingsForEnergy(py::module &m, py::module &detail_module, ESBinder &&b) {
+    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, Energy>(b));
+}
+
 template<class ESBinder>
 void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
     // For each energy, generate an elastic solid binding
@@ -71,18 +79,30 @@ void generateElasticSolidBindings(py::module &m, py::module &detail_module, ESBi
 
     // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder, IsoCRLEWithHessianProjection>(b));
     // generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,    StVenantKirchhoffEnergyHP>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,           NeoHookeanEnergyHP>(b));
-    generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ESBinder,       CommonNeoHookeanEnergy>(b));
+    generateElasticSolidBindingsForEnergy<    NeoHookeanEnergyHP>(m, detail_module, b);
+    generateElasticSolidBindingsForEnergy<CommonNeoHookeanEnergy>(m, detail_module, b);
+    generateElasticSolidBindingsForEnergy<    SymmetricDirichlet>(m, detail_module, b);
+    generateElasticSolidBindingsForEnergy<SymmetricDirichletDerivativeFree>(m, detail_module, b);
 #endif
+}
+
+template<template<typename, size_t> class Energy, class ESBinder>
+void generateElasticSheetBindingsForEnergy(py::module &m, py::module &detail_module, ESBinder &&b) {
+    b.template bind<ElasticSheet<Energy<double, 2>>>(m, detail_module);
 }
 
 template<class ESBinder>
 void generateElasticSheetBindings(py::module &m, py::module &detail_module, ESBinder &&b) {
     // b.template bind<ElasticSheet<StVenantKirchhoffEnergyCBased<double, 2>>>(m, detail_module);
-    b.template bind<ElasticSheet<             NeoHookeanEnergy<double, 2>>>(m, detail_module);
+    // b.template bind<ElasticSheet<             NeoHookeanEnergy<double, 2>>>(m, detail_module);
     // b.template bind<ElasticSheet<   OptionalTensionFieldEnergy<double   >>>(m, detail_module);
+    generateElasticSheetBindingsForEnergy<NeoHookeanEnergy>(m, detail_module, b);
 }
 
+// Generate instantiations for all of MeshFEM's default energy densities defined above;
+// user-defined energies will need to be bound separately by directly calling
+//      `generateElasticSolidBindingsForEnergy` or
+//      `generateElasticSheetBindingsForEnergy`.
 template<class EOBinder>
 void generateElasticObjectBindings(py::module &m, py::module &detail_module, EOBinder &&b) {
     generateElasticSolidBindings<EOBinder>(m, detail_module, std::forward<EOBinder>(b));

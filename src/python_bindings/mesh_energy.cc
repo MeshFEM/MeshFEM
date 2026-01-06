@@ -36,6 +36,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
 #include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 
+#include "ParametrizationBinding.hh"
+
 // Bind the "NodalVars" factory method on each mesh type.
 struct NodalVarsBinder {
     template<class FEMMesh_>
@@ -52,21 +54,6 @@ struct NodalVarsBinder {
 template<class NVars>
 void bind_nvars(py::module &detail) {
     py::class_<NVars, NewtonVarsBase, std::shared_ptr<NVars>>(detail, NameMangler<NVars>::name().c_str());
-}
-
-template<class E>
-auto bindParametrizationMeshEnergy(py::module &m, py::module &detail) {
-    using PME = ParametrizationMeshEnergy<E>;
-    using Element     = std::decay_t<decltype(std::declval<PME>().elements.front())>;
-    using ElementData = typename Element::EData;
-    using M32d        = typename ElementData::M32d;
-
-    auto pyPME = bindMeshEnergy<PME, E>("Parametrization", m, detail);
-    pyPME.def("getB", [](const PME &pme, size_t ei) { return pme.elements.at(ei).elementData.B(); });
-    pyPME.def("setB", [](      PME &pme, size_t ei, const M32d &B) { pme.elements.at(ei).elementData.setB(B); });
-    pyPME.def("elementJacobian", [](const PME &pme, size_t ei) { return pme.elements.at(ei).getFB(pme.extractLocalVars(ei)); });
-
-    return pyPME;
 }
 
 PYBIND11_MODULE(mesh_energy, m)
