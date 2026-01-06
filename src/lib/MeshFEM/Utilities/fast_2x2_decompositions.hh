@@ -33,13 +33,13 @@
 
 #include <cmath>
 #include <MeshFEM/Types.hh>
-#include <iostream>
 
 namespace fast_decompositions {
 
 // Simple closed-form eigendecomposition of a 2x2 symmetric matrix A = Q Lambda Q^T
+// Returns `false` if the algorithm was short-circuited due to the matrix being numerically diagonal.
 template<bool FullyRobust = true, typename Real> // FullyRobust is for compatibility with the 3x3 SVD code.
-void sym_eigensolver(Mat2_T<Real> A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
+bool sym_eigensolver(const Mat2_T<Real> &A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
     const Real a_minus_c = A(0, 0) - A(1, 1);
     const Real b = A(0, 1);
 
@@ -51,10 +51,11 @@ void sym_eigensolver(Mat2_T<Real> A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
 
     Vec2_T<Real> q0(-2 * b, a_minus_c + sqrt_d);
     Real q0_norm = q0.norm();
-    if (q0_norm == 0) { Q.setIdentity(); return; } // A is the zero matrix...
+    if ((b == 0) || (q0_norm == 0)) { Q.setIdentity(); return false; } // A is diagonal or the zero matrix...
     q0 /= q0_norm;
     Q.col(0) = q0;
     Q.col(1) << -q0[1], q0[0];
+    return true;
 }
 
 

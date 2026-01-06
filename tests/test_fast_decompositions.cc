@@ -68,7 +68,7 @@ template<size_t N>
 void test_eigs() {
     using MNd = MatN_T<double, N>;
     using VNd = VecN_T<double, N>;
-    const double tol = (N == 3) ? 0.5e-11 : 1e-8;
+    const double tol = (N == 3) ? 1e-11 : 1e-8;
 
     // // Specifically problematic inputs we've discovered (for debugging).
     // {
@@ -370,8 +370,6 @@ TEST_CASE("fast 2x2 decompositions", "[fast_2x2_decompositions]" ) {
         }
         double duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
         std::cout << "fast_decompositions::sym_eigensolver (2x2) took " << duration << "s for " << runs << " runs." << std::endl;
-        std::cout << "Q_sum: " << Q_sum << std::endl;
-        std::cout << "lambda: " << lambda.transpose() << std::endl;
 
         start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < runs; ++i) {
@@ -380,6 +378,19 @@ TEST_CASE("fast 2x2 decompositions", "[fast_2x2_decompositions]" ) {
         }
         duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
         std::cout << "Eigen's 2x2 eigensolver took " << duration << "s for " << runs << " runs." << std::endl;
+
+        start = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < runs; ++i) {
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> es;
+            es.computeDirect(A_mats[i]);
+            Q_sum += es.eigenvectors();
+            lambda_sum += es.eigenvalues();
+        }
+        duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+        std::cout << "Eigen's 2x2 computeDirect eigensolver took " << duration << "s for " << runs << " runs." << std::endl;
+
+        std::cout << "Q_sum: " << Q_sum << std::endl;
+        std::cout << "lambda: " << lambda.transpose() << std::endl;
     }
 }
 
