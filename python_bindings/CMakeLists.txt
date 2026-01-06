@@ -17,6 +17,11 @@ set_target_properties(dirichlet_demo PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${P
 target_link_libraries(dirichlet_demo PUBLIC MeshFEM)
 target_compile_options(dirichlet_demo PRIVATE -ftemplate-backtrace-limit=0)
 
+pybind11_add_module(custom_energy_demo custom_energy_demo.cc)
+set_target_properties(custom_energy_demo PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(custom_energy_demo PUBLIC MeshFEM)
+target_compile_options(custom_energy_demo PRIVATE -ftemplate-backtrace-limit=0)
+
 pybind11_add_module(flip_avoiding_step_length flip_avoiding_step_length.cc)
 set_target_properties(flip_avoiding_step_length PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(flip_avoiding_step_length PUBLIC MeshFEM)
