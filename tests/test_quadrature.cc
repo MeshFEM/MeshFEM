@@ -13,6 +13,8 @@
 //  Created:  12/14/2014 16:02:02
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/GaussQuadrature.hh>
+#include <MeshFEM/ClenshawCurtisQuadrature.hh>
+
 #include <catch2/catch.hpp>
 #include <iostream>
 #include <functional>
@@ -23,11 +25,16 @@ using namespace std;
 
 typedef double Real;
 
-template<size_t K, size_t Deg, typename F>
+template<size_t K, size_t Deg, bool ClenshawCurtis = false, typename F>
 void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
-    using QR = Quadrature<K, Deg>;
+    using QR = std::conditional_t<ClenshawCurtis, ClenshawCurtisQuadrature<K, Deg>, Quadrature<K, Deg>>;
     Real vol = 0.125; // Make sure the element volume factor is accounted for...
     for (size_t d = 0; d <= Deg; ++d) {
+        if (ClenshawCurtis && (Deg % 2) == 0 && (d == Deg)) {
+            // Clenshaw-Curtis quadrature of **even** degree d
+            // is only exact for polynomials up to degree d-1...
+            continue;
+        }
         for (size_t i = 0; i < funcs[d].size(); ++i) {
             auto check = [d, i, vol, &ints](Real val) {
                 Real relError = std::abs((val / vol - ints.at(d).at(i)) / ints.at(d).at(i));
@@ -93,15 +100,16 @@ void test(const vector<vector<F>> &funcs, const vector<vector<Real>> &ints) {
 
 TEST_CASE("quadrature routines", "[quadrature]" ) {
 
-    // 1D functions up to degree 4
+    // 1D functions up to degree 5
     vector<vector<function<Real(Real, Real)>>> functions1D =
             {{[](Real u, Real other) { return 1; }},
              {[](Real u, Real other) { return u; }},
              {[](Real u, Real other) { return u*u; }},
              {[](Real u, Real other) { return u*u*u; }},
-             {[](Real u, Real other) { return u*u*u*u; }}};
+             {[](Real u, Real other) { return u*u*u*u; }},
+             {[](Real u, Real other) { return u*u*u*u*u; }}};
     vector<vector<Real>> integrals1D =
-             {{1},{1.0 / 2.0},{1.0 / 3.0},{1.0 / 4.0},{1.0 / 5.0}};
+             {{1},{1.0 / 2.0},{1.0 / 3.0},{1.0 / 4.0},{1.0 / 5.0},{1.0/6.0}};
 
     // 2D functions up to degree 5
     vector<vector<function<Real(Real, Real, Real)>>> functions2D =
@@ -210,6 +218,15 @@ TEST_CASE("quadrature routines", "[quadrature]" ) {
 
     SECTION("Degree 5 tests") {
       test<2, 5>(functions2D, integrals2D);
+    }
+
+    SECTION("Clenshaw-Curtis tests") {
+      test<1, 0, /*ClenshawCurtis= */ true>(functions1D, integrals1D);
+      test<1, 1, /*ClenshawCurtis= */ true>(functions1D, integrals1D);
+      test<1, 2, /*ClenshawCurtis= */ true>(functions1D, integrals1D);
+      test<1, 3, /*ClenshawCurtis= */ true>(functions1D, integrals1D);
+      test<1, 4, /*ClenshawCurtis= */ true>(functions1D, integrals1D);
+      test<1, 5, /*ClenshawCurtis= */ true>(functions1D, integrals1D);
     }
 }
 
