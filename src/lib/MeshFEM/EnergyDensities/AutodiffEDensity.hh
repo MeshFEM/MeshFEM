@@ -49,6 +49,14 @@ struct AutodiffEDensity : public Psi {
         }
     }
 
+    static std::string unmangled_name() {
+        if constexpr (has_name_method<Psi>::value) {
+            return Psi::name();
+        } else {
+            return get_name_of_type<Psi>();
+        }
+    }
+
     template<typename... Args>
     AutodiffEDensity(Args &&... args) : Psi(std::forward<Args>(args)...) { setDeformationGradient(Matrix::Identity()); }
     AutodiffEDensity(const AutodiffEDensity &other, UninitializedDeformationTag &&)
@@ -198,6 +206,12 @@ struct SymmetricDirichletPsi {
         if (J < 0) return typename Derived::Scalar(std::numeric_limits<double>::infinity());
         return 0.5 * (A.squaredNorm() + A.inverse().squaredNorm());
     }
+};
+
+template<class PsiExpr>
+struct ADEDensity_FBased {
+    template<typename Real_, size_t Dim_>
+    using type = AutodiffEDensity<PsiExpr, Real_, Dim_>;
 };
 
 template<typename Real_, size_t Dim_>

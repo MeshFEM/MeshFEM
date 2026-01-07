@@ -43,21 +43,23 @@ struct CustomEnergyInstantiationsBinder {
         py::module::import("sparse_matrices");
     }
 
-    template<template<typename Real_, size_t Dim_> class EnergyType, bool bindSolid = true, bool bindSheet = true, bool bindParametrization = true, bool bindLoads = true>
-    void bindParameterless(const std::string &name) {
-        generateEnergyBindingsParameterless<EnergyType>(name, m_e, m_e_d);
-        m_bindInstantiations<EnergyType, bindSolid, bindSheet, bindParametrization, bindLoads>(name);
+    template<class EnergyTypeWrapper, bool bindSolid = true, bool bindParametrization = true, bool bindSheet = false, bool bindLoads = true>
+    void bindParameterless(std::string name = "") {
+        if (name.empty()) name = EnergyTypeWrapper::template type<Real, 2>::unmangled_name();
+        generateEnergyBindingsParameterless<EnergyTypeWrapper::template type>(name, m_e, m_e_d);
+        m_bindInstantiations<EnergyTypeWrapper::template type, bindSolid, bindParametrization, bindSheet, bindLoads>();
     }
 
-    template<template<typename Real_, size_t Dim_> class EnergyType, bool bindSolid = true, bool bindSheet = true, bool bindParametrization = true, bool bindLoads = true>
-    void bindYoungPoisson(const std::string &name) {
-        generateEnergyBindingsYoungPoisson<EnergyType>(name, m_e, m_e_d);
-        m_bindInstantiations<EnergyType, bindSolid, bindSheet, bindParametrization, bindLoads>(name);
+    template<class EnergyTypeWrapper, bool bindSolid = true, bool bindParametrization = true, bool bindSheet = false, bool bindLoads = true>
+    void bindYoungPoisson(std::string name = "") {
+        if (name.empty()) name = EnergyTypeWrapper::template type<Real, 2>::unmangled_name();
+        generateEnergyBindingsYoungPoisson<EnergyTypeWrapper::template type>(name, m_e, m_e_d);
+        m_bindInstantiations<EnergyTypeWrapper::template type, bindSolid, bindParametrization, bindSheet, bindLoads>();
     }
 
 private:
-    template<template<typename Real_, size_t Dim_> class EnergyType, bool bindSolid = true, bool bindSheet = true, bool bindParametrization = true, bool bindLoads = true>
-    void m_bindInstantiations(const std::string &name) {
+    template<template<typename Real_, size_t Dim_> class EnergyType, bool bindSolid = true, bool bindParametrization = true, bool bindSheet = false, bool bindLoads = true>
+    void m_bindInstantiations() {
         if constexpr (bindSolid) generateElasticSolidBindingsForEnergy<EnergyType>( m_es,  m_es_d);
         if constexpr (bindSheet) generateElasticSheetBindingsForEnergy<EnergyType>(m_esh, m_esh_d, ElasticSheetBinder());
         if constexpr (bindParametrization) bindParametrizationMeshEnergy<EnergyType<double, 2>>(m_param, m_param_d);
