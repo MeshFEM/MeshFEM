@@ -21,15 +21,46 @@ namespace Loads {
     namespace detail {
         template<class Object>
         struct GravityLoadVector {
-            using VXd  = typename Object::VXd;
+            using VXd = typename Object::VXd;
+            using Real = typename VXd::Scalar;
             static constexpr size_t N   = Object::N;
             static constexpr size_t K   = Object::K;
             static constexpr size_t Deg = Object::Deg;
             static VXd compute(const Gravity<Object> &g) {
+                BENCHMARK_SCOPED_TIMER_SECTION timer("GravityLoadVector.compute");
                 const auto &o = g.getObj();
-                auto M = o.massMatrix(/* updatedParametrization */ false);
-                VXd neg_g_rep = (-g.get_g()).replicate(M.numSparseVars() / N, 1); // Assumes all variables are nodal displacements... (like ElasticSolid)
-                return M.apply(neg_g_rep);
+                if constexpr ((K == 2) && (N == 3)) {
+                    // Special implementation for ElasticSheet (which has angle variables after the nodal positions)
+                    typename Object::Mesh::ElementData::Phis phiIntegrals;
+                    auto integratedPhis = integratedShapeFunctions<Deg, K>();
+
+                    const auto &m = o.mesh();
+                    VXd globalShapeFunctionIntegrals;
+                    globalShapeFunctionIntegrals.setZero(m.numNodes());
+                    for (size_t ei = 0; ei < m.numElements(); ++ei) {
+                        Real vol = o.element3DVolume(ei);
+                        auto enodes = m.elementNodeIndices(ei);
+                        for (size_t lni = 0; lni < enodes.size(); ++lni)
+                            globalShapeFunctionIntegrals[enodes[lni]] += vol * integratedPhis[lni];
+                    }
+
+                    size_t nvars = o.numVars();
+                    VXd result(nvars);
+                    // Don't apply any load to the angular degrees of freedom
+                    // (we make the assumption that bending moments applied
+                    // by the load are negligible).
+                    result.tail(nvars - N * m.numNodes()).setZero();
+
+                    Real rho = o.getMassDensity();
+                    for (size_t i = 0; i < m.numNodes(); ++i)
+                        result.template segment<N>(N * i) = (-rho * globalShapeFunctionIntegrals[i]) * g.get_g();
+                    return result;
+                }
+                else {
+                    auto M = o.massMatrix(/* updatedParametrization */ false);
+                    VXd neg_g_rep = (-g.get_g()).replicate(M.numSparseVars() / N, 1); // Assumes all variables are nodal displacements... (like ElasticSolid)
+                    return M.apply(neg_g_rep);
+                }
             }
         };
     }
@@ -54,8 +85,8 @@ namespace Loads {
         Gravity(const ST &obj, const VNd &g = default_gravity())
             : Base(obj), m_g(g) { m_updateCache(); }
 
-        void set_g(VNd g)      { m_g = g; m_updateCache(); }
-        VNd  get_g()     const { return m_g; }
+        void set_g(VNd g)        { m_g = g; m_updateCache(); }
+        const VNd &get_g() const { return m_g; }
 
         virtual Real energy() const override { return m_grad.dot(Base::getObj().getVars()); }
 
