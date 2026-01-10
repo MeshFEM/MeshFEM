@@ -91,6 +91,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     using M2d   = Eigen::Matrix<Real, 2, 2>;
     using M3d   = Eigen::Matrix<Real, 3, 3>;
     using M32d  = Eigen::Matrix<Real, 3, 2>;
+    using M23d  = Eigen::Matrix<Real, 2, 3>;
     using VXd   = Eigen::Matrix<Real, Eigen::Dynamic, 1>;
     using MX3d  = Eigen::Matrix<Real, Eigen::Dynamic, 3, Eigen::RowMajor>; // Row major so that flattened order agrees with VField
     using MX2d  = Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>;
@@ -202,6 +203,8 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
 
     size_t numDefoVars() const override { return varStructure().numVars(); }
     size_t numRestVars() const override { return 3 * numVertices(); }
+
+    size_t numNodes()    const override { return m_numVertices; }
 
     size_t numVertices()  const { return m_numVertices;   }
     size_t numEdges()     const { return m_edgeVarStructure.numEdges;   }
@@ -413,6 +416,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     }
 
     const M32d &getB(size_t ei) const { return m_shellElements[ei].elementData.B(); }
+    const M23d &getBtGradBarycentric (size_t ei) const { return m_shellElements[ei].elementData.BtGradBarycentric(); }
     M32d getFB(size_t ei)       const { return m_shellElements[ei].getFB(); }
 
     SM2d getBendingStrain(size_t ei) const { return plateElement(ei).bendingStrain(); }
@@ -550,6 +554,10 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     MX2d getPrincipalCurvatures() const;
 
     // The volume associated with a shell element is area * thickness.
+    Real element3DVolume(size_t ei) const override {
+        return m_materials[ei].getThickness() * m_shellElements[ei].elementData.volume();
+    }
+
     VXd element3DVolumes() const {
         const auto &m = mesh();
         VXd result(m.numElements());
@@ -687,7 +695,9 @@ private:
     }
 
     void m_setRestVars(const Eigen::Ref<const VXd> &vars) override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSheet.m_setRestVars");
         m_mesh->setNodePositions(Eigen::Map<const MX3d>(vars.data(), numVertices(), size_t(N)));
+
         for (auto &se : m_shellElements)
             se.elementData.embeddingUpdated();
 

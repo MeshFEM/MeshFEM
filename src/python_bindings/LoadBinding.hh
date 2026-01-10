@@ -3,6 +3,7 @@
 
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include <MeshFEM/Loads/Load.hh>
+#include <MeshFEM/Loads/BodyForce.hh>
 #include <MeshFEM/Loads/Gravity.hh>
 #include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/Inertia.hh>
@@ -16,9 +17,19 @@
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 template<class Object>
-static void bindGravity(py::module &m, py::module &detail_module) {
-    using Load = Loads::Load<double>;
-    using GLoad = Loads::Gravity<Object>;
+static void bindBodyForces(py::module &m, py::module &detail_module) {
+    using Load   = Loads::Load<double>;
+    using GLoad  = Loads::Gravity<Object>;
+    using BFLoad = Loads::BodyForce<Object>;
+
+    py::class_<BFLoad, Load, std::shared_ptr<BFLoad>>(detail_module, ("BodyForce" + NameMangler<Object>::name()).c_str())
+       .def_property("nodalForceDensity", &BFLoad::getNodalForceDensity, &BFLoad::setNodalForceDensity)
+       ;
+
+    m.def("BodyForce", [&](const std::shared_ptr<Object> &obj, const Eigen::Ref<const typename BFLoad::MXd> &f) {
+            return std::make_shared<GLoad>(obj, f);
+        }, py::arg("obj"), py::arg("f"));
+
     py::class_<GLoad, Load, std::shared_ptr<GLoad>>(detail_module, ("Gravity" + NameMangler<Object>::name()).c_str())
         .def_property("g", &GLoad::get_g, &GLoad::set_g, "Gravitational acceleration vector")
        ;
@@ -51,7 +62,7 @@ struct LoadBinder {
         using Real = typename Object::Real;
         using Load = Loads::Load<Real>;
 
-        bindGravity<Object>(m, detail_module);
+        bindBodyForces<Object>(m, detail_module);
         bindInertia<Object>(m, detail_module);
 
         ////////////////////////////////////////////////////////////////////////

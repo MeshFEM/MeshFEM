@@ -88,7 +88,8 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
 
     size_t numElements() const { return mesh().numElements(); }
     size_t numVertices() const { return mesh().numVertices(); }
-    size_t numNodes   () const { return mesh().numNodes(); }
+
+    size_t numNodes   () const override { return mesh().numNodes(); }
 
     size_t numDefoVars() const override { return m_x.size(); }
     size_t numRestVars() const override { return numVertices() * N; }
@@ -352,6 +353,10 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
             return elementHessian(ei, !projectionMask);
         });
         return blockH;
+    }
+
+    Real element3DVolume(size_t ei) const override {
+        return mesh().elementVolume(ei);
     }
 
     using Base::massMatrix;
