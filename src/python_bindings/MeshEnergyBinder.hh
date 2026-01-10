@@ -99,8 +99,8 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail, 
         .def("allocatePerElementMaterials", &ME::allocatePerElementMaterials)
         .def("elementEnergy",               [](const ME &me, size_t ei) { return me.elementEnergy(ei); }, py::arg("ei"))
 
-        .def_property_readonly("mesh", &ME::mesh, py::return_value_policy::reference_internal)
-        .def_property_readonly("vars", &ME::vars, py::return_value_policy::reference_internal)
+        .def_property_readonly("mesh", &ME::mesh_ptr)
+        .def_property_readonly("vars", &ME::vars_ptr)
         ;
 
     ElementSpecificMEBindings<ME>::bind(pyME);
