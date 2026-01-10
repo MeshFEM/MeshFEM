@@ -280,6 +280,9 @@ struct MeshEnergy : public MeshEnergyBase {
     std::vector<Element> elements;
     MA materials; // must come after stencils so stencil count is initialized first.
 
+    const auto &mesh() const { return *m_mesh; }
+    const auto &vars() const { return  m_vars; }
+
 private:
     Material &m_getMaterial(size_t ei) override { return materials[ei]; }
 

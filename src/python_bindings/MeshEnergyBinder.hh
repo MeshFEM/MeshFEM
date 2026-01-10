@@ -32,6 +32,8 @@ struct ElementSpecificMEBindings<HingeMeshEnergy<HingeEnergy>> {
     template<class PyME>
     static void bind(PyME &pyME) {
         pyME.def("theta",        [](const ME &me, size_t ei) { return me.elements[ei].theta(); }, py::arg("ei"), "Get the current dihedral angle of the hinge element.");
+        pyME.def("hingeEdgeLen", [](const ME &me, size_t ei) { return me.elements[ei].hingeEdgeLen(); }, py::arg("ei"), "Get the length of the hinge edge of the hinge element.");
+        pyME.def("avgHeight",    [](const ME &me, size_t ei) { return me.elements[ei].avgHeight(); }, py::arg("ei"), "Get the average height of the hinge element's two triangles over the hinge edge.");
         if (HingeElement<HingeEnergy>::HasRestTheta) {
             pyME.def("getRestTheta", [](const ME &me, size_t ei) { return me.elements[ei].getRestTheta(); }, py::arg("ei"), "Get the rest dihedral angle of the hinge element.");
             pyME.def("setRestTheta", [](      ME &me, size_t ei, double theta) { me.elements[ei].setRestTheta(theta); }, py::arg("ei"), py::arg("theta"), "Set the rest dihedral angle of the hinge element. WARNING: does not affect energy/gradient/Hessian until the next deformed configuration update (`setVars`).");
@@ -96,6 +98,9 @@ auto bindMeshEnergy(const std::string &name, py::module &m, py::module &detail, 
         .def("setSpatiallyVaryingMaterial", [](ME &me, const std::vector<RawMaterial> &mats, const std::vector<size_t> &materialForElement) { me.setSpatiallyVaryingMaterial(convertMaterialList<Material>(mats), materialForElement); }, py::arg("materials"), py::arg("materialForElement"))
         .def("allocatePerElementMaterials", &ME::allocatePerElementMaterials)
         .def("elementEnergy",               [](const ME &me, size_t ei) { return me.elementEnergy(ei); }, py::arg("ei"))
+
+        .def_property_readonly("mesh", &ME::mesh, py::return_value_policy::reference_internal)
+        .def_property_readonly("vars", &ME::vars, py::return_value_policy::reference_internal)
         ;
 
     ElementSpecificMEBindings<ME>::bind(pyME);

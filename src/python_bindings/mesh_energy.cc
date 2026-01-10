@@ -86,6 +86,7 @@ PYBIND11_MODULE(mesh_energy, m)
     py::class_<DSHEMat, MaterialBase>(detail, "DiscreteShellMaterial")
         .def("setYoungPoisson", &DSHEMat::setYoungPoisson, py::arg("E"), py::arg("nu"))
         .def_readwrite("stiffness", &DSHEMat::stiffness)
+        .def_readwrite("include_inv_hbar_weight", &DSHEMat::include_inv_hbar_weight)
         ;
 
     using NHE = NeoHookeanEnergy<double, 2>;
