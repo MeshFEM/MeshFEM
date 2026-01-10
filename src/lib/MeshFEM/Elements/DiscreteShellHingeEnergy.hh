@@ -29,20 +29,29 @@ struct DiscreteShellHingeEnergy {
     struct MaterialProperties : public MaterialBase {
         void setYoungPoisson(Real E, Real nu) { throw std::runtime_error("TODO"); }
         Real stiffness = 1;
+        bool include_inv_hbar_weight = true;
+
     };
+
+    Real weightedStiffness(const MaterialProperties &m) const {
+        Real result = m.stiffness * m_e_len;
+        if (m.include_inv_hbar_weight) result /= m_h_bar;
+        return result;
+    }
 
     void configure(const RestState &X, Real theta, EvalLevel elevel = EvalLevel::Full) {
         m_theta = theta;
         m_theta_bar = X.theta;
-        m_weight = X.e_len / X.h_bar;
+        m_h_bar = X.h_bar;
+        m_e_len = X.e_len;
     }
 
-    Real   energy(const MaterialProperties &m) const { return 0.5 * (m_theta - m_theta_bar) * (m_theta - m_theta_bar) * (m_weight * m.stiffness); }
-    Real gradient(const MaterialProperties &m) const { return (m_theta - m_theta_bar) * (m_weight * m.stiffness); }
-    Real  hessian(const MaterialProperties &m) const { return m_weight * m.stiffness; }
+    Real   energy(const MaterialProperties &m) const { return 0.5 * (m_theta - m_theta_bar) * (m_theta - m_theta_bar) * weightedStiffness(m); }
+    Real gradient(const MaterialProperties &m) const { return (m_theta - m_theta_bar) * weightedStiffness(m); }
+    Real  hessian(const MaterialProperties &m) const { return weightedStiffness(m); }
 
 private:
-    Real m_theta, m_theta_bar, m_weight, m_stiffness;
+    Real m_theta, m_theta_bar, m_e_len, m_h_bar, m_stiffness;
 };
 
 template<class _Real>

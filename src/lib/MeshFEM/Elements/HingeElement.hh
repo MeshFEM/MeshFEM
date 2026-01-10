@@ -64,6 +64,9 @@ struct HingeElement : public ElementBase<HingeElement<HingeEnergy>> {
     }
 
     Real theta() const { return m_theta.value(); }
+    Real hingeEdgeLen() const { return m_theta.hingeEdgeLen(); }
+    Real avgHeight() const { return m_theta.avgHeight(); }
+
     void setRestTheta(Real theta) { // Warning: won't afffect energy until next call to `setDeformedConfiguration`!
         if constexpr (HasRestTheta) {
             m_restState.theta = theta;
