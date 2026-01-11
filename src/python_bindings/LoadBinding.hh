@@ -5,6 +5,7 @@
 #include <MeshFEM/Loads/Load.hh>
 #include <MeshFEM/Loads/BodyForce.hh>
 #include <MeshFEM/Loads/Gravity.hh>
+#include <MeshFEM/Loads/RegionNetForce.hh>
 #include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/Inertia.hh>
 #include <MeshFEM/Loads/Spreaders.hh>
@@ -21,6 +22,7 @@ static void bindBodyForces(py::module &m, py::module &detail_module) {
     using Load   = Loads::Load<double>;
     using GLoad  = Loads::Gravity<Object>;
     using BFLoad = Loads::BodyForce<Object>;
+    using NFLoad = Loads::RegionNetForce<Object>;
 
     py::class_<BFLoad, Load, std::shared_ptr<BFLoad>>(detail_module, ("BodyForce" + NameMangler<Object>::name()).c_str())
        .def_property("nodalForceDensity", &BFLoad::getNodalForceDensity, &BFLoad::setNodalForceDensity)
@@ -37,6 +39,19 @@ static void bindBodyForces(py::module &m, py::module &detail_module) {
     m.def("Gravity", [&](const std::shared_ptr<Object> &obj, const typename GLoad::VNd &g) {
             return std::make_shared<GLoad>(obj, g);
         }, py::arg("obj"), py::arg("g") = GLoad::default_gravity());
+
+    py::class_<NFLoad, Load, std::shared_ptr<NFLoad>>(detail_module, ("RegionNetForce" + NameMangler<Object>::name()).c_str())
+       .def_property("indicatorField", &NFLoad::get_indicator_field, &NFLoad::set_indicator_field, "Indicator field defining the region over which the net force is applied")
+       .def_property("f", &NFLoad::get_f, &NFLoad::set_f, "Net force applied by this load")
+       ;
+
+    m.def("NetForce", [&](const std::shared_ptr<Object> &obj, const typename NFLoad::VNd &f, const Eigen::VectorXd &indicatorField) {
+            auto result = std::make_shared<NFLoad>(obj);
+            result->set_f(f);
+            if (indicatorField.size() > 0)
+                result->set_indicator_field(indicatorField);
+            return result;
+        }, py::arg("obj"), py::arg("f"), py::arg("indicatorField") = Eigen::VectorXd());
 }
 
 template<class Object>

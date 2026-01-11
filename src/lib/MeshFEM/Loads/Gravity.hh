@@ -24,9 +24,6 @@
 
 namespace Loads {
     template<class Object>
-    struct Gravity;
-
-    template<class Object>
     struct Gravity : public BodyForce<Object> {
         using Real = typename Object::Real;
         using Base = BodyForce<Object>;
@@ -44,12 +41,11 @@ namespace Loads {
 
         Gravity(const ST &obj, const VNd &g = default_gravity()) : Base(obj) { set_g(g); }
 
-        void set_g(VNd g) {
+        void set_g(const VNd &g) {
             m_g = g;
+
             const auto &o = this->getObj();
-
             VXd f = o.getMassDensity() * (m_g).replicate(o.numNodes(), 1);
-
             Base::setNodalForceDensity(f);
         }
         const VNd &get_g() const { return m_g; }

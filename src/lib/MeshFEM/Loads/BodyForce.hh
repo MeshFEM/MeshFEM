@@ -101,7 +101,7 @@ namespace Loads {
                             if constexpr (K == N)
                                 result.template segment<N>(N * everts[lvi]) -= d_dvol * vol * m.elementData(ei).gradBarycentric().col(lvi);
                             else {
-                                static_assert(K == 2 && N == 3, "Expected elastic sheet");
+                                static_assert(K == 2 && N == 3, "Expected elastic membrane");
                                 result.template segment<N>(N * everts[lvi]) -= d_dvol * vol * o.getB(ei) * o.getBtGradBarycentric(ei).col(lvi);
                             }
                         }
