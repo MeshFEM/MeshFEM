@@ -421,11 +421,11 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
     using V3d = Vec3_T<Real>;
     // A = U Sigma V^T
     // M = A^T A = V Sigma^2 V^T
-    Mat3_T<Real> M = A.transpose() * A;
     {
+        Mat3_T<Real> M = A.transpose() * A;
 #if 1
         V3d s_sq;
-        sym_eigensolver<FullyRobust, /* Descending = */ true>(M, s_sq, V); // s_sq holds eigenvalues of A^T A in ascending order
+        sym_eigensolver<FullyRobust, /* Descending = */ true>(M, s_sq, V); // s_sq holds eigenvalues of A^T A in descending order
 #else
         Eigen::SelfAdjointEigenSolver<Mat3_T<Real>> es;
         es.computeDirect(M);
@@ -439,7 +439,7 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
     // We recover the singular values using the diagonal entries of R,
     // which slightly reduces the backward error compared to using sqrt(s_sq).
     Mat3_T<Real> USigma = A * V;
-    Real norm_0 = USigma.col(0).norm(); // should equal s[0], but recompute for safety.
+    Real norm_0 = USigma.col(0).norm(); // should equal sqrt(s_sq[0]), but recompute for safety.
     if (norm_0 == 0) { U.setIdentity(); s.setZero(); return; }
     V3d u0 = USigma.col(0) / norm_0;
     U.col(0) = u0;
@@ -471,7 +471,7 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
     else                       U.col(2) = u2 / norm_2;
     s[2] = norm_2;
 
-    // Since we recomputed the singular values from `R` they may fail to be sorted.
+    // Since we recomputed the singular values from `R`, they may fail to be sorted.
     if (s[1] > s[0]) {
         std::swap(s[0], s[1]);
         U.col(0).swap(U.col(1));

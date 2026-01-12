@@ -58,7 +58,6 @@ bool sym_eigensolver(const Mat2_T<Real> &A, Vec2_T<Real> &lambda, Mat2_T<Real> &
     return true;
 }
 
-
 template<typename T>
 T sign(T val) { return (val >= T(0)) ? T(1) : T(-1); }
 
