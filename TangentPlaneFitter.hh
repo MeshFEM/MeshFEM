@@ -61,7 +61,7 @@ template<typename Real_>
 using TangentPlaneFittingEnergyDensity = AutodiffEDensity<TangentPlaneFittingPsi<Real_>, Real_, 3, EDensityType::Membrane>;
 
 template<typename Real_>
-using TangentPlaneFittingElement = MembraneElement_3x2<1, TangentPlaneFittingEnergyDensity<Real_>>;
+using TangentPlaneFittingElement = MembraneElement<1, TangentPlaneFittingEnergyDensity<Real_>>;
 
 struct TangentPlaneFitter : public MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars<3>, ElementStencil<2, 1, 3>, TangentPlaneFittingElement<double>> {
     using Base = MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars<3>, ElementStencil<2, 1, 3>, TangentPlaneFittingElement<double>>;
