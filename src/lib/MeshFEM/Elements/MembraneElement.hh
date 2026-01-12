@@ -115,11 +115,16 @@ struct ElementTraits<MembraneElement<Deg, Psi_2x2, CustomMat_>> {
     using Material = CustomMat_;
 };
 
-template<size_t Deg, class Psi_2x2, class CustomMat_ = MembraneMaterial<Psi_2x2>>
-struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi_2x2, CustomMat_>> {
+// Construct a membrane element from either a 3x2 or 2x2 energy density
+// function, the latter being automatically (albeit somewhat inefficiently)
+// converted to a 3x2 energy density function.
+template<size_t Deg, class Psi, class CustomMat_ = std::conditional_t<Psi::EDType == EDensityType::Membrane,
+                                                                      MembraneMaterial_3x2<Psi>,
+                                                                      MembraneMaterial<Psi>>>
+struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi, CustomMat_>> {
     static constexpr size_t K = 2;
     static constexpr size_t N = 3;
-    using Real     = typename Psi_2x2::Real;
+    using Real     = typename Psi::Real;
     using Base     = ElementBase<MembraneElement>;
     using Material = typename Base::Material;
 
@@ -147,12 +152,9 @@ struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi_2x2, Custom
     elements::EmbeddedMembraneEData<K, Deg, VecN_T<Real, N>> elementData;
 };
 
-template<size_t Deg, class Psi_3x2>
-using MembraneElement_3x2 = MembraneElement<Deg, Psi_3x2, MembraneMaterial_3x2<Psi_3x2>>;
-
 #include "../MeshEnergy.hh"
 
-template<class Psi_2x2, size_t Deg = 1>
-using MembraneMeshEnergy = MeshEnergy<FEMMesh<2, Deg, Vector3D>, NodalVars<3>, ElementStencil<2, Deg, 3>, MembraneElement<Deg, Psi_2x2>>;
+template<class Psi, size_t Deg = 1>
+using MembraneMeshEnergy = MeshEnergy<FEMMesh<2, Deg, Vector3D>, NodalVars<3>, ElementStencil<2, Deg, 3>, MembraneElement<Deg, Psi>>;
 
 #endif /* end of include guard: MEMBRANEELEMENT_HH */

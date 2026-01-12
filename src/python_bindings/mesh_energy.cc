@@ -36,6 +36,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
 #include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 
+#include <MeshFEM/EnergyDensities/IsotropicAutodiffEDensity.hh>
+
 #include "ParametrizationBinding.hh"
 
 // Bind the "NodalVars" factory method on each mesh type.
@@ -94,6 +96,10 @@ PYBIND11_MODULE(mesh_energy, m)
 
     bindMeshEnergy<MembraneMeshEnergy<NHE>>("NeoHookeanMembrane", m, detail);
     bindMeshEnergy<DiscreteShellHingeMeshEnergy<double>>("DiscreteShellBending", m, detail);
+
+    using CNHE = APADIsotropicEDensity_SBased<CommonNeoHookeanFromInvariants>::membrane_type<double>;
+    bindMembraneMaterial<CNHE>(m, detail);
+    bindMeshEnergy<MembraneMeshEnergy<CNHE>>("CommonNeoHookeanMembrane", m, detail);
 
     bindParametrizationMeshEnergy<                      NeoHookeanEnergy  <double, 2> >(m, detail);
     bindParametrizationMeshEnergy<AutoHessianProjection<NeoHookeanEnergy  <double, 2>>>(m, detail);
