@@ -43,15 +43,27 @@ namespace Loads {
 
         void set_g(const VNd &g) {
             m_g = g;
-
-            const auto &o = this->getObj();
-            VXd f = o.getMassDensity() * (m_g).replicate(o.numNodes(), 1);
-            Base::setNodalForceDensity(f);
+            m_updateCache();
         }
+
         const VNd &get_g() const { return m_g; }
 
     private:
         VNd  m_g; // Gravitational acceleration vector
+
+        // Note: we must respond to the `m_stateUpdated` callback
+        // (even though changes to rest shape are automatically
+        // handled by `BodyForce`) to account for changes in mass density
+        // (which also trigger a rest-state update notification).
+        virtual void m_stateUpdated(typename Base::VM vmask) override {
+            if (vmask == Base::VM::Rest) m_updateCache();
+        }
+
+        void m_updateCache() {
+            const auto &o = this->getObj();
+            VXd f = o.getMassDensity() * (m_g).replicate(o.numNodes(), 1);
+            Base::setNodalForceDensity(f);
+        }
     };
 
 } // namespace Loads
