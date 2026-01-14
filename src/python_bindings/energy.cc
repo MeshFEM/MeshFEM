@@ -180,6 +180,8 @@ PYBIND11_MODULE(energy, m)
     bindLinearElasticEnergy<3>  (detail_module);
     bindNeoHookeanEnergy<2>     (detail_module);
     bindNeoHookeanEnergy<3>     (detail_module);
+    bindCommonNeoHookeanEnergy<2>(detail_module);
+    bindCommonNeoHookeanEnergy<3>(detail_module);
     bindNeoHookeanEnergyHP<2>   (detail_module);
     bindNeoHookeanEnergyHP<3>   (detail_module);
     bindCRLinearElasticEnergy<2>(detail_module);
@@ -332,6 +334,9 @@ PYBIND11_MODULE(energy, m)
     m.def("NeoHookeanYoungPoisson",         [&](size_t dimension, double E, double nu, bool autoproject) {                                                                     return constructDimensionSpecificConditionalAP<NeoHookeanEnergy>(dimension, autoproject, lambdaFromENu(E, nu), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("E"), py::arg("nu"), py::arg("autoproject") = false);
     m.def("NeoHookeanYoungPoisson",         [&](py::object mesh,  double E, double nu, bool autoproject) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecificConditionalAP<NeoHookeanEnergy>(dimension, autoproject, lambdaFromENu(E, nu), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"), py::arg("autoproject") = false);
     m.def("NeoHookeanMembraneYoungPoisson", [&](                  double E, double nu) {                                                                     return std::make_unique<NeoHookeanMembrane>( lambdaFromENu(E, nu), muFromENu(E, nu)); },                       py::arg("E"), py::arg("nu"));
+
+    m.def("CommonNeoHookeanYoungPoisson",   [&](size_t dimension, double E, double nu) {                                                                     return constructDimensionSpecific<CommonNeoHookeanEnergy>(dimension, lambdaFromENu(E, nu, (dimension == 3)), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("E"), py::arg("nu"));
+    m.def("CommonNeoHookeanYoungPoisson",   [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecific<CommonNeoHookeanEnergy>(dimension, lambdaFromENu(E, nu, (dimension == 3)), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"));
 
     m.def("IsoCRLEWithHessianProjection",   [&](size_t dimension, double E, double nu) {                                                                     return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("young"), py::arg("poisson"));
     m.def("IsoCRLEWithHessianProjection",   [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructIsoCRLEHessProj(dimension, lambdaFromENu(E, nu, dimension == 3), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("young"), py::arg("poisson"));
