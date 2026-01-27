@@ -36,3 +36,8 @@ pybind11_add_module(simple_elastic_solid simple_elastic_solid.cc)
 set_target_properties(simple_elastic_solid PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(simple_elastic_solid PUBLIC MeshFEM)
 target_compile_options(simple_elastic_solid PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(poisson_gradient_integration poisson_gradient_integration.cc)
+set_target_properties(poisson_gradient_integration PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(poisson_gradient_integration PUBLIC MeshFEM)
+target_compile_options(poisson_gradient_integration PRIVATE -ftemplate-backtrace-limit=0)
