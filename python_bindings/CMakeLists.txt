@@ -30,6 +30,11 @@ set_target_properties(symdir_test PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJ
 target_link_libraries(symdir_test PUBLIC MeshFEM)
 target_compile_options(symdir_test PRIVATE -ftemplate-backtrace-limit=0)
 
+pybind11_add_module(custom_energy_demo custom_energy_demo.cc)
+set_target_properties(custom_energy_demo PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(custom_energy_demo PUBLIC MeshFEM)
+target_compile_options(custom_energy_demo PRIVATE -ftemplate-backtrace-limit=0)
+
 pybind11_add_module(flip_avoiding_step_length flip_avoiding_step_length.cc)
 set_target_properties(flip_avoiding_step_length PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(flip_avoiding_step_length PUBLIC MeshFEM)
@@ -39,3 +44,13 @@ pybind11_add_module(continuation_parametrization continuation_parametrization.cc
 set_target_properties(continuation_parametrization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(continuation_parametrization PUBLIC MeshFEM)
 target_compile_options(continuation_parametrization PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(simple_elastic_solid simple_elastic_solid.cc)
+set_target_properties(simple_elastic_solid PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(simple_elastic_solid PUBLIC MeshFEM)
+target_compile_options(simple_elastic_solid PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(poisson_gradient_integration poisson_gradient_integration.cc)
+set_target_properties(poisson_gradient_integration PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(poisson_gradient_integration PUBLIC MeshFEM)
+target_compile_options(poisson_gradient_integration PRIVATE -ftemplate-backtrace-limit=0)

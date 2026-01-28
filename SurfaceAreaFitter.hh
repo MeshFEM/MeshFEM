@@ -24,7 +24,7 @@ struct SurfaceAreaEnergyDensityPsi {
 };
 
 template<typename Real_>
-using SurfaceAreaElement = MembraneElement_3x2<1, AutodiffEDensity<SurfaceAreaEnergyDensityPsi, Real_, 3, EDensityType::Membrane>>;
+using SurfaceAreaElement = MembraneElement<1, AutodiffEDensity<SurfaceAreaEnergyDensityPsi, Real_, 3, EDensityType::Membrane>>;
 
 // Implement the surface area fitter as a composition of a "MeshEnergy"
 // evaluating the surface area and the univariate function
