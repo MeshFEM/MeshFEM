@@ -138,7 +138,7 @@ def tutteInitialization(m, bdry_uv = None):
 def polar_decomposition(F, force_rotation=False):
     """
     Computes the polar decomposition `F = RS`, where `F` can be a single `n x n`
-    matrix or a collection of matrices (of shape (k, n, n)).
+    matrix or a collection of matrices (of shape (k, n, n) or even (..., n, n).
     
     The unitary part is obtained as `R = U V^T`, using SVD `F = U diag(s) V^T`.
     
@@ -157,8 +157,8 @@ def polar_decomposition(F, force_rotation=False):
         s[flipped, -1] *= -1
         U[flipped, :, -1] *= -1
     R = (U @ Vt)
-    # S = (Vt.transpose(0, 2, 1) * s[..., None, :]) @ Vt # Slightly more expensive way of obtaining S
-    S = R.transpose(0, 2, 1) @ F
+    # S = (Vt.transpose(0, 2, 1) * s[..., np.newaxis, :]) @ Vt # Slightly more expensive way of obtaining S
+    S = R.swapaxes(-1, -2) @ F
     return (R, S)
 
 ################################################################################
