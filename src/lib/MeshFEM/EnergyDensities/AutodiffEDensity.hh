@@ -217,4 +217,10 @@ struct ADEDensity_FBased {
 template<typename Real_, size_t Dim_>
 using SymmetricDirichletDerivativeFree = AutodiffEDensity<SymmetricDirichletPsi, Real_, Dim_>;
 
+template <class PsiExpr>
+struct ADFbasedEDensity {
+    template<typename Real_, size_t Dim_>
+    using type = AutodiffEDensity<PsiExpr, Real_, Dim_>;
+};
+
 #endif /* end of include guard: AUTODIFFEDENSITY_HH */

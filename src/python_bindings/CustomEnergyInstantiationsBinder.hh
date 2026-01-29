@@ -50,6 +50,10 @@ struct CustomEnergyInstantiationsBinder {
         m_bindInstantiations<EnergyTypeWrapper::template type, bindSolid, bindParametrization, bindSheet, bindLoads>();
     }
 
+    // More concise name for the common case of parameterless energies.
+    template<class EnergyTypeWrapper, bool bindSolid = true, bool bindParametrization = true, bool bindSheet = false, bool bindLoads = true>
+    void bind(std::string name = "") { bindParameterless<EnergyTypeWrapper, bindSolid, bindParametrization, bindSheet, bindLoads>(name); }
+
     template<class EnergyTypeWrapper, bool bindSolid = true, bool bindParametrization = true, bool bindSheet = false, bool bindLoads = true>
     void bindYoungPoisson(std::string name = "") {
         if (name.empty()) name = EnergyTypeWrapper::template type<Real, 2>::unmangled_name();
