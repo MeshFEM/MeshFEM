@@ -36,7 +36,7 @@ struct VPBinder {
     }
 };
 
-PYBIND11_MODULE(variable_coefficient_poisson, m)
+PYBIND11_MODULE(poisson_gradient_integration, m)
 {
     py::module::import("MeshFEM");
     py::module::import("mesh");
