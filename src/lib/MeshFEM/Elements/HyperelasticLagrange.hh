@@ -75,7 +75,7 @@ struct HyperelasticLagrange {
     }
 
     template<class FGetter, class EData>
-    static Gradient gradient(const Psi &psi_template, const FGetter &getF, const EData &edata, Real weight = 1.0) {
+    static Gradient gradient(const Psi &psi_template, const FGetter &getF, const EData &edata, double weight = 1.0) {
         Psi psi(psi_template, UninitializedDeformationTag());
 
         Gradient result;
@@ -92,19 +92,19 @@ struct HyperelasticLagrange {
     }
 
     template<class EData>
-    static Gradient gradient(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, Real weight = 1.0) {
+    static Gradient gradient(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, double weight = 1.0) {
         return gradient(psi_template, ElasticFGetter(deformedPositions), edata, weight);
     }
 
     template<bool SetLowerTri = false, class FGetter, class EData>
-    static Hessian hessian(const Psi &psi_template, const FGetter &getF, const EData &edata, bool disableProjection, Real weight = 1.0) {
+    static Hessian hessian(const Psi &psi_template, const FGetter &getF, const EData &edata, bool disableProjection, double weight = 1.0) {
         Psi psi(psi_template, UninitializedDeformationTag());
         Hessian result;
 
         if constexpr (NQP > 1) result.template triangularView<Eigen::Upper>().setZero();
 
         for (size_t i = 0; i < NQP; ++i) {
-            double w = ((edata.volume() * weight) * QuadratureRule::weights[i]); // Weight is applied to gradPhi_b below for efficiency!
+            Real w = ((edata.volume() * weight) * QuadratureRule::weights[i]); // Weight is applied to gradPhi_b below for efficiency!
             auto gphis = edata.gradPhis(QuadratureRule::points[i]);
             psi.setDeformationGradient(getF(gphis), disableProjection ? EvalLevel::HessianWithDisabledProjection
                                                                       : EvalLevel::Hessian);
@@ -135,7 +135,7 @@ struct HyperelasticLagrange {
     }
 
     template<bool SetLowerTri = false, class EData>
-    static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection, Real weight = 1.0) {
+    static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection, double weight = 1.0) {
         return hessian<SetLowerTri>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection, weight);
     }
 

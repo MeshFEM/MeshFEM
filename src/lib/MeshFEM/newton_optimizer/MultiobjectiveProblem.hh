@@ -59,6 +59,8 @@ struct MESHFEM_EXPORT NewtonVarsBase {
         if (size_t(vars.size()) != numVars()) throw std::runtime_error("Variable size mismatch");
         m_setVarsImpl(vars);
         m_issueNotifications(VarType::Variable);
+        // Warning: does not invalidate the cached problem Hessian! For this,
+        // one must call the problem's `setVars`.
     }
 
     // Set x to a trivial starting point for solving the optimization problem.
@@ -419,6 +421,7 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
     void   setVars(const VXd &vars) override {
         if (size_t(vars.size()) != numVars()) throw std::runtime_error("Incorrect variable vector size");
         m_vars->setVars(vars);
+        invalidateCachedHessian();
     }
 
     void applyTrivialInitialGuess() { m_vars->applyTrivialInitialGuess(); }

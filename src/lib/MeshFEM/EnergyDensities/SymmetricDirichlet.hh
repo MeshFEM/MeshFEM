@@ -119,10 +119,12 @@ struct SymmetricDirichlet {
         Real I3Cu = I3Sq*I3;
 
         Real lambda_4 = 1.0 + (1.0/I3Sq) - (I2/I3Cu);
-        Real lambda_4_proj = useAbsProjection ? std::abs(lambda_4) : std::max(lambda_4, 0.0);
+        Real lambda_4_proj = std::max(lambda_4, Real(0.0));
         Real proj_dist = lambda_4_proj - lambda_4;
+        if (useAbsProjection)
+            proj_dist *= 2.0; // adding twice the projection distance gets to the absolute value
 
-        if (proj_dist > 0) {
+        if (proj_dist > 0.0) {
             VN2_T T;
             MMap(T.data()) = U.col(1) * V.col(0).transpose() - U.col(0) * V.col(1).transpose(); // "Twist" eigenmatrix (unnormalized)
             H += (0.5 * proj_dist) * T * T.transpose();

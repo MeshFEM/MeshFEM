@@ -81,19 +81,19 @@ void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
         // Warning: the "singular values" summed and subtracted here
         // are the signed versions w1 and w2 from Blinn's paper.
         // So `sigma_sum == 0` does *not* imply that `A == 0`.
-        sigma_sum  = std::hypot(F2, G2); // w1 + w2
-        sigma_diff = std::hypot(E2, H2); // w1 - w2
+        sigma_sum  = hypot(F2, G2); // w1 + w2
+        sigma_diff = hypot(E2, H2); // w1 - w2
 
         // Avoid NaNs in the case of the zero matrix.
-        if (sigma_sum + sigma_diff == 0) { U.setIdentity(); V.setIdentity(); sigma.setZero(); return; }
+        if (sigma_sum + sigma_diff == 0.0) { U.setIdentity(); V.setIdentity(); sigma.setZero(); return; }
 
         // Avoid NaNs in the case of repeated sigular values.
         // Here `A` is a scalar multiple of a rotation/reflection matrix; we
         // can arbitrarily set `U` as this element of O(2) and pick `V = I`.
-        if ((sigma_diff == 0) || (sigma_sum == 0)) {
+        if ((sigma_diff == 0.0) || (sigma_sum == 0.0)) {
             V.setIdentity();
             // Note that due to signs, the actual sum of singular values can be either w1 + w2 or w1 - w2...
-            T s = std::max(sigma_diff, sigma_sum) / 2;
+            T s = std::max(sigma_diff, sigma_sum) / 2.0;
             sigma.setConstant(s);
             U = A / s;
             return;
@@ -108,18 +108,19 @@ void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
         s_p = H2 / sigma_diff; // sin(alpha_2 + alpha_1)
     }
 
-    T c1 = std::sqrt((c_m + c_p) * (c_m + c_p) + (s_p + s_m) * (s_p + s_m)) / 2; // cos(alpha_1)
-    T s1 = std::sqrt((c_m - c_p) * (c_m - c_p) + (s_p - s_m) * (s_p - s_m)) / 2; // sin(alpha_1)
+    T c1 = sqrt((c_m + c_p) * (c_m + c_p) + (s_p + s_m) * (s_p + s_m)) / 2.0; // cos(alpha_1)
+    T s1 = sqrt((c_m - c_p) * (c_m - c_p) + (s_p - s_m) * (s_p - s_m)) / 2.0; // sin(alpha_1)
 
     // Sign recovery: the sign of the first left singular vector is arbitrary,
     // so we need only ensure that s1 has the correct sign relative to c1.
     // Note the trig identity: s_p c_m - c_p s_m = ... = 2 s1 c1
-    s1 = std::copysign(s1, s_p * c_m - c_p * s_m);
+    // (We could use `std::copysign`, but that isn't autodiff-friendly.)
+    if (s_p * c_m - c_p * s_m < 0.0) s1 = -s1;
 
     U << c1, s1,
         -s1, c1;
 
-    sigma << (sigma_sum + sigma_diff) / 2, std::abs(sigma_sum - sigma_diff) / 2; // guaranteed positive and sorted descending...
+    sigma << (sigma_sum + sigma_diff) / 2.0, fabs(sigma_sum - sigma_diff) / 2.0; // guaranteed positive and sorted descending...
 
     // Recover a consistent first right singular vector from U^T A = Sigma V^T ==> V Sigma = A^T U.
     // We could alternatively get this by computing `c2, s2`, but then sign recovery looks more tricky.
