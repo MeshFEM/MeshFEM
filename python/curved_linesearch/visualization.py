@@ -28,3 +28,7 @@ def plot_trajectory(vertex_positions, color='orange', alpha=1.0, zorder=None, lw
     num_frames, num_vertices, dimension = vertex_positions.shape
     for i in range(num_vertices):
         plt.plot(*vertex_positions[:, i, :].T, c=color, alpha=alpha, zorder=zorder, lw=lw)
+        
+def plot_element_labels(m, uv):
+    for ei, pos in enumerate(uv[m.elements()].mean(axis=1)):
+        plt.text(*pos, str(ei))

@@ -62,3 +62,7 @@ compile_commands.json
 
 # Auto-generated python stuff
 python/MeshFEM/__init__.py
+
+# Other files
+*.png
+*.pdf
