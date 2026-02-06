@@ -403,6 +403,18 @@ void polar(const Mat3_T<Real> &M, Mat3_T<Real> &R, Mat3_T<Real> &S, Vec3_T<Real>
     S = R.transpose() * M;
 }
 
+template<typename Real>
+void polar(const Mat3_T<Real> &M, Mat3_T<Real> &R, Mat3_T<Real> &S) {
+    Vec3_T<Real> s;
+    polar(M, R, S, s);
+}
+
+template<typename Real>
+Mat3_T<Real> closest_rotation(const Mat3_T<Real> &M) {
+    Mat3_T<Real> R, S;
+    polar(M, R, S);
+    return R;
+}
 
 // Compute SVD using polar decomposition and symmetric eigenvector computation
 template<typename Real>

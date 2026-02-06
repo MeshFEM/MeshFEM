@@ -46,16 +46,15 @@ void test_cubicroot() {
 template<size_t N>
 void test_polar() {
     using MNd = MatN_T<double, N>;
-    using VNd = VecN_T<double, N>;
     static constexpr size_t numTests = 1000;
     for (size_t i = 0; i < numTests; ++i) {
         MNd A = MNd::Random();
         MNd R, S;
-        VNd s;
-        fast_decompositions::polar(A, R, S, s);
+        fast_decompositions::polar(A, R, S);
 
         REQUIRE((R.transpose() * R - MNd::Identity()).norm() < 1e-10);
         REQUIRE((R * S - A).norm() / A.norm() < 1e-10); // Check backward error.
+        REQUIRE(R.determinant() > 0); // Check that R is a proper rotation (not a reflection).
     }
 }
 
@@ -406,6 +405,7 @@ TEST_CASE("fast 3x3 decompositions", "[fast_3x3_decompositions]" ) {
 TEST_CASE("fast 2x2 decompositions", "[fast_2x2_decompositions]" ) {
     test_eigs<2>();
     test_svd<2>();
+    test_polar<2>();
 
     {
         // Benchmarking comparison of `fast_decompositions::svd` against Eigen's SVD

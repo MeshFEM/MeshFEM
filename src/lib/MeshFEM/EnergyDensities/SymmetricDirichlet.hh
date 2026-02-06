@@ -70,6 +70,8 @@ struct SymmetricDirichlet {
         if (N == 3) throw std::runtime_error("Analytical Hessian Projection in N=3 Unimplemented!");
 
         // Analytical Hessian Projection in 2D
+
+#if 0 // Complete analytical eigendecomposition
 #if 0
         Eigen::JacobiSVD<Matrix> svd;
         svd.compute(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
@@ -81,8 +83,6 @@ struct SymmetricDirichlet {
         Vector sigma;
         fast_decompositions::svd(F, U, sigma, V);
 #endif
-
-#if 0 // Complete analytical eigendecomposition
         Real I1 = m_F.trace();
         Real I2 = m_F.squaredNorm();
         Real I3 = m_J;
@@ -125,9 +125,14 @@ struct SymmetricDirichlet {
             proj_dist *= 2.0; // adding twice the projection distance gets to the absolute value
 
         if (proj_dist > 0.0) {
-            VN2_T T;
-            MMap(T.data()) = U.col(1) * V.col(0).transpose() - U.col(0) * V.col(1).transpose(); // "Twist" eigenmatrix (unnormalized)
-            H += (0.5 * proj_dist) * T * T.transpose();
+            VN2_T T_vec;
+            // The twist eigenmatrix can be rewritten in terms of the polar
+            // decomposition `F = R S` as `R [0 -1; 1 0]`.
+            // This is both more efficient and avoids numerical singularities in
+            // autodiff that arise when using the standard `U` and `V` formulas.
+            auto R = fast_decompositions::closest_rotation(m_F);
+            MMap(T_vec.data()) << R.col(1), -R.col(0);
+            H += (0.5 * proj_dist) * T_vec * T_vec.transpose();
         }
 #endif
 

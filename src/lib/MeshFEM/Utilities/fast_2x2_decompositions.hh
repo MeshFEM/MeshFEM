@@ -130,9 +130,14 @@ void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
 
     // Since det(U) = 1 and det(sigma) >= 0 by construction,
     // we must ensure det(V) = sign(det(A));
-    T sgn = sign(A.determinant());
-    V(0, 1) = -sgn * V(1, 0);
-    V(1, 1) =  sgn * V(0, 0);
+    if (A.determinant() >= 0) {
+        V(0, 1) = -V(1, 0);
+        V(1, 1) =  V(0, 0);
+    }
+    else {
+        V(0, 1) =  V(1, 0);
+        V(1, 1) = -V(0, 0);
+    }
 }
 
 // The following more complicated code is adapted from https://scicomp.stackexchange.com/a/28506.
@@ -234,6 +239,35 @@ void svd_petiaccja(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &s, Mat2_T<T> &V)
     V(1, 1) =  V(0, 0);
 }
 
+// Computes the closest rotation matrix to A in Frobenius norm, i.e., the R
+// factor of the polar decomposition without resorting to the SVD.
+// Note that:
+//  min_θ ||A - R(θ)||_F^2  <==> max_θ R(θ) : A = max_θ cos(θ) (A(0, 0) + A(1, 1)) + sin(θ) (A(1, 0) - A(0, 1)) = max_θ [cos(θ), sin(θ)] . [a, b],
+//  which is clearly solved by setting [cos(θ), sin(θ)] = normalize([a, b])
+template<typename Real>
+Mat2_T<Real> closest_rotation(const Mat2_T<Real> &A) {
+    Real a = A(0, 0) + A(1, 1);
+    Real b = A(1, 0) - A(0, 1);
+    Real den = sqrt(a * a + b * b);
+
+    // The singular case `den = 0` corresponds to a matrix of the form [a b; b -a].
+    // In this case, any rotation is equally good. We arbitrarily break symmetry
+    // by returning the identity matrix.
+    if (den == 0) return Mat2_T<Real>::Identity();
+    Real scale = 1 / den;
+    a *= scale;
+    b *= scale;
+    Mat2_T<Real> R;
+    R << a, -b, b,  a;
+    return R;
 }
+
+template<typename Real>
+void polar(const Mat2_T<Real> &A, Mat2_T<Real> &R, Mat2_T<Real> &S) {
+    R = closest_rotation(A);
+    S = R.transpose() * A;
+}
+
+} // namespace fast_decompositions
 
 #endif /* end of include guard: FAST_2X2_DECOMPOSITIONS_HH */
