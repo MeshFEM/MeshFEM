@@ -15,9 +15,79 @@ import parametrization, benchmark
 import energy, poisson_gradient_integration
 import numpy as np
 import igl
-import differential_operators
+import differential_operators, sparse_matrices
 
-import param_utils
+import param_utils, sim_utils
+
+def getColorStr(method):
+    color_dict = {}
+    color_dict['Eulerian'] = 'tab:blue'
+    color_dict['Linear'] = 'orange'
+    color_dict['Lagrangian'] = 'red'
+    
+    return color_dict[method]
+
+def getParamProb(m, uv_init, FIX_VARS=True):
+    '''
+    Get Parameterization class and its corresponding newton problem
+    '''
+    uv = mesh_energy.NodalVars(m, 2)
+    uv.setVars(uv_init.ravel())
+    
+    e = energy.SymmetricDirichlet(2)
+    param = mesh_energy.Parametrization(m, uv, e)
+    objectives = [param]
+    prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, objectives)
+    
+    import flip_avoiding_step_length
+    prob.initialFeasibleStepLengthComputer = flip_avoiding_step_length.FlipAvoidingStepLength(m.elements())
+    prob.initialFeasibleStepLengthComputer.backoffFactor = 0.8
+    
+    FIX_VARS = True
+    if FIX_VARS:
+        fv = sim_utils.getBBoxVars(m, sim_utils.BBoxFace.MIN_X, dimension=2)
+        prob.setFixedVars(fv)
+    else:
+        param.elementHessianShift = 1e-6
+        
+    prob.useRelativeHessianShift = True
+    param.useXBasedProjection = False
+    
+    return param, prob
+
+
+def getStepandCurUVofToyProb(param, prob, uv_init, optIters):
+    '''
+    For Pants Parameterization, obtain newton step and current uv after user_specified iters (max iters)
+    '''
+    
+    opt = prob.optimizer()
+    opt.options.niter = 500
+    opt.options.gradTol = 2e-8
+    opt.options.hessianProjectionController.numConsecutiveIndefiniteStepsBeforeEnable = 0
+    opt.options.hessianProjectionController.numProjectionStepsBeforeDisable = 2
+    opt.options.hessianProjectionController.startWithProjectionActive = False
+    
+    opt.options.niter = optIters
+    prob.setVars(uv_init.ravel())
+    opt.optimize()
+    
+    # Newton step and current UVs
+    uv_cur = prob.getVars().reshape(-1,2)
+    step = opt.newton_step()
+    
+    return uv_cur, step
+
+def getLaplacianFactorizer(m, fixedVars=None):
+    L_matrix = differential_operators.laplacian(m, upperTriOnly=True)
+    L_sparse = sparse_matrices.SuiteSparseMatrix(L_matrix)
+    if fixedVars is not None:
+        L_sparse.rowColRemoval(fixedVars)
+    L_sparse.symmetry_mode = L_sparse.symmetry_mode.UPPER_TRIANGLE
+
+    Linv = sparse_matrices.CholeskyFactorizer()
+    Linv.factorize(L_sparse)
+    return Linv
 
 
 def getParamDispGrad(m, step, param):
@@ -130,6 +200,7 @@ def paramNewtonstepExtrapolation(m, step, param, alpha, LFactorizer,
     step:         a newton step
     param:        MeshFEM parameterization object
     alpha:        extraploation scaling factor
+    method:      'Lagrangian', 'Eulerian', 'Linear'
     LFactorizer:  Cholesky Factorizer
     '''
 
@@ -145,5 +216,5 @@ def paramNewtonstepExtrapolation(m, step, param, alpha, LFactorizer,
     # Reconstruct UV Solving Possion equation
     uv_new = getUVnewSolvePoission(m, F_extra, LFactorizer, fixedVind=fixedVind, fixedUV=fixedUV)
     
-    return uv_new, F_extra, d_grad
+    return uv_new
 
