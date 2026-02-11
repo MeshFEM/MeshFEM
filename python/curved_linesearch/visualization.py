@@ -28,12 +28,10 @@ def plot_trajectory(vertex_positions, color='orange', alpha=1.0, zorder=None, lw
     num_frames, num_vertices, dimension = vertex_positions.shape
     for i in range(num_vertices):
         plt.plot(*vertex_positions[:, i, :].T, c=color, alpha=alpha, zorder=zorder, lw=lw)
-<<<<<<< HEAD
         
 def plot_element_labels(m, uv):
     for ei, pos in enumerate(uv[m.elements()].mean(axis=1)):
         plt.text(*pos, str(ei))
-=======
 
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 import newton_flow_utils as nfu
@@ -172,4 +170,3 @@ def writeVideo(path, num_frames, plot_frame):
         vw.writeFrame(plt.gcf())
         plt.close()
   
->>>>>>> origin
