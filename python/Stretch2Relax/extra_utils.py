@@ -19,6 +19,7 @@ import differential_operators, sparse_matrices
 
 import param_utils, sim_utils
 
+
 def getColorStr(method):
     color_dict = {}
     color_dict['Eulerian'] = 'tab:blue'
@@ -39,19 +40,9 @@ def getParamProb(m, uv_init, FIX_VARS=True):
     objectives = [param]
     prob = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, objectives)
     
-    import flip_avoiding_step_length
-    prob.initialFeasibleStepLengthComputer = flip_avoiding_step_length.FlipAvoidingStepLength(m.elements())
-    prob.initialFeasibleStepLengthComputer.backoffFactor = 0.8
-    
-    FIX_VARS = True
     if FIX_VARS:
         fv = sim_utils.getBBoxVars(m, sim_utils.BBoxFace.MIN_X, dimension=2)
         prob.setFixedVars(fv)
-    else:
-        param.elementHessianShift = 1e-6
-        
-    prob.useRelativeHessianShift = True
-    param.useXBasedProjection = False
     
     return param, prob
 
@@ -217,4 +208,7 @@ def paramNewtonstepExtrapolation(m, step, param, alpha, LFactorizer,
     uv_new = getUVnewSolvePoission(m, F_extra, LFactorizer, fixedVind=fixedVind, fixedUV=fixedUV)
     
     return uv_new
+
+
+    
 
