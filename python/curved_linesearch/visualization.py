@@ -150,10 +150,14 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     plt.sca(axs[0])
     for c, t in zip(colors, trajectories):
         plot_trajectory(t, color=c)
-   
+
     plt.text(0.01, 0.01, f"Step {frame} (⍺={0.02 * frame:0.3})", transform=axs[0].transAxes, ha="left", va="bottom")
-    plt.xlim(-1, 2.25)
-    plt.ylim(-1.84, 1.5)  
+
+    bbox = np.array([fv.reshape(-1, 2).min(axis=0), fv.reshape(-1, 2).max(axis=0)])
+    bb_c = bbox.mean(axis=0)
+    bbox_expanded = bb_c + 1.10 * (bbox - bb_c[None, :])
+    plt.xlim(*bbox_expanded[:, 0])
+    plt.ylim(*bbox_expanded[:, 1])
 
 import video_writer
 def writeVideo(path, num_frames, plot_frame):
