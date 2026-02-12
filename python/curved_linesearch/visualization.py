@@ -21,7 +21,6 @@ def plot_vector_field(V, d, ax=None, mesh_lw=0.6, mesh_color="k", quiver_scale=N
         V[:, 0], V[:, 1], d[:, 0], d[:, 1],
         np.linalg.norm(d, axis=1),
         cmap=cmap, angles="xy", scale_units="xy", scale=quiver_scale, width=quiver_width, zorder=2)
-
     return ax
 
 def plot_trajectory(vertex_positions, color='orange', alpha=1.0, zorder=None, lw=None):
@@ -71,9 +70,20 @@ def line_search_energy_plot(prob, alphas, trajectories, labels, truncate=False):
     
     return energies
 
+def detect_corners(V, F, turning_angle_threshold = 0.5):
+    """
+    Return a boolean indicator array indicating whether a vertex is a corner or not.
+    Corners are boundary vertices with significant geodesic curvature.
+    """
+    import igl
+    incidentAngle = np.zeros(len(V))
+    np.add.at(incidentAngle, F, igl.internal_angles(V, F))
+    return np.logical_and(np.abs(incidentAngle - 2 * np.pi) > 0.01, np.abs(incidentAngle - np.pi) > turning_angle_threshold)
+
+
 def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
                max_degree = 5, min_degree = 1, degree_list = None, eval_trajectory=nfu.eval_trajectory_taylor,
-               extrapolation_method_list = None, truncate = False):
+               extrapolation_method_list = None, truncate = False, corners_only = False):
     """
     Visualize the Newton step extrapolations starting from step `frame` within an underlying "ground truth" sequence of `flow_uvs`
     (computed by nfu.ground_truth_flow).
@@ -82,6 +92,10 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     For full control, the user can pass `extrapolation_method_list`, which contains a sequence of (deg, eval_trajectory, label) triplets.
     Alternatively, a single extrapolation method `eval_trajectory` can be run on a sequence of different degrees specified
     either as an interval [min_degree, max_degree] or an explicit list `degree_list` (the later of which takes precedence if passed).
+
+    If `truncate = True`, then trajectories are truncated at the minimum-energy value.
+
+    If `corners_only = True`, then trajectories are only drawn for vertices detected to be corners of the mesh.
     """
     opt, fv = optimizer, flow_uvs
     prob = optimizer.get_problem()
@@ -99,7 +113,11 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     plt.sca(axs[0])
     plot_mesh(fv[0].reshape(-1,2), elements, zorder=-1, face_color='white', ax=axs[0])
     plot_mesh(fv[frame].reshape(-1,2), elements, ax=axs[0])
-    plot_trajectory(fv, color='gray', alpha=0.5) # ground-truth flow trajectory
+    trajectory_slice = slice(None)
+    if corners_only:
+        trajectory_slice = detect_corners(fv[-1], elements)
+
+    plot_trajectory(fv[:, trajectory_slice, :], color='gray', alpha=0.5) # ground-truth flow trajectory
     # plot_vector_field(fv[frame], ds[frame].reshape(-1, 2), ax=plt.gca(), quiver_scale=1)
     
     if extrapolation_method_list is not None:
@@ -149,7 +167,7 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     # Visualize the trajectories (potentially after truncation)
     plt.sca(axs[0])
     for c, t in zip(colors, trajectories):
-        plot_trajectory(t, color=c)
+        plot_trajectory(t[:, trajectory_slice, :], color=c)
 
     plt.text(0.01, 0.01, f"Step {frame} (⍺={0.02 * frame:0.3})", transform=axs[0].transAxes, ha="left", va="bottom")
 
