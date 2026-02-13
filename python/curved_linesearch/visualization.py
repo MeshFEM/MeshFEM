@@ -7,7 +7,7 @@ def get_ax(ax=None):
     ax.set_axis_off()
     return ax
 
-def plot_mesh(V, F, face_color=[0.9, 0.9, 0.9], edge_color='k', lw=0.25, alpha=1.0, zorder=0, ax=None):
+def plot_mesh(V, F, face_color=[0.9, 0.9, 0.9], edge_color='b', lw=0.05, alpha=1.0, zorder=0, ax=None):
     pc = matplotlib.collections.PolyCollection(
         V[F, 0:2], facecolors=face_color, edgecolors=edge_color, lw=lw, alpha=alpha, zorder=zorder)
     ax = get_ax(ax)
@@ -15,7 +15,7 @@ def plot_mesh(V, F, face_color=[0.9, 0.9, 0.9], edge_color='k', lw=0.25, alpha=1
     ax.autoscale_view()
     return ax
 
-def plot_vector_field(V, d, ax=None, mesh_lw=0.6, mesh_color="k", quiver_scale=None, quiver_width=0.0035, cmap="turbo"):
+def plot_vector_field(V, d, ax=None, mesh_lw=0.3, mesh_color="k", quiver_scale=None, quiver_width=0.0035, cmap="turbo"):
     ax = get_ax(ax)
     q = ax.quiver(
         V[:, 0], V[:, 1], d[:, 0], d[:, 1],
@@ -178,7 +178,7 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     plt.ylim(*bbox_expanded[:, 1])
 
 import video_writer
-def writeVideo(path, num_frames, plot_frame):
+def writeVideo(path, num_frames, plot_frame, skipFrame=1):
     from ipywidgets import IntProgress
     from IPython.display import display
     progress = IntProgress(min=0, max=num_frames)
@@ -186,7 +186,7 @@ def writeVideo(path, num_frames, plot_frame):
     plot_frame(0)
     vw = video_writer.PlotVideoWriter(path, plt.gcf(), dpi=150, quality='-crf 10', tight_layout=False)
     plt.close()
-    for frame in range(0, num_frames):
+    for frame in range(0, num_frames, skipFrame):
         progress.value = frame
         plot_frame(frame)
         vw.writeFrame(plt.gcf())

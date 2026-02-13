@@ -1,12 +1,12 @@
 import numpy as np
 
-def ground_truth_flow(optimizer, step_size, x_init = None, verbose=False):
+def ground_truth_flow(optimizer, step_size, grad_tol=1e-6, x_init = None, verbose=False):
     prob = optimizer.get_problem()
     flow_vertices = []
     if x_init is None: x_init = prob.getVars()
     else: prob.setVars(x_init)
     flow_vertices.append(x_init)
-    while np.linalg.norm(prob.gradient()) > 1e-6:
+    while np.linalg.norm(prob.gradient()) > grad_tol:
         d = optimizer.newton_step()
         flow_vertices.append(prob.getVars())
         curr_energy = prob.energy()
