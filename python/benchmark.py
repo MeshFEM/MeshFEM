@@ -2,15 +2,23 @@ from _benchmark import *
 import functools
 import time
 
+class ScopedTimer:
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        start_timer_section(self.name)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        stop_timer_section(self.name)
+
 def benchmarkit(fn):
     # Ensure that the name and docstring of 'fn' is preserved in 'wrapper'
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
       # the wrapper passes all parameters to the function being decorated
-      start_timer_section(fn.__name__)
-      res = fn(*args, **kwargs)
-      stop_timer_section(fn.__name__)
-      return res
+      with ScopedTimer(fn.__name__):
+        return fn(*args, **kwargs)
     return wrapper
 
 def benchmarkit_customname(name):
@@ -19,10 +27,8 @@ def benchmarkit_customname(name):
       @functools.wraps(fn)
       def wrapper(*args, **kwargs):
         # the wrapper passes all parameters to the function being decorated
-        start_timer_section(name)
-        res = fn(*args, **kwargs)
-        stop_timer_section(name)
-        return res
+        with ScopedTimer(name):
+          return fn(*args, **kwargs)
       return wrapper
   return named_benchmarkit
 
