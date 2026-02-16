@@ -275,9 +275,9 @@ def parse_custom_csv(folder_path, csv_filename):
 class HessianStats(NamedTuple):
     import numpy as np
     from numpy.typing import NDArray
-    projected:  NDArray[np.int_]
-    shifted:    NDArray[np.float_]
-    indefinite: NDArray[np.int_]
+    projected:  NDArray[np.int32]
+    shifted:    NDArray[np.float64]
+    indefinite: NDArray[np.int32]
 
 def runSYDParam(m, ProjectionStrategy, EigenvalueModification, 
                 ProjectionType, AutodiffSetting, SteplengthComputer,

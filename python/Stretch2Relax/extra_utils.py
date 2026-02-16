@@ -80,20 +80,21 @@ def getLaplacianFactorizer(m, fixedVars=None):
     Linv.factorize(L_sparse)
     return Linv
 
-
+@benchmark.benchmarkit
 def getParamDispGrad(m, step, param):
     """
     For Parameterization problem, the displacement gradient field should be (EleNum, 2, 2)
     """
-    
     # G matrix using igl's function
-    G = igl.grad(m.vertices(), m.elements())
-    Gd = G @ step.reshape(-1, 2)
+    with benchmark.ScopedTimer('grad'):
+        G = igl.grad(m.vertices(), m.elements())
+        Gd = G @ step.reshape(-1, 2)
     B_arr = np.array([param.getB(ei) for ei in range(m.numElements())])
     d_grad = Gd.reshape(m.numElements(), 3, 2, order='F').swapaxes(-1, -2) @ B_arr
     
     return d_grad
 
+@benchmark.benchmarkit
 def getUVnewSolvePoission(m, F_extra, LFactorizer, fixedVind=None, fixedUV=None):
     """
     F_extra: extrapolated version of deformation gradient field
@@ -122,6 +123,7 @@ def getUVnewSolvePoission(m, F_extra, LFactorizer, fixedVind=None, fixedUV=None)
     return uv_new
 
 
+@benchmark.benchmarkit
 def extrapolateDeformGrad(F, alpha, d_grad, method='Eulerian'):
     """
     Extrapolate the deformation gradient 
@@ -181,6 +183,7 @@ def extrapolateDeformGrad(F, alpha, d_grad, method='Eulerian'):
     return F_extra
     
 
+@benchmark.benchmarkit
 def paramNewtonstepExtrapolation(m, step, param, alpha, LFactorizer,
                                  method = 'Eulerian',
                                  fixedVind=None, fixedUV=None):
@@ -195,14 +198,17 @@ def paramNewtonstepExtrapolation(m, step, param, alpha, LFactorizer,
     LFactorizer:  Cholesky Factorizer
     '''
 
-    B_arr = np.array([param.getB(ei) for ei in range(m.numElements())])
     d_grad = getParamDispGrad(m, step, param)
-    # current deformation gradient F and its polar decompositions
-    F = np.array([param.elementJacobian(ei) for ei in range(m.numElements())])
+
+    with benchmark.ScopedTimer('jacobian'):
+        B_arr = np.array([param.getB(ei) for ei in range(param.numElements())])
+        F = np.array([param.elementJacobian(ei) for ei in range(param.numElements())])
     
     # Extrapolate deformation gradient
     F_extra = extrapolateDeformGrad(F, alpha, d_grad, method)
-    F_extra = F_extra @ np.transpose(B_arr, (0, 2, 1))
+
+    with benchmark.ScopedTimer('transform'):
+        F_extra = F_extra @ np.transpose(B_arr, (0, 2, 1))
     
     # Reconstruct UV Solving Possion equation
     uv_new = getUVnewSolvePoission(m, F_extra, LFactorizer, fixedVind=fixedVind, fixedUV=fixedUV)
