@@ -96,7 +96,7 @@ struct HyperelasticLagrange {
         return gradient(psi_template, ElasticFGetter(deformedPositions), edata, weight);
     }
 
-    template<bool SetLowerTri = false, class FGetter, class EData>
+    template<bool SetLowerTri = false, bool Verbose = false, class FGetter, class EData>
     static Hessian hessian(const Psi &psi_template, const FGetter &getF, const EData &edata, bool disableProjection, double weight = 1.0) {
         Psi psi(psi_template, UninitializedDeformationTag());
         Hessian result;
@@ -109,6 +109,12 @@ struct HyperelasticLagrange {
             psi.setDeformationGradient(getF(gphis), disableProjection ? EvalLevel::HessianWithDisabledProjection
                                                                       : EvalLevel::Hessian);
             auto d2psi = evaluate_d2energy_dF2(psi); // Note: asymmetric, flattened into (N K) x (N K) matrix using a column-major ordering.
+            // if constexpr (Verbose) {
+            //     auto F = getF(gphis);
+            //     std::cout << "d2psi:\n" << d2psi << std::endl << extractTaylorCoefficient(d2psi, 1) << std::endl;
+            //     std::cout << "F:\n" << F << std::endl << extractTaylorCoefficient(F, 1) << std::endl;
+            //     psi.template setDeformationGradient<true>(getF(gphis), EvalLevel::Hessian);
+            // }
 
             for (size_t lni_b = 0; lni_b < NumNodesPerElement; ++lni_b) {
                 // Apply d2psi to (e_c \otimes gphi_b) for components c in 0..N, obtaining N results of size N x K
@@ -134,9 +140,9 @@ struct HyperelasticLagrange {
         return result;
     }
 
-    template<bool SetLowerTri = false, class EData>
+    template<bool SetLowerTri = false, bool Verbose = false, class EData>
     static Hessian hessian(const Psi &psi_template, const NodePositions &deformedPositions, const EData &edata, bool disableProjection, double weight = 1.0) {
-        return hessian<SetLowerTri>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection, weight);
+        return hessian<SetLowerTri, Verbose>(psi_template, ElasticFGetter(deformedPositions), edata, disableProjection, weight);
     }
 
     template<class EData, class FGetter, class GradYGetter>

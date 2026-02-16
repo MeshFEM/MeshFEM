@@ -69,6 +69,8 @@ struct SolidElement : public ElementBase<SolidElement<Deg, Psi, EData>> {
     Gradient gradient(Real weight,                      const LocalVars &x) const { const auto &m = Base::material(); return HLE::gradient(m.psi, x, m_edata, weight); }
     Hessian   hessian(Real weight, bool projectionMask, const LocalVars &x) const { const auto &m = Base::material(); return HLE:: hessian(m.psi, x, m_edata, /* projectionDisabled  = */ !projectionMask, weight); }
 
+    typename HLE::MNKd deformationGradient(const LocalVars &x, const EvalPt<K> &bc) const { return typename HLE::ElasticFGetter(x)(m_edata.gradPhis(bc)); }
+
 private:
     EData m_edata;
 };

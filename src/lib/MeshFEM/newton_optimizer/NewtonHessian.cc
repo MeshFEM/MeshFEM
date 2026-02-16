@@ -28,8 +28,9 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
     bool needsUpdate = (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID);
     if (!needsUpdate) {
         // Even if the sparsity pattern ID is the same, the fixed variables might have changed.
-        m_setFixedVars(m_problem->fixedVars()); // Can't happ
+        m_setFixedVars(m_problem->fixedVars());
         const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !s.fixesSameVarsAsSortedUnique(sparseFixedVars());
+
         needsUpdate |= fixedVarsChanged;
     }
 

@@ -2,7 +2,7 @@
 // SymmetricDirichlet.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  SymmetricDirichlet(SD) energy for 3D triangular mesh parameterization 
+//  SymmetricDirichlet(SD) energy for 3D triangular mesh parameterization
 //  D = (1/2)*(J_f : J_f + J_f^(-1) : J_f^(-1))
 //  (from (x,y,z) --> (u,v)) --> original case. But here we generalize to various mapping dimensions
 */
@@ -32,13 +32,13 @@ struct SymmetricDirichlet {
     using VN2_T     = Eigen::Matrix<_Real, N * N, 1>;
     using MN2_T     = Eigen::Matrix<_Real, N * N, N * N>;
 
-    SymmetricDirichlet(){
-        setDeformationGradient(Matrix::Identity());
-    }
+    SymmetricDirichlet() { setDeformationGradient(Matrix::Identity()); }
 
-    SymmetricDirichlet(const SymmetricDirichlet &other, UninitializedDeformationTag &&)
-        : useAbsProjection(other.useAbsProjection) { }
+    template<typename Real2>
+    SymmetricDirichlet(const SymmetricDirichlet<Real2, _Dim> &other, UninitializedDeformationTag &&)
+        : useAbsProjection(other.useAbsProjection), smoothingEpsilon(other.smoothingEpsilon) { }
 
+    // template<bool Verbose = false>
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
         m_F = F;
         m_Finv = F.inverse();
@@ -97,7 +97,7 @@ struct SymmetricDirichlet {
 
         VN2_T T;
         MMap(T.data()) = U.col(1)*V.col(0).transpose() - U.col(0)*V.col(1).transpose();
-        
+
         VN2_T L;
         MMap(L.data()) = U.col(0)*V.col(1).transpose() + U.col(1)*V.col(0).transpose();
 
@@ -118,13 +118,31 @@ struct SymmetricDirichlet {
         Real I3Sq = I3*I3;
         Real I3Cu = I3Sq*I3;
 
+        // Real lambda_4 = I3Cu + I3 - I2;
         Real lambda_4 = 1.0 + (1.0/I3Sq) - (I2/I3Cu);
-        Real lambda_4_proj = std::max(lambda_4, Real(0.0));
+
+        Real lambda_4_proj;
+        if (usingSmoothProjection()) {
+            // We use a smooth approximation to the max operation to avoid
+            // discontinuities in higher-order AD derivatives. This adds a small
+            // amount of additional stiffness to the "Twist" mode and clamps to a
+            // slightly positive value that tends to zero as lambda_4 -> -Inf.
+            // Specifically,
+            // when `lambda_4 == 0`, `lambda_4_proj = sqrt(smooth_max_eps_sq) / 2`, and
+            // when `lambda_4 << 0`, `lambda_4_proj ~ smooth_max_eps_sq / (4 * abs(lambda_4))`.
+            double offset = 0; // smoothingEpsilon;
+            lambda_4 += offset;
+            lambda_4_proj = (0.5 * (lambda_4 + sqrt(lambda_4 * lambda_4 + smoothingEpsilon * smoothingEpsilon)));
+            lambda_4_proj -= offset;
+        }
+        else lambda_4_proj = std::max(lambda_4, Real(0.0));
+
+        // Real proj_dist = (lambda_4_proj - lambda_4) / I3Cu;
         Real proj_dist = lambda_4_proj - lambda_4;
         if (useAbsProjection)
             proj_dist *= 2.0; // adding twice the projection distance gets to the absolute value
 
-        if (proj_dist > 0.0) {
+        if (proj_dist != 0.0) {
             VN2_T T_vec;
             // The twist eigenmatrix can be rewritten in terms of the polar
             // decomposition `F = R S` as `R [0 -1; 1 0]`.
@@ -133,6 +151,22 @@ struct SymmetricDirichlet {
             auto R = fast_decompositions::closest_rotation(m_F);
             MMap(T_vec.data()) << R.col(1), -R.col(0);
             H += (0.5 * proj_dist) * T_vec * T_vec.transpose();
+
+            // if constexpr (Verbose) {
+            //     std::cout << "lambda_4: " << lambda_4 << "\t" << lambda_4.c[1] << std::endl;
+            //     std::cout << "lambda_4_proj: " << lambda_4_proj << "\t" << lambda_4_proj.c[1] << std::endl;
+            //     std::cout << "smoothingEpsilon: " << smoothingEpsilon << std::endl;
+            //     std::cout << "proj_dist: " << proj_dist << "\t" << proj_dist.c[1] << std::endl;
+            //     std::cout << "R:\n" << R << std::endl << extractTaylorCoefficient(R, 1) << std::endl;
+            // }
+        }
+        else {
+            // if constexpr (Verbose) {
+            //     std::cout << "lambda_4: " << lambda_4 << "\t" << lambda_4.c[1] << std::endl;
+            //     std::cout << "lambda_4_proj: " << lambda_4_proj << "\t" << lambda_4_proj.c[1] << std::endl;
+            //     std::cout << "smoothingEpsilon: " << smoothingEpsilon << std::endl;
+            //     std::cout << "proj_dist: " << proj_dist << "\t" << proj_dist.c[1] << std::endl;
+            // }
         }
 #endif
 
@@ -168,10 +202,14 @@ struct SymmetricDirichlet {
         throw std::runtime_error("Unimplemented.");
     }
 
+    bool usingSmoothProjection() const { return smoothingEpsilon > 0; }
+
     using Hessian = Eigen::Matrix<Real, N * N, N * N>;
     const Hessian &d2energy() const { return m_d2psi; }
 
     bool useAbsProjection = false;
+    double smoothingEpsilon = 0; // set this to a small positive value to enable
+                                 // the smooth version of the eigenvalue clamping.
 
 private:
     Matrix m_F, m_Finv;

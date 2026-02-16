@@ -41,6 +41,22 @@ struct ElementSpecificMEBindings<HingeMeshEnergy<HingeEnergy>> {
     }
 };
 
+template<size_t Deg, class Psi>
+struct ElementSpecificMEBindings<SolidMeshEnergy<Deg, Psi>> {
+    using ME = SolidMeshEnergy<Deg, Psi>;
+    using SE = typename ME::Element;
+    template<class PyME>
+    static void bind(PyME &pyME) {
+        pyME.def("elementDeformationGradient", [](const ME &me, size_t ei) {
+            auto x = me.extractLocalVars(ei);
+            EvalPt<SE::K> q;
+            q.fill(1.0 / (SE::K + 1)); // sample at element center
+            return me.elements[ei].deformationGradient(x, q);
+        }, py::arg("ei"), "Get the (average) deformation gradient over element ei.")
+        ;
+    }
+};
+
 // The MeshEnergy material class creates its own wrappers around, e.g.,
 // volumetric elastic energy density objects. We need to convert
 // from this underlying `RawMaterial` type to the `Material` type
