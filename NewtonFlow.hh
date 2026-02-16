@@ -22,6 +22,9 @@
 #include "3rdparty/TaylorAutodiff/TaylorAutodiffStaticSize.hh"
 #include <MeshFEM/Elements/SolidElement.hh>
 
+#define REMOVE_RIGID_TRANSLATION 0
+#define REMOVE_RIGID_ROTATION 0
+
 template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
 struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> {
     using Psi = Psi_<double, Dim>;
@@ -56,6 +59,8 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(), [&](size_t ei) {
             const auto &edata = (*Base::mesh().element(ei));
 
+            Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
+
             if constexpr (!ProjectHessian) {
                 // When the Hessian is exact, we can simply build a
                 // `Degree`-order expansion of the gradient to reconstruct the
@@ -65,7 +70,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
                 for (int j = 1; j < Degree; ++j)
                     setTaylorCoefficient(x_e, j, Base::extractLocalVars(ei, result[j - 1], vs));
                 zeroTaylorCoefficient(x_e, Degree);
-                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(Psi_AD{}, x_e, edata, -1.0);
+                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(psi_ad, x_e, edata, -1.0);
                 return (extractTaylorCoefficient(neg_g_e_ad, Degree - 1) + Degree * extractTaylorCoefficient(neg_g_e_ad, Degree)).eval();
             }
             else {
@@ -90,13 +95,27 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
                 // TODO: avoid by using mixed-degree types.
                 zeroTaylorCoefficient(x_e_prime, Degree - 1);
 
+                auto H_e_ad = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
+                // Note: any constant Hessian shift does not affect coefficient `Degree - 1` 
+                // if (Base::elementHessianShift != 0.0)
+                //     H_e_ad.diagonal().array() += Base::elementHessianShift;
+
                 // TODO: Implement Hessian matvec for efficiency?
                 VecN_T<TAD, NumVarsPerElement> neg_g_e_ad
-                            = HLE_AD::gradient(Psi_AD{}, x_e, edata, -1.0)
-                            + HLE_AD:: template hessian</* SetLowerTri = */ true>(Psi_AD{}, x_e, edata, /* disableProjection = */ false, -1.0) * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
+                            = HLE_AD::gradient(psi_ad, x_e, edata, -1.0)
+                            - H_e_ad * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
                 // NaN debugging:
                 // if (Degree == 2) {
-                //     auto H_e = HLE_AD:: template hessian</* SetLowerTri = */ true>(Psi_AD{}, x_e, edata, /* disableProjection = */ false, -1.0);
+                //     auto H_e = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
+                //     std::cout << "Element " << ei << " hessian:\n" << extractTaylorCoefficient(H_e, 0) << std::endl << extractTaylorCoefficient(H_e, 1) << std::endl;
+                //     std::cout << "Element " << ei << " x_e:\n" << extractTaylorCoefficient(x_e, 0) << std::endl << extractTaylorCoefficient(x_e, 1) << std::endl;
+                //     std::cout << "Element " << ei << " x_e_prime:\n" << extractTaylorCoefficient(x_e_prime, 0) << std::endl << extractTaylorCoefficient(x_e_prime, 1) << std::endl;
+                //     std::cout << "Element " << ei << " neg_g_e_ad:\n" << extractTaylorCoefficient(neg_g_e_ad, Degree - 1) << std::endl;
+                // }
+
+                // if (Degree == 2 && ei == 8782) {
+                //     std::cout.precision(17);
+                //     auto H_e = HLE_AD:: template hessian</* SetLowerTri = */ true, /* Verbose = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
                 //     std::cout << "Element " << ei << " hessian:\n" << extractTaylorCoefficient(H_e, 0) << std::endl << extractTaylorCoefficient(H_e, 1) << std::endl;
                 //     std::cout << "Element " << ei << " x_e:\n" << extractTaylorCoefficient(x_e, 0) << std::endl << extractTaylorCoefficient(x_e, 1) << std::endl;
                 //     std::cout << "Element " << ei << " x_e_prime:\n" << extractTaylorCoefficient(x_e_prime, 0) << std::endl << extractTaylorCoefficient(x_e_prime, 1) << std::endl;
@@ -108,9 +127,17 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         BENCHMARK_STOP_TIMER_SECTION("order " + std::to_string(Degree));
         BENCHMARK_STOP_TIMER_SECTION("Assemble RHS");
 
+        // // TODO: search for potential discontinuities. Are we conditionally projecting elements?
+        // { // write `neg_delta_g` file for debugging discontinuities.
+        //     std::ofstream out("neg_delta_g_" + std::to_string(Degree) + ".txt");
+        //     out.precision(17);
+        //     out << neg_delta_g.transpose() << std::endl;
+        // }
+
         result.emplace_back();
-        // removeRigidComponent(neg_delta_g);
+        removeRigidComponent(neg_delta_g);
         Hf.solve(neg_delta_g, result.back());
+        removeRigidComponent(result.back());
 
         // We just computed coefficient `Degree - 1` of  x'  which is
         // coefficient `Degree` of x scaled by `Degree`...
@@ -150,6 +177,8 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(), [&](size_t ei) {
             const auto &edata = (*Base::mesh().element(ei));
 
+            Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
+
             if constexpr (!ProjectHessian) {
                 // When the Hessian is exact, we can simply build a
                 // `Degree`-order expansion of the gradient to reconstruct the
@@ -159,7 +188,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
                 for (int j = 1; j < Degree; ++j)
                     setTaylorCoefficient(x_e, j, Base::extractLocalVars(ei, x[j - 1], vs));
                 zeroTaylorCoefficient(x_e, Degree);
-                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(Psi_AD{}, x_e, edata, -1.0);
+                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(psi_ad, x_e, edata, -1.0);
                 VecN_T<TAD, NumVarsPerElement> lambda_neg_g_e_ad = lambda_ad * neg_g_e_ad;
                 return (extractTaylorCoefficient(lambda_neg_g_e_ad, Degree - 1) + Degree * extractTaylorCoefficient(neg_g_e_ad, Degree)).eval();
             }
@@ -182,12 +211,14 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
                     setTaylorCoefficient(x_e_prime, j - 1, d_j * j);
                 }
 
-                // TODO: avoid by using mixed-degree types.
                 zeroTaylorCoefficient(x_e_prime, Degree - 1);
-
+                auto H_e_ad = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
+                // Note: any constant Hessian shift does not affect coefficient `Degree - 1`
+                // if (Base::elementHessianShift != 0.0)
+                //     H_e_ad.diagonal().array() += Base::elementHessianShift;
                 VecN_T<TAD, NumVarsPerElement> neg_g_e_ad
-                            = lambda_ad * HLE_AD::gradient(Psi_AD{}, x_e, edata, -1.0)
-                            + HLE_AD:: template hessian</* SetLowerTri = */ true>(Psi_AD{}, x_e, edata, /* disableProjection = */ false, -1.0) * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
+                            = lambda_ad * HLE_AD::gradient(psi_ad, x_e, edata, -1.0)
+                            - H_e_ad * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
                 return extractTaylorCoefficient(neg_g_e_ad, Degree - 1);
             }
         }, [this](size_t ei) { return Base::stencils[ei].blockVars; });
@@ -195,7 +226,9 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         BENCHMARK_STOP_TIMER_SECTION("Assemble RHS");
 
         VXd x_tilde;
+        removeRigidComponent(neg_delta_g);
         Hf.solve(neg_delta_g, x_tilde);
+        removeRigidComponent(x_tilde);
 
         // Enforce arclength normalization condition:
         if (Degree == 1) {
@@ -214,7 +247,33 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         x.push_back(x_tilde / Degree);
     }
 
-    static constexpr int MaxDegree = 16;
+    // Remove the rigid translation/rotation component of a gradient-like vector.
+    void removeRigidComponent(VXd &g) const {
+#if REMOVE_RIGID_TRANSLATION
+        int nv = g.size() / 2;
+
+        // Remove rigid translation.
+        auto rhs = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(g.data(), nv, 2);
+        auto rigidTrans = rhs.colwise().mean();
+        // std::cout << "rigidTrans: " << rigidTrans << std::endl;
+        rhs.rowwise() -= rigidTrans;
+#endif
+        // std::cout << "new rigidTrans: " << rhs.colwise().mean() << std::endl;
+
+#if REMOVE_RIGID_ROTATION
+        // Remove rigid rotation.
+        VXd x = getNVars().getVars();
+        auto pos = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(x.data(), nv, 2);
+
+        VXd rigidRotMode(x.size());
+        for (int i = 0; i < nv; ++i) {
+            rigidRotMode.segment<2>(2 * i) << -pos(i, 1), pos(i, 0);
+        }
+        g -= rigidRotMode * (rigidRotMode.dot(g) / rigidRotMode.squaredNorm());
+#endif
+    }
+
+    static constexpr int MaxDegree = 20;
     std::vector<VXd> computeTaylorCoefficients(const NewtonHessianFactorization &Hf, int degree, bool projectHessian = false) const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonFlow.computeTaylorCoefficients");
 
@@ -236,6 +295,15 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         return x;
     }
 
+    void setProjectionSmoothingEpsilon(double smoothingEpsilon) {
+        Base::materials.foreach([smoothingEpsilon](typename Base::Material &mat) {
+            mat.psi.smoothingEpsilon = smoothingEpsilon;
+        });
+    }
+
+    double getProjectionSmoothingEpsilon() const {
+        return Base::materials[0].psi.smoothingEpsilon;
+    }
 };
 
 #endif /* end of include guard: NEWTONFLOW_HH */

@@ -7,7 +7,7 @@ def get_ax(ax=None):
     ax.set_axis_off()
     return ax
 
-def plot_mesh(V, F, face_color=[0.9, 0.9, 0.9], edge_color='b', lw=0.05, alpha=1.0, zorder=0, ax=None):
+def plot_mesh(V, F, face_color=[0.9, 0.9, 0.9], edge_color=[0.5, 0.5, 0.5], lw=0.05, alpha=1.0, zorder=0, ax=None):
     pc = matplotlib.collections.PolyCollection(
         V[F, 0:2], facecolors=face_color, edgecolors=edge_color, lw=lw, alpha=alpha, zorder=zorder)
     ax = get_ax(ax)
@@ -70,6 +70,20 @@ def line_search_energy_plot(prob, alphas, trajectories, labels, truncate=False):
     
     return energies
 
+def trajectory_gnorms(prob, trajectory):
+    gnorms = []
+    for uv in trajectory:
+        prob.setVars(uv.ravel())
+        gnorms.append(np.linalg.norm(prob.gradient()))
+    return np.array(gnorms)
+
+def line_search_gnorm_plot(prob, alphas, trajectories, labels = None, truncate=False):
+    for ti in range(len(trajectories)):
+        plt.semilogy(alphas, trajectory_gnorms(prob, trajectories[ti]), label=labels[ti] if labels is not None else None)
+
+    plt.xlabel('Line Search Parameter ⍺')
+    plt.ylabel('Gradient Norm')
+
 def detect_corners(V, F, turning_angle_threshold = 0.5):
     """
     Return a boolean indicator array indicating whether a vertex is a corner or not.
@@ -111,13 +125,13 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     axs = [ax_left, ax_right]
     
     plt.sca(axs[0])
-    plot_mesh(fv[0].reshape(-1,2), elements, zorder=-1, face_color='white', ax=axs[0])
+    # plot_mesh(fv[0].reshape(-1,2), elements, zorder=-1, face_color='white', ax=axs[0])
     plot_mesh(fv[frame].reshape(-1,2), elements, ax=axs[0])
     trajectory_slice = slice(None)
     if corners_only:
         trajectory_slice = detect_corners(fv[-1], elements)
 
-    plot_trajectory(fv[:, trajectory_slice, :], color='gray', alpha=0.5) # ground-truth flow trajectory
+    plot_trajectory(fv[frame:, trajectory_slice, :], color='gray', alpha=0.5) # ground-truth flow trajectory
     # plot_vector_field(fv[frame], ds[frame].reshape(-1, 2), ax=plt.gca(), quiver_scale=1)
     
     if extrapolation_method_list is not None:
@@ -129,8 +143,10 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
 
     # Plot each extrapolation up to the specified degree.
     prob.setVars(fv[frame].ravel())
+    opt.options.hessianProjectionController.reset()
     d = opt.newton_step()
     proj = prob.hessianWasProjected
+    # print(proj)
     prob.setVars(fv[frame].ravel())
     d_coeffs = nf.computeTaylorCoefficients(opt.hessian_factorization, max_degree, proj)
     
@@ -166,12 +182,13 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     
     # Visualize the trajectories (potentially after truncation)
     plt.sca(axs[0])
-    for c, t in zip(colors, trajectories):
-        plot_trajectory(t[:, trajectory_slice, :], color=c)
+    for i in range(len(trajectories)):
+        t = trajectories[i]
+        plot_trajectory(t[:, trajectory_slice, :], color=colors[i], zorder = len(trajectories) - i)
 
     plt.text(0.01, 0.01, f"Step {frame} (⍺={0.02 * frame:0.3})", transform=axs[0].transAxes, ha="left", va="bottom")
 
-    bbox = np.array([fv.reshape(-1, 2).min(axis=0), fv.reshape(-1, 2).max(axis=0)])
+    bbox = np.array([fv[frame:].reshape(-1, 2).min(axis=0), fv[frame:].reshape(-1, 2).max(axis=0)])
     bb_c = bbox.mean(axis=0)
     bbox_expanded = bb_c + 1.10 * (bbox - bb_c[None, :])
     plt.xlim(*bbox_expanded[:, 0])
@@ -191,4 +208,3 @@ def writeVideo(path, num_frames, plot_frame, skipFrame=1):
         plot_frame(frame)
         vw.writeFrame(plt.gcf())
         plt.close()
-  
