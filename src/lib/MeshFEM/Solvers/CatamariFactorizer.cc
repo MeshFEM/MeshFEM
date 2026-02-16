@@ -125,6 +125,7 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
 
         // `m_initRowColRemoval` has now stored the pinned **block** variable
         // indices, whereas `m_fixedVars` should store **scalar** variable indices.
+        std::sort(scalarFixedVars.begin(), scalarFixedVars.end());
         m_fixedVars.swap(scalarFixedVars);
 
         if (!reducedRowForRow_block.empty()) {

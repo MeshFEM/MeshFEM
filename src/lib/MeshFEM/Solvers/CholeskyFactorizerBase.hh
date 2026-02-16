@@ -381,7 +381,10 @@ protected:
     // This is meant to be called only once upon symbolic factorization, and
     // the resulting reduced matrix is re-used for factorization
     const SuiteSparseMatrix *m_initRowColRemoval(const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool alreadySorted = false) {
-        if (pinnedVars.empty()) return &mat;
+        if (pinnedVars.empty()) {
+            m_fixedVars.clear();
+            return &mat;
+        }
 
         m_Areduced = std::make_unique<SuiteSparseMatrix>(mat);
 
