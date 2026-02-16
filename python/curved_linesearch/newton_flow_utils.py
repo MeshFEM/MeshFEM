@@ -1,14 +1,14 @@
 import numpy as np
 
-def ground_truth_flow(optimizer, step_size, x_init = None, verbose=False):
+def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, verbose=False):
     prob = optimizer.get_problem()
     flow_vertices = []
     if x_init is None: x_init = prob.getVars()
     else: prob.setVars(x_init)
     flow_vertices.append(x_init)
-    while np.linalg.norm(prob.gradient()) > 1e-6:
+    g = prob.gradient()
+    while np.linalg.norm(g) > grad_tol:
         d = optimizer.newton_step()
-        flow_vertices.append(prob.getVars())
         curr_energy = prob.energy()
         alpha = step_size
         x = prob.getVars()
@@ -17,7 +17,9 @@ def ground_truth_flow(optimizer, step_size, x_init = None, verbose=False):
             if (prob.energy() > curr_energy):
                 alpha = 0.5 * alpha
             else: break
-        if verbose: print(len(flow_vertices) - 1, np.linalg.norm(d), prob.hessianWasProjected, alpha)
+        g = prob.gradient()
+        if verbose: print(len(flow_vertices) - 1, np.linalg.norm(g), prob.hessianWasProjected, alpha)
+        flow_vertices.append(prob.getVars())
     prob.setVars(x_init)
     return np.array([fv.reshape(-1, 2) for fv in flow_vertices])
 
@@ -45,7 +47,7 @@ def eval_trajectory_logspiral(x_0, coeffs, alphas):
         # Avoid division by zero in the fitting formulas;
         # we fall back to ordinary polynomial extrapolation
         # in these degenerate configurations.
-        mask = (np.abs(z1) * np.abs(z2) > 1e-3)
+        mask = np.logical_and(np.abs(z1) > 1e-3, np.abs(z2) > 1e-3)
         z1 = np.where(mask, z1, 1)
         z2 = np.where(mask, z2, 1)
         
@@ -110,7 +112,7 @@ def eval_trajectory_vector_pade(x_0, coeffs, alphas):
     if (degree < 2):
         return np.array([(x_0 + coeffs[0] * a).reshape(-1, 2) for a in alphas])
     an = np.vstack([x_0.ravel(), coeffs])
-    deg_q = (degree) // 2
+    deg_q = degree // 2
     deg_p = degree - deg_q
     dc, nc, f = vector_pade.hermite_pade_ls(an, deg_p, deg_q)
     return np.array([f(a).reshape(-1, 2) for a in alphas])

@@ -14,6 +14,13 @@ auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) 
     return bindMeshEnergy<NFME>(name, m, detail)
         .def("computeTaylorCoefficients", &NFME::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("projectHessian") = false)
         .def("computeTaylorCoefficientsArclen", &NFME::computeTaylorCoefficientsArclen, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("projectHessian") = false)
+        .def("elementDeformationGradient", [](const NFME &me, size_t ei) {
+            auto x = me.extractLocalVars(ei);
+            EvalPt<Dim> q;
+            q.fill(1.0 / (Dim + 1)); // sample at element center
+            return me.elements[ei].deformationGradient(x, q);
+        }, py::arg("ei"), "Get the (average) deformation gradient over element ei.")
+        .def_property("projectionSmoothingEpsilon", &NFME::getProjectionSmoothingEpsilon, &NFME::setProjectionSmoothingEpsilon)
         ;
 
 }
