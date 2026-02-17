@@ -72,12 +72,10 @@ def getStepandCurUVofToyProb(param, prob, uv_init, optIters):
 def getLaplacianFactorizer(m, fixedVars=None):
     L_matrix = differential_operators.laplacian(m, upperTriOnly=True)
     L_sparse = sparse_matrices.SuiteSparseMatrix(L_matrix)
-    if fixedVars is not None:
-        L_sparse.rowColRemoval(fixedVars)
     L_sparse.symmetry_mode = L_sparse.symmetry_mode.UPPER_TRIANGLE
 
     Linv = sparse_matrices.CholeskyFactorizer()
-    Linv.factorize(L_sparse)
+    Linv.factorize(L_sparse, fixedVars)
     return Linv
 
 @benchmark.benchmarkit
@@ -107,12 +105,8 @@ def getUVnewSolvePoission(m, F_extra, LFactorizer, fixedVind=None, fixedUV=None)
     rhs_v = poisson_gradient_integration.rhs(m, F_extra_v)
 
     # Pin One Vertex and Solve rhs
-    rhs_u_reduce = rhs_u[1:]
-    rhs_v_reduce = rhs_v[1:]
-    u_sol_reduce = LFactorizer.solve(rhs_u_reduce)
-    v_sol_reduce = LFactorizer.solve(rhs_v_reduce)
-    u_sol = np.concatenate(([0], u_sol_reduce))
-    v_sol = np.concatenate(([0], v_sol_reduce))
+    u_sol = LFactorizer.solve(rhs_u)
+    v_sol = LFactorizer.solve(rhs_v)
 
     uv_new = np.column_stack((u_sol, v_sol))
 
@@ -124,7 +118,7 @@ def getUVnewSolvePoission(m, F_extra, LFactorizer, fixedVind=None, fixedUV=None)
 
 
 @benchmark.benchmarkit
-def extrapolateDeformGrad(F, alpha, d_grad, method='Eulerian'):
+def extrapolateDeformGrad(F, alpha, d_grad, method='Eulerian', F_inv = None):
     """
     Extrapolate the deformation gradient 
     
@@ -135,29 +129,32 @@ def extrapolateDeformGrad(F, alpha, d_grad, method='Eulerian'):
     """
     
     if method == 'Eulerian':
-        ## Inverse F using Numpy's batched inverse
-        F_inv = np.linalg.inv(F)
-        DFinv = d_grad @ F_inv 
-        DFinv_T = np.transpose(DFinv, (0, 2, 1))
+        if F_inv is None: F_inv = np.linalg.inv(F)
+        with benchmark.ScopedTimer('decompose'):
+            DFinv = d_grad @ F_inv
+            DFinv_T = np.transpose(DFinv, (0, 2, 1))
 
-        R_tilde_zero = 0.5 * (DFinv - DFinv_T)
-        S_tilde_zero = 0.5 * (DFinv + DFinv_T)
+            R_tilde_zero = (0.5 * alpha) * (DFinv - DFinv_T)
+            S_tilde_zero = (0.5 * alpha) * (DFinv + DFinv_T)
 
-        I_tensor = np.broadcast_to(np.eye(2, dtype=F.dtype), F.shape).copy()
-        ## S_extra
-        S_extra = I_tensor + alpha * S_tilde_zero
-        ## R_extra
-        theta = alpha * R_tilde_zero[:, 1, 0] # bottom left entry in w
-        c = np.cos(theta)
-        s = np.sin(theta)
-        R_extra = np.empty((theta.shape[0], 2, 2), dtype=theta.dtype)
-        R_extra[:, 0, 0] = c
-        R_extra[:, 0, 1] = -s
-        R_extra[:, 1, 0] = s
-        R_extra[:, 1, 1] = c
+        with benchmark.ScopedTimer('extrap'):
+            ## S_extra
+            S_extra = S_tilde_zero
+            S_extra[:, 0, 0] += 1
+            S_extra[:, 1, 1] += 1
+            ## R_extra
+            theta = R_tilde_zero[:, 1, 0] # bottom left entry in w
+            c = np.cos(theta)
+            s = np.sin(theta)
+            R_extra = np.empty((theta.shape[0], 2, 2), dtype=theta.dtype)
+            R_extra[:, 0, 0] = c
+            R_extra[:, 0, 1] = -s
+            R_extra[:, 1, 0] = s
+            R_extra[:, 1, 1] = c
 
-        F_tilde = R_extra @ S_extra
-        F_extra = F_tilde @ F
+        with benchmark.ScopedTimer('combine'):
+            F_tilde = R_extra @ S_extra
+            F_extra = F_tilde @ F
     
     elif method == 'Lagrangian':
         import energy, tensors
@@ -215,6 +212,47 @@ def paramNewtonstepExtrapolation(m, step, param, alpha, LFactorizer,
     
     return uv_new
 
+class RotationStrainExtrapolation:
+    def __init__(self, prob, method='Eulerian'):
+        """
+        Constructor caches quantities that depend only on the input mesh
+        (remaining constant throughout optimization).
+        """
+        self.prob = prob
+        self.param = self.prob.term(0)
+        m = self.param.mesh
+        self.G = igl.grad(m.vertices(), m.elements())
+        self.B = np.array([self.param.getB(ei) for ei in range(m.numElements())])
+        self.Bt = np.transpose(self.B, (0, 2, 1))
+        self.method = method
+        self.Linv = getLaplacianFactorizer(m, fixedVars=[0])
 
-    
+    @benchmark.benchmarkit_customname('RotationStrainExtrapolation')
+    def __call__(self, x0, coeffs, alphas):
+        """
+        Evaluate extrapolation for ray `x0 + alpha coeffs[0]` at each value in `alphas`.
+        """
+        self.linesearch_begin(x0, coeffs[0])
+        return np.array([self.linesearch_eval(a) for a in alphas])
 
+    def linesearch_begin(self, x0, d):
+        """
+        Precompute and cache quantities used to extrapolate away from base point `x0`
+        along direction `d`.
+        This must be called in preparation for calls to `linesearch_eval`.
+        """
+        self.prob.setVars(x0)
+        self.F = np.array([self.param.elementJacobian(ei) for ei in range(self.param.numElements())]) 
+        self.Finv = np.linalg.inv(self.F)
+        self.c0 = x0.reshape(-1,2).mean(axis=0)
+
+        self.d_grad = (self.G @ d.reshape(-1, 2)).reshape(self.param.numElements(), 3, 2, order='F').swapaxes(-1, -2) @ self.B
+
+    def linesearch_eval(self, alpha):
+        """
+        Evaluate extrapolation for `x0 + alpha d`, where `x0` and `d`
+        have been specified by a previous call to `linesearch_begin`.
+        """
+        F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) @ self.Bt
+        uv_ex = getUVnewSolvePoission(self.param.mesh, F_ex, self.Linv)
+        return uv_ex + (self.c0 - uv_ex.mean(axis=0))

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib, matplotlib.pyplot as plt
+import MeshFEM, benchmark
 
 def get_ax(ax=None):
     if ax is None: fig, ax = plt.subplots(figsize=(7, 5), constrained_layout=True)
@@ -141,20 +142,20 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
         degree_list = range(min_degree, max_degree + 1)
     else: max_degree = max(degree_list)
 
+    benchmark.start_timer_section('extrapolate')
     # Plot each extrapolation up to the specified degree.
     prob.setVars(fv[frame].ravel())
     opt.options.hessianProjectionController.reset()
     d = opt.newton_step()
     proj = prob.hessianWasProjected
-    # print(proj)
-    prob.setVars(fv[frame].ravel())
-    d_coeffs = nf.computeTaylorCoefficients(opt.hessian_factorization, max_degree, proj)
-    
+
     if constant_speed:
         # Replace with constant-speed trajectory coefficients
-        speed = np.linalg.norm(d_coeffs[0])
-        scales = speed**(np.arange(len(d_coeffs)) + 1)
+        speed = np.linalg.norm(d)
+        scales = speed**(np.arange(max_degree) + 1)
         d_coeffs = scales[:, np.newaxis] * np.array(nf.computeTaylorCoefficientsArclen(opt.hessian_factorization, max_degree, proj))
+    else:
+        d_coeffs = nf.computeTaylorCoefficients(opt.hessian_factorization, max_degree, proj)
         
     alphas = np.linspace(0, extrapolation_dist, 100)
     trajectories, labels = [], []
@@ -164,13 +165,15 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
             labels.append(f'Deg {deg}')
     else:
         for deg, et, l in extrapolation_method_list:
-            trajectories.append(et(fv[frame].ravel(), d_coeffs[:deg], alphas))
-            labels.append(l)
+            with benchmark.ScopedTimer('Eval ' + l):
+                trajectories.append(et(fv[frame].ravel(), d_coeffs[:deg], alphas))
+                labels.append(l)
     
 
     # Plot energy along the trajectories to visualize line search behavior.
     plt.sca(axs[1])
-    line_search_energy_plot(prob, alphas, trajectories, labels, truncate=truncate)
+    with benchmark.ScopedTimer('Plot Energy'):
+        line_search_energy_plot(prob, alphas, trajectories, labels, truncate=truncate)
     plt.title(('Constant Speed' if constant_speed else 'Unnormalized') + ' Newton Flow Extrapolations')
     
     # # fixed ylim optimized for full sequence
@@ -182,9 +185,10 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     
     # Visualize the trajectories (potentially after truncation)
     plt.sca(axs[0])
-    for i in range(len(trajectories)):
-        t = trajectories[i]
-        plot_trajectory(t[:, trajectory_slice, :], color=colors[i], zorder = len(trajectories) - i)
+    with benchmark.ScopedTimer('Plot Trajectories'):
+        for i in range(len(trajectories)):
+            t = trajectories[i]
+            plot_trajectory(t[:, trajectory_slice, :], color=colors[i], zorder = len(trajectories) - i)
 
     plt.text(0.01, 0.01, f"Step {frame} (⍺={0.02 * frame:0.3})", transform=axs[0].transAxes, ha="left", va="bottom")
 
@@ -193,6 +197,8 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     bbox_expanded = bb_c + 1.10 * (bbox - bb_c[None, :])
     plt.xlim(*bbox_expanded[:, 0])
     plt.ylim(*bbox_expanded[:, 1])
+
+    benchmark.stop_timer_section('extrapolate')
 
 import video_writer
 def writeVideo(path, num_frames, plot_frame, skipFrame=1):

@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.linalg import lstsq
+import MeshFEM, benchmark
 
 def _polyval_scalar_desc(coeff_desc, t):
     """Evaluate scalar polynomial with descending-order coefficients."""
@@ -15,6 +16,7 @@ def _polyval_vector_desc(coeff_desc, t):
         y = y * t + c
     return y
 
+@benchmark.benchmarkit
 def hermite_pade_ls(
     x_coeffs: np.ndarray,
     p,
