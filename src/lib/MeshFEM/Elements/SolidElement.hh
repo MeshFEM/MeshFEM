@@ -58,7 +58,7 @@ struct SolidElement : public ElementBase<SolidElement<Deg, Psi, EData>> {
     template<class VDerived, class FDerived, class E = EData, typename = std::enable_if_t<!std::is_reference_v<E>>> // Hack to hide this when EData is a reference type that must be bound.
     SolidElement(size_t ei, const Eigen::MatrixBase<VDerived> &V, const Eigen::MatrixBase<FDerived> &F, MaterialAssignment<Material> &materials)
         : Base(ei, materials) {
-        m_edata.embed(V, F, ei);
+        embed(V, F);
     }
 
     // For future shape optimization support:
@@ -71,6 +71,19 @@ struct SolidElement : public ElementBase<SolidElement<Deg, Psi, EData>> {
 
     typename HLE::MNKd deformationGradient(const LocalVars &x, const EvalPt<K> &bc) const { return typename HLE::ElasticFGetter(x)(m_edata.gradPhis(bc)); }
 
+    template<class VDerived, class FDerived>
+    void embed(const Eigen::MatrixBase<VDerived> &V, const Eigen::MatrixBase<FDerived> &F) {
+        m_edata.embed(V, F, Base::elementIndex());
+    }
+
+    template<class VDerived>
+    void embed(const Eigen::MatrixBase<VDerived> &cornerPositions) {
+        static_assert(VDerived::RowsAtCompileTime == K + 1, "embed: cornerPositions should have K+1 rows");
+        m_edata.embed(cornerPositions);
+    }
+
+    const EData &elementData() const { return m_edata; }
+
 private:
     EData m_edata;
 };
@@ -81,5 +94,12 @@ template<size_t Deg, class Psi>
 using SolidMeshEnergy = MeshEnergy<FEMMesh<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>,
                                    NodalVars<Psi::N>,
                                    ElementStencil<Psi::N, Deg, Psi::N>, SolidElement<Deg, Psi>>;
+
+// A SolidMeshEnergy where element rest shapes can be altered by changing their embeddings
+template<size_t Deg, class Psi>
+using SolidMeshEnergyReembeddable = MeshEnergy<FEMMesh<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>,
+                                   NodalVars<Psi::N>,
+                                   ElementStencil<Psi::N, Deg, Psi::N>,
+                                   SolidElement<Deg, Psi, LinearlyEmbeddedElement<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>>>;
 
 #endif /* end of include guard: SOLIDELEMENT_HH */

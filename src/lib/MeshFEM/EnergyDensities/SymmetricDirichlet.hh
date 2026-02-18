@@ -36,7 +36,11 @@ struct SymmetricDirichlet {
 
     template<typename Real2>
     SymmetricDirichlet(const SymmetricDirichlet<Real2, _Dim> &other, UninitializedDeformationTag &&)
-        : useAbsProjection(other.useAbsProjection), smoothingEpsilon(other.smoothingEpsilon) { }
+        : useAbsProjection(other.useAbsProjection),
+          smoothingEpsilon(other.smoothingEpsilon),
+          eigenvalueClampTarget(other.eigenvalueClampTarget),
+          eigenvalueProjectionModulation(other.eigenvalueProjectionModulation)
+    { }
 
     // template<bool Verbose = false>
     void setDeformationGradient(const Matrix &F, const EvalLevel elevel = EvalLevel::Full) {
@@ -113,13 +117,7 @@ struct SymmetricDirichlet {
             lambda_4 = std::max(lambda_4, 0.0); // clamp potentially negative eigenvalue.
         H = lambda_1*D1*D1.transpose() + lambda_2*D2*D2.transpose() + 0.5*lambda_3*L*L.transpose() + 0.5*lambda_4*T*T.transpose();
 #else // Modify only the potentially negative eigencomponent (the "Twist" mode)
-        Real I2 = m_F.squaredNorm();
-        Real I3 = m_J;
-        Real I3Sq = I3*I3;
-        Real I3Cu = I3Sq*I3;
-
-        // Real lambda_4 = I3Cu + I3 - I2;
-        Real lambda_4 = 1.0 + (1.0/I3Sq) - (I2/I3Cu);
+        const Real lambda_4 = minimumEigenvalue();
 
         Real lambda_4_proj;
         if (usingSmoothProjection()) {
@@ -130,27 +128,26 @@ struct SymmetricDirichlet {
             // Specifically,
             // when `lambda_4 == 0`, `lambda_4_proj = sqrt(smooth_max_eps_sq) / 2`, and
             // when `lambda_4 << 0`, `lambda_4_proj ~ smooth_max_eps_sq / (4 * abs(lambda_4))`.
-            double offset = 0; // smoothingEpsilon;
-            lambda_4 += offset;
-            lambda_4_proj = (0.5 * (lambda_4 + sqrt(lambda_4 * lambda_4 + smoothingEpsilon * smoothingEpsilon)));
+            double offset = -eigenvalueClampTarget; // smoothingEpsilon;
+            Real l4_offset = lambda_4 + offset;
+            lambda_4_proj = (0.5 * (l4_offset + sqrt(l4_offset * l4_offset + smoothingEpsilon * smoothingEpsilon)));
             lambda_4_proj -= offset;
         }
-        else lambda_4_proj = std::max(lambda_4, Real(0.0));
+        else lambda_4_proj = std::max(lambda_4, Real(eigenvalueClampTarget));
 
-        // Real proj_dist = (lambda_4_proj - lambda_4) / I3Cu;
         Real proj_dist = lambda_4_proj - lambda_4;
         if (useAbsProjection)
             proj_dist *= 2.0; // adding twice the projection distance gets to the absolute value
 
-        if (proj_dist != 0.0) {
+        if (proj_dist > 0.0) {
             VN2_T T_vec;
             // The twist eigenmatrix can be rewritten in terms of the polar
             // decomposition `F = R S` as `R [0 -1; 1 0]`.
             // This is both more efficient and avoids numerical singularities in
             // autodiff that arise when using the standard `U` and `V` formulas.
             auto R = fast_decompositions::closest_rotation(m_F);
-            MMap(T_vec.data()) << R.col(1), -R.col(0);
-            H += (0.5 * proj_dist) * T_vec * T_vec.transpose();
+            MMap(T_vec.data()) << R.col(1), -R.col(0); // weighted by sqrt(2)
+            H += ((0.5 * eigenvalueProjectionModulation) * proj_dist) * T_vec * T_vec.transpose();
 
             // if constexpr (Verbose) {
             //     std::cout << "lambda_4: " << lambda_4 << "\t" << lambda_4.c[1] << std::endl;
@@ -202,6 +199,14 @@ struct SymmetricDirichlet {
         throw std::runtime_error("Unimplemented.");
     }
 
+    Real minimumEigenvalue() const {
+        Real I2 = m_F.squaredNorm();
+        Real I3 = m_J;
+        Real I3Sq = I3*I3;
+        Real I3Cu = I3Sq*I3;
+        return 1.0 + (1.0/I3Sq) - (I2/I3Cu);
+    }
+
     bool usingSmoothProjection() const { return smoothingEpsilon > 0; }
 
     using Hessian = Eigen::Matrix<Real, N * N, N * N>;
@@ -210,6 +215,8 @@ struct SymmetricDirichlet {
     bool useAbsProjection = false;
     double smoothingEpsilon = 0; // set this to a small positive value to enable
                                  // the smooth version of the eigenvalue clamping.
+    double eigenvalueClampTarget = 0;
+    double eigenvalueProjectionModulation = 1.0;
 
 private:
     Matrix m_F, m_Finv;
