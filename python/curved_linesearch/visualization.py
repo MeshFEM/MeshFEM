@@ -148,6 +148,7 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     opt.options.hessianProjectionController.reset()
     d = opt.newton_step()
     proj = prob.hessianWasProjected
+    # proj = False
 
     if constant_speed:
         # Replace with constant-speed trajectory coefficients
@@ -199,6 +200,7 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     plt.ylim(*bbox_expanded[:, 1])
 
     benchmark.stop_timer_section('extrapolate')
+    prob.setVars(fv[frame].ravel())
 
 import video_writer
 def writeVideo(path, num_frames, plot_frame, skipFrame=1):
