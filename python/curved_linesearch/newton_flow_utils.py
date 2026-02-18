@@ -1,6 +1,6 @@
 import numpy as np
 
-def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, verbose=False):
+def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, max_iters=None, verbose=False, step_limiter = None):
     prob = optimizer.get_problem()
     flow_vertices = []
     if x_init is None: x_init = prob.getVars()
@@ -8,17 +8,21 @@ def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, verb
     flow_vertices.append(x_init)
     g = prob.gradient()
     while np.linalg.norm(g) > grad_tol:
+        it = len(flow_vertices) - 1
+        if it == max_iters: break
         d = optimizer.newton_step()
         curr_energy = prob.energy()
         alpha = step_size
         x = prob.getVars()
+        if step_limiter is not None:
+            alpha = min(alpha, step_limiter.eval(x, d))
         while True:
             prob.setVars(x + alpha * d)
             if (prob.energy() > curr_energy):
                 alpha = 0.5 * alpha
             else: break
         g = prob.gradient()
-        if verbose: print(len(flow_vertices) - 1, np.linalg.norm(g), prob.hessianWasProjected, alpha)
+        if verbose: print(it, np.linalg.norm(g), prob.hessianWasProjected, alpha)
         flow_vertices.append(prob.getVars())
     prob.setVars(x_init)
     return np.array([fv.reshape(-1, 2) for fv in flow_vertices])
@@ -26,6 +30,7 @@ def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, verb
 def eval_trajectory_taylor(x_0, coeffs, alphas):
     result = []
     degree = len(coeffs)
+    # print([np.linalg.norm(c) for c in coeffs])
     for a in alphas:
         x = x_0.copy()
         for i in range(degree):

@@ -12,6 +12,7 @@ template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
 auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) {
     using NFME = NewtonFlowMeshEnergy<Dim, FEMDeg, Psi_>;
     return bindMeshEnergy<NFME>(name, m, detail)
+        .def("setRestVertexPositions", &NFME::setRestVertexPositions, py::arg("V"))
         .def("computeTaylorCoefficients", &NFME::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("projectHessian") = false)
         .def("computeTaylorCoefficientsArclen", &NFME::computeTaylorCoefficientsArclen, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("projectHessian") = false)
         .def("elementDeformationGradient", [](const NFME &me, size_t ei) {
@@ -20,9 +21,13 @@ auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) 
             q.fill(1.0 / (Dim + 1)); // sample at element center
             return me.elements[ei].deformationGradient(x, q);
         }, py::arg("ei"), "Get the (average) deformation gradient over element ei.")
+        .def("elementHessianMinimumEigenvalues", &NFME::elementHessianMinimumEigenvalues)
         .def_property("projectionSmoothingEpsilon", &NFME::getProjectionSmoothingEpsilon, &NFME::setProjectionSmoothingEpsilon)
+        .def_property("eigenvalueClampTarget", &NFME::getEigenvalueClampTarget, &NFME::setEigenvalueClampTarget)
+        .def_property("eigenvalueProjectionModulation", &NFME::getEigenvalueProjectionModulation, &NFME::setEigenvalueProjectionModulation)
+        .def_readwrite("remove_rigid_translation", &NFME::remove_rigid_translation)
+        .def_readwrite("remove_rigid_rotation", &NFME::remove_rigid_rotation)
         ;
-
 }
 
 PYBIND11_MODULE(newton_flow, m)

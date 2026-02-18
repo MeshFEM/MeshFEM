@@ -22,14 +22,11 @@
 #include "3rdparty/TaylorAutodiff/TaylorAutodiffStaticSize.hh"
 #include <MeshFEM/Elements/SolidElement.hh>
 
-#define REMOVE_RIGID_TRANSLATION 0
-#define REMOVE_RIGID_ROTATION 0
-
 template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
-struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> {
+struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<double, Dim>> {
     using Psi = Psi_<double, Dim>;
     using SE = SolidElement<FEMDeg, Psi>;
-    using Base = SolidMeshEnergy<FEMDeg, Psi>;
+    using Base = SolidMeshEnergyReembeddable<FEMDeg, Psi>;
     using Base::Base;
 
     using VXd = Eigen::VectorXd;
@@ -57,7 +54,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
 
         const auto &vs = Base::assembler().varStructure();
         Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(), [&](size_t ei) {
-            const auto &edata = (*Base::mesh().element(ei));
+            const auto &edata = Base::elements[ei].elementData();
 
             Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
 
@@ -135,9 +132,9 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         // }
 
         result.emplace_back();
-        removeRigidComponent(neg_delta_g);
+        removeNetForceAndTorque(neg_delta_g);
         Hf.solve(neg_delta_g, result.back());
-        removeRigidComponent(result.back());
+        removeRigidDisplacement(result.back());
 
         // We just computed coefficient `Degree - 1` of  x'  which is
         // coefficient `Degree` of x scaled by `Degree`...
@@ -175,7 +172,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
 
         const auto &vs = Base::assembler().varStructure();
         Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(), [&](size_t ei) {
-            const auto &edata = (*Base::mesh().element(ei));
+            const auto &edata = Base::elements[ei].elementData();
 
             Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
 
@@ -226,9 +223,9 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         BENCHMARK_STOP_TIMER_SECTION("Assemble RHS");
 
         VXd x_tilde;
-        removeRigidComponent(neg_delta_g);
+        removeNetForceAndTorque(neg_delta_g);
         Hf.solve(neg_delta_g, x_tilde);
-        removeRigidComponent(x_tilde);
+        removeRigidDisplacement(x_tilde);
 
         // Enforce arclength normalization condition:
         if (Degree == 1) {
@@ -247,30 +244,83 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         x.push_back(x_tilde / Degree);
     }
 
-    // Remove the rigid translation/rotation component of a gradient-like vector.
-    void removeRigidComponent(VXd &g) const {
-#if REMOVE_RIGID_TRANSLATION
+    // Remove the net translational/rotational component of a gradient-like (FEM load) vector.
+    void removeNetForceAndTorque(VXd &g) const {
         int nv = g.size() / 2;
 
-        // Remove rigid translation.
-        auto rhs = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(g.data(), nv, 2);
-        auto rigidTrans = rhs.colwise().mean();
-        // std::cout << "rigidTrans: " << rigidTrans << std::endl;
-        rhs.rowwise() -= rigidTrans;
-#endif
+        if (remove_rigid_translation) {
+            auto rhs = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(g.data(), nv, 2);
+            auto rigidTrans = rhs.colwise().mean();
+            // std::cout << "rigidTrans: " << rigidTrans << std::endl;
+            rhs.rowwise() -= rigidTrans;
+        }
         // std::cout << "new rigidTrans: " << rhs.colwise().mean() << std::endl;
 
-#if REMOVE_RIGID_ROTATION
-        // Remove rigid rotation.
-        VXd x = getNVars().getVars();
-        auto pos = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(x.data(), nv, 2);
+        if (remove_rigid_rotation) {
+            static_assert(Dim == 2, "removeNetForceAndTorque: rigid rotation removal currently only implemented for 2D");
+            VXd x = this->getNVars().getVars();
+            auto pos = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(x.data(), nv, 2);
 
-        VXd rigidRotMode(x.size());
-        for (int i = 0; i < nv; ++i) {
-            rigidRotMode.segment<2>(2 * i) << -pos(i, 1), pos(i, 0);
+            double net_torque = 0;
+            // r x F = r^\perp . F
+            for (int i = 0; i < nv; ++i) {
+                Eigen::Vector2d r_perp(-pos(i, 1), pos(i, 0));
+                net_torque += r_perp.dot(g.segment<2>(2 * i));
+            }
+            double projection_mag = net_torque / pos.squaredNorm();
+
+            // g -= projection_mag * r^\perp
+            double new_net_torque = 0;
+            for (int i = 0; i < nv; ++i) {
+                Eigen::Vector2d r_perp(-pos(i, 1), pos(i, 0));
+                g.segment<2>(2 * i) -= projection_mag * r_perp;
+                new_net_torque += r_perp.dot(g.segment<2>(2 * i));
+            }
+            std::cout << "net torque before/after: " << net_torque << "\t" << new_net_torque << std::endl;
         }
-        g -= rigidRotMode * (rigidRotMode.dot(g) / rigidRotMode.squaredNorm());
-#endif
+    }
+
+    // Remove the net translational/rotational component of a gradient-like vector.
+    void removeRigidDisplacement(VXd &d) const {
+        int nv = d.size() / 2;
+
+        if (remove_rigid_translation) {
+
+        }
+        // std::cout << "new rigidTrans: " << rhs.colwise().mean() << std::endl;
+
+        if (remove_rigid_rotation) {
+        }
+    }
+
+    void setRestVertexPositions(const Eigen::MatrixXd &V) {
+        if (V.rows() != Base::mesh().numVertices()) throw std::runtime_error("setRestVertexPositions: wrong number of vertices");
+        bool parametrization = (Dim == 2) && (V.cols() == 3); // Support the parametrization of 2D meshes in 3D space by allowing 3D "rest" vertex positions when `Dim == 2`.
+        if ((V.cols() != Dim) && !parametrization) throw std::runtime_error("setRestVertexPositions: wrong vertex dimension");
+
+        if (!parametrization) {
+            auto F = getF(Base::mesh());
+            for (auto &e : Base::elements)
+                e.embed(V, F);
+        }
+        else {
+            // Emulate a parametrization element: express the triangle rest
+            // positions in 2D using an orthonormal basis for the tangent plane.
+            const auto &m = Base::mesh();
+            parallel_for_range(m.numElements(), [this, &V, &m](size_t ei) {
+                auto evi = m.elementVertexIndices(ei);
+
+                Eigen::Matrix<double, 3, 3> P;
+                P.col(0) = V.row(evi[0]).transpose();
+                P.col(1) = V.row(evi[1]).transpose();
+                P.col(2) = V.row(evi[2]).transpose();
+                Eigen::Matrix<double, 3, 2> U;
+                U.col(0) = (P.col(1) - P.col(0)).normalized();
+                Eigen::Vector3d n = U.col(0).cross(P.col(2) - P.col(0));
+                U.col(1) = n.cross(U.col(0)).normalized();
+                Base::elements[ei].embed(P.transpose() * U);
+            });
+        }
     }
 
     static constexpr int MaxDegree = 20;
@@ -285,7 +335,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
     }
 
     std::vector<VXd> computeTaylorCoefficientsArclen(const NewtonHessianFactorization &Hf, int degree, bool projectHessian = false) const {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonFlow.computeTaylorCoefficients");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonFlow.computeTaylorCoefficientsArclen");
 
         std::vector<VXd> x;
         std::vector<double> lambda;
@@ -295,6 +345,23 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
         return x;
     }
 
+    VXd elementHessianMinimumEigenvalues() const {
+        const size_t ne = Base::mesh().numElements();
+        VXd result(ne);
+        parallel_for_range(ne, [this, &result](size_t ei) {
+            auto x = Base::extractLocalVars(ei);
+            EvalPt<Dim> q;
+            q.fill(1.0 / (Dim + 1)); // sample at element center
+            auto F = Base::elements[ei].deformationGradient(x, q);
+            Psi psi(getPsi(), UninitializedDeformationTag{});
+            psi.setDeformationGradient(F, EvalLevel::EnergyOnly);
+            result[ei] = psi.minimumEigenvalue();
+        });
+        return result;
+    }
+
+    const Psi &getPsi() const { return Base::materials[0].psi; }
+
     void setProjectionSmoothingEpsilon(double smoothingEpsilon) {
         Base::materials.foreach([smoothingEpsilon](typename Base::Material &mat) {
             mat.psi.smoothingEpsilon = smoothingEpsilon;
@@ -302,8 +369,31 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
     }
 
     double getProjectionSmoothingEpsilon() const {
-        return Base::materials[0].psi.smoothingEpsilon;
+        return getPsi().smoothingEpsilon;
     }
+
+    void setEigenvalueClampTarget(double tgt) {
+        Base::materials.foreach([tgt](typename Base::Material &mat) {
+            mat.psi.eigenvalueClampTarget = tgt;
+        });
+    }
+
+    double getEigenvalueClampTarget() const {
+        return getPsi().eigenvalueClampTarget;
+    }
+
+    void setEigenvalueProjectionModulation(double modulation) {
+        Base::materials.foreach([modulation](typename Base::Material &mat) {
+            mat.psi.eigenvalueProjectionModulation = modulation;
+        });
+    }
+
+    double getEigenvalueProjectionModulation() const {
+        return getPsi().eigenvalueProjectionModulation;
+    }
+
+    bool remove_rigid_translation = false,
+         remove_rigid_rotation = false;
 };
 
 #endif /* end of include guard: NEWTONFLOW_HH */
