@@ -197,6 +197,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("suppressSparsity", &NOT::suppressSparsity, "Suppress sparsity pattern contributions from this term")
         .def_property_readonly("sparsityUpdateFrequency", &NOT::sparsityUpdateFrequency)
         .def_readonly("increaseLimiter", &NOT::increaseLimiter, py::return_value_policy::reference_internal)
+
+        .def("objectiveAtVars", &NOT::objectiveAtVars, py::arg("x"))
         ;
 
     py::class_<FeasibleStepLengthComputer, std::shared_ptr<FeasibleStepLengthComputer>>(m, "FeasibleStepLengthComputer")
@@ -225,6 +227,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
 
         .def("termObjectives", &NewtonMultiobjectiveProblem::termObjectives)
         .def("termGradients",  &NewtonMultiobjectiveProblem::termGradients)
+
+        .def("objectiveAtVars", &NewtonMultiobjectiveProblem::objectiveAtVars, py::arg("x"))
 
         .def_readwrite("initialFeasibleStepLengthComputer",
                 &NewtonMultiobjectiveProblem::initialFeasibleStepLengthComputer,

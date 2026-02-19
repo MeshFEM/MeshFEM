@@ -198,6 +198,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     enum class SparsityUpdateFrequency { NEVER, ALWAYS, SOMETIMES };
 
     virtual Real objective() const = 0;
+    virtual Real objectiveAtVars(const Eigen::Ref<const VXd> &x) const { throw std::runtime_error("objectiveAtVars not implemented by" + std::string(typeid(*this).name())); }
     virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const = 0;
     virtual void accumulateHessian(Real weight, NewtonHessian &result, bool projectionMask = false) const = 0;
 
@@ -397,6 +398,25 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
             Real w = weight(ti);
             if (w == 0) continue;
             Real o = t.objective();
+
+            // Bail early if any term exceeds its increase limit
+            if (t.increaseLimiter.valueExceedsLimit(o))
+                return ObjectiveIncreaseLimiter::INFTY;
+
+            result += w * o;
+        }
+        return result;
+    }
+
+    // Evaluate the objective away from the currently set variables
+    // for accelerated line search (only works if supported by all terms).
+    Real objectiveAtVars(const Eigen::Ref<const VXd> &x) const {
+        Real result = 0;
+        for (size_t ti = 0; ti < numTerms(); ++ti) {
+            const auto &t = term(ti);
+            Real w = weight(ti);
+            if (w == 0) continue;
+            Real o = t.objectiveAtVars(x);
 
             // Bail early if any term exceeds its increase limit
             if (t.increaseLimiter.valueExceedsLimit(o))

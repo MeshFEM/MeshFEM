@@ -156,11 +156,11 @@ struct MeshEnergy : public MeshEnergyBase {
         return stencils[si].template extract<LocalVars>(m_vars.globalVars(), m_vars.varStructure());
     }
 
-    auto extractLocalVars(size_t si, const VXd &x) const {
+    auto extractLocalVars(size_t si, const Eigen::Ref<const VXd> &x) const {
         return stencils[si].template extract<LocalVars>(x, m_vars.varStructure());
     }
 
-    auto extractLocalVars(size_t si, const VXd &x, const typename Assembler::VarStructure &vs) const {
+    auto extractLocalVars(size_t si, const Eigen::Ref<const VXd> &x, const typename Assembler::VarStructure &vs) const {
         return stencils[si].template extract<LocalVars>(x, vs);
     }
 
@@ -174,9 +174,23 @@ struct MeshEnergy : public MeshEnergyBase {
     }
 
     Real objective() const override {
-        return summation_parallel([&](size_t ei) {
+        return summation_parallel([this](size_t ei) {
                 return elementEnergy(ei);
             }, elements.size());
+    }
+
+    Real objectiveAtVars(const Eigen::Ref<const VXd> &x) const override {
+        if (x.size() != m_vars.globalVars().size()) throw std::runtime_error("Invalid variable vector size");
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".objectiveAtVars");
+        if constexpr (Element::CachesDeformedQuantities) {
+            throw std::runtime_error("objectiveAtVars not supported for energies with cached deformed quantities");
+        }
+        else {
+            auto &vs = m_vars.varStructure();
+            return summation_parallel([&](size_t ei) {
+                    return elements[ei].energy(extractLocalVars(ei, x));
+                }, elements.size());
+        }
     }
 
     const auto &assembler() const { return m_vars.assembler(); }
