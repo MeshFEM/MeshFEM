@@ -44,7 +44,7 @@ def getParamProb(m, uv_init, FIX_VARS=True):
         fv = sim_utils.getBBoxVars(m, sim_utils.BBoxFace.MIN_X, dimension=2)
         prob.setFixedVars(fv)
     
-    return param, prob
+    return param, prob, uv
 
 
 def getStepandCurUVofToyProb(param, prob, uv_init, optIters):
@@ -253,6 +253,7 @@ class RotationStrainExtrapolation:
         Evaluate extrapolation for `x0 + alpha d`, where `x0` and `d`
         have been specified by a previous call to `linesearch_begin`.
         """
-        F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) @ self.Bt
+        with benchmark.ScopedTimer('F_ex@Bt'):
+            F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) @ self.Bt
         uv_ex = getUVnewSolvePoission(self.param.mesh, F_ex, self.Linv)
         return uv_ex + (self.c0 - uv_ex.mean(axis=0))
