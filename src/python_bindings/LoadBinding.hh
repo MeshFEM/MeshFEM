@@ -29,7 +29,7 @@ static void bindBodyForces(py::module &m, py::module &detail_module) {
        ;
 
     m.def("BodyForce", [&](const std::shared_ptr<Object> &obj, const Eigen::Ref<const typename BFLoad::MXd> &f) {
-            return std::make_shared<GLoad>(obj, f);
+            return std::make_shared<BFLoad>(obj, f);
         }, py::arg("obj"), py::arg("f"));
 
     py::class_<GLoad, Load, std::shared_ptr<GLoad>>(detail_module, ("Gravity" + NameMangler<Object>::name()).c_str())

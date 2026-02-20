@@ -126,6 +126,7 @@ struct BodyForce : public ObjectSpecificLoad<Object> {
     using Base::getObj;
 
     BodyForce(const ST &obj) : Base(obj) { m_updateCache(); }
+    BodyForce(const ST &obj, const MXd &f) : Base(obj) { setNodalForceDensity(f); }
 
     virtual Real energy() const override { return m_grad.dot(getObj().getVars()); }
 
