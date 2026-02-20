@@ -345,16 +345,21 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
         return x;
     }
 
+    // Compute the Jacobian of a nodal vector field `x` at the center of element `ei`.
+    typename SE::HLE::MNKd elementJacobian(size_t ei, const VXd &x) const {
+        auto x_e = Base::extractLocalVars(ei, x);
+        EvalPt<Dim> q;
+        q.fill(1.0 / (Dim + 1)); // sample at element center
+        return Base::elements[ei].deformationGradient(x_e, q);
+    }
+
     VXd elementHessianMinimumEigenvalues() const {
         const size_t ne = Base::mesh().numElements();
         VXd result(ne);
-        parallel_for_range(ne, [this, &result](size_t ei) {
-            auto x = Base::extractLocalVars(ei);
-            EvalPt<Dim> q;
-            q.fill(1.0 / (Dim + 1)); // sample at element center
-            auto F = Base::elements[ei].deformationGradient(x, q);
+        const auto &x = Base::globalVars();
+        parallel_for_range(ne, [this, &x, &result](size_t ei) {
             Psi psi(getPsi(), UninitializedDeformationTag{});
-            psi.setDeformationGradient(F, EvalLevel::EnergyOnly);
+            psi.setDeformationGradient(elementJacobian(ei, x), EvalLevel::EnergyOnly);
             result[ei] = psi.minimumEigenvalue();
         });
         return result;
