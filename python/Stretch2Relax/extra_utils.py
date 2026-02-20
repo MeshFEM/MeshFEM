@@ -9,6 +9,7 @@ Created Time: 2026-02-01 12:57 PM
 
 import os, sys
 sys.path.append('../')
+sys.path.append('../curved_linesearch/')
 import MeshFEM
 import mesh, mesh_energy, py_newton_optimizer, viewer
 import parametrization, benchmark
@@ -17,6 +18,9 @@ import numpy as np
 import igl
 import differential_operators, sparse_matrices
 
+import newton_flow 
+import newton_flow_utils as nfu
+import vector_pade
 import param_utils, sim_utils
 
 
@@ -264,3 +268,92 @@ class LinearExtrapolator:
         self.d = d
     def linesearch_eval(self, alpha):
         return self.x0 + alpha * self.d
+    
+class TaylorExtrapolator:
+    def __init__(self, prob, opt, max_degree, constant_speed=True):
+        """
+        Assume prob contains one nfu(newton_flow_utils) object
+        """
+        self.prob = prob
+        self.opt = opt
+        self.nf = self.prob.term(0)
+        self.max_degree = max_degree
+        self.constant_speed = constant_speed
+    
+    @benchmark.benchmarkit_customname('TaylorExtrapolation')
+    def __call__(self, x0, coeffs, alphas):
+        """
+        Evaluate extrapolation for ray `x0 + alpha coeffs[0]` at each value in `alphas`.
+        """
+        self.linesearch_begin(x0, coeffs[0])
+        return np.array([self.linesearch_eval(a) for a in alphas])
+    
+    def linesearch_begin(self, x0, d):
+        opt = self.opt
+        opt.update_factorizations()
+        proj = self.prob.hessianWasProjected
+        if self.constant_speed:
+            speed = np.linalg.norm(d)
+            scales = speed ** (np.arange(self.max_degree) + 1)
+            d_coeffs = scales[:, np.newaxis] * np.array(self.nf.computeTaylorCoefficientsArclen(opt.hessian_factorization, self.max_degree, proj))
+        else:
+            d_coeffs = self.nf.computeTaylorCoefficients(opt.hessian_factorization, self.max_degree, proj)
+        self.x0 = x0
+        self.d_coeffs = d_coeffs
+        
+    def linesearch_eval(self, alpha):
+        """
+        same with nfu.eval_trajectory_taylor
+        """
+        coeffs = self.d_coeffs[:self.max_degree]
+        x = self.x0.copy()
+        for i in range(self.max_degree):
+            x += coeffs[i] * alpha**(i + 1)
+        return x.reshape(-1, 2)
+    
+class PadeExtrapolator:
+    def __init__(self, prob, opt, max_degree, constant_speed=True):
+        """
+        Assume prob contains one nfu(newton_flow_utils) object
+        """
+        self.prob = prob
+        self.opt = opt
+        self.nf = self.prob.term(0)
+        self.max_degree = max_degree
+        self.constant_speed = constant_speed
+    
+    @benchmark.benchmarkit_customname('PadeExtrapolation')
+    def __call__(self, x0, coeffs, alphas):
+        """
+        Evaluate extrapolation for ray `x0 + alpha coeffs[0]` at each value in `alphas`.
+        """
+        self.linesearch_begin(x0, coeffs[0])
+        return np.array([self.linesearch_eval(a) for a in alphas])
+    
+    def linesearch_begin(self, x0, d):
+        opt = self.opt
+        opt.update_factorizations()
+        proj = self.prob.hessianWasProjected
+        if self.constant_speed:
+            speed = np.linalg.norm(d)
+            scales = speed ** (np.arange(self.max_degree) + 1)
+            d_coeffs = scales[:, np.newaxis] * np.array(self.nf.computeTaylorCoefficientsArclen(opt.hessian_factorization, self.max_degree, proj))
+        else:
+            d_coeffs = self.nf.computeTaylorCoefficients(opt.hessian_factorization, self.max_degree, proj)
+        self.x0 = x0
+        self.d_coeffs = d_coeffs
+        
+    def linesearch_eval(self, alpha):
+        """
+        same with nfu.eval_trajectory_vector_pade
+        """
+        coeffs = self.d_coeffs[:self.max_degree]
+        degree = len(coeffs)
+        if degree < 2:
+            return (self.x0 + coeffs[0] * alpha).reshape(-1, 2)
+        an = np.vstack([self.x0.ravel(), coeffs])
+        deg_q = degree // 2
+        deg_p = degree - deg_q
+        dc, nc, f = vector_pade.hermite_pade_ls(an, deg_p, deg_q)
+        return f(alpha).reshape(-1, 2)
+    
