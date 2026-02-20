@@ -257,3 +257,10 @@ class RotationStrainExtrapolation:
             F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) @ self.Bt
         uv_ex = getUVnewSolvePoission(self.param.mesh, F_ex, self.Linv)
         return uv_ex + (self.c0 - uv_ex.mean(axis=0))
+
+class LinearExtrapolator:
+    def linesearch_begin(self, x0, d):
+        self.x0 = x0
+        self.d = d
+    def linesearch_eval(self, alpha):
+        return self.x0 + alpha * self.d

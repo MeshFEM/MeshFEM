@@ -98,7 +98,8 @@ def detect_corners(V, F, turning_angle_threshold = 0.5):
 
 def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
                max_degree = 5, min_degree = 1, degree_list = None, eval_trajectory=nfu.eval_trajectory_taylor,
-               extrapolation_method_list = None, truncate = False, corners_only = False):
+               extrapolation_method_list = None, truncate = False, corners_only = False,
+              energy_plot_ylim = None):
     """
     Visualize the Newton step extrapolations starting from step `frame` within an underlying "ground truth" sequence of `flow_uvs`
     (computed by nfu.ground_truth_flow).
@@ -177,13 +178,15 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
         line_search_energy_plot(prob, alphas, trajectories, labels, truncate=truncate)
     plt.title(('Constant Speed' if constant_speed else 'Unnormalized') + ' Newton Flow Extrapolations')
     
-    # # fixed ylim optimized for full sequence
-    # prob.setVars(fv[0].ravel())
-    # e0 = prob.energy()
-    # prob.setVars(fv[-1].ravel())
-    # emin = prob.energy()
-    # plt.ylim(e0 - (e0 - emin) * 1.05, e0 + (e0 - emin) * 1.05)
-    
+    if energy_plot_ylim is not None:
+        plt.ylim(*energy_plot_ylim)
+    else:
+        # optimize for remaining sequence
+        e0 = prob.objectiveAtVars(fv[frame].ravel())
+        emin = prob.objectiveAtVars(fv[-1].ravel())
+        plt.ylim(e0 - (e0 - emin) * 1.05, e0 + (e0 - emin) * 1.05)
+        plt.axhline(y=emin, ls='--', c='lightgray')
+
     # Visualize the trajectories (potentially after truncation)
     plt.sca(axs[0])
     with benchmark.ScopedTimer('Plot Trajectories'):
@@ -203,16 +206,16 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     prob.setVars(fv[frame].ravel())
 
 import video_writer
-def writeVideo(path, num_frames, plot_frame, skipFrame=1):
+def writeVideo(path, num_frames, plot_frame, skipFrame=1, framerate=30):
     from ipywidgets import IntProgress
     from IPython.display import display
     progress = IntProgress(min=0, max=num_frames)
     display(progress)
     plot_frame(0)
-    vw = video_writer.PlotVideoWriter(path, plt.gcf(), dpi=150, quality='-crf 10', tight_layout=False)
+    vw = video_writer.PlotVideoWriter(path, plt.gcf(), dpi=150, quality='-crf 10', tight_layout=False, framerate=framerate)
     plt.close()
     for frame in range(0, num_frames, skipFrame):
-        progress.value = frame
         plot_frame(frame)
         vw.writeFrame(plt.gcf())
         plt.close()
+        progress.value = frame + 1

@@ -17,13 +17,9 @@ import igl
 import extra_utils
 
 @benchmark.benchmarkit
-def newton_extrapolate(extrapolator, linesearch_func, callback_func = None, 
-                      alpha_step=0.1, grad_tol=1e-6, max_iters = 200, default_max_alpha=5,
-                      x_init = None, verbose=False, step_limiter=None,
-                     ):
-    
-    prob = extrapolator.prob # Newton Prob
-    optimizer = prob.optimizer()
+def newton_extrapolate(opt, extrapolator, linesearch_func, callback_func = None,
+                      grad_tol=1e-6, max_iters = 200, x_init = None, verbose=False):
+    prob = opt.get_problem()
     flow_vertices = []
     
     if x_init is None: x_init = prob.getVars()
@@ -32,33 +28,25 @@ def newton_extrapolate(extrapolator, linesearch_func, callback_func = None,
     # Newton Optimization Loop
     iter_count = 0
     while np.linalg.norm(prob.gradient()) > grad_tol and iter_count < max_iters:
-        d = optimizer.newton_step()
+        d = opt.newton_step()
         flow_vertices.append(prob.getVars())
-        curr_energy = prob.energy()
         x = prob.getVars()
         
         # Linesearch
         ## Prepare
         with benchmark.ScopedTimer('linesearch_begin'):
             extrapolator.linesearch_begin(x, d)
-        
-        max_alpha = default_max_alpha
-        if step_limiter is not None:
-            max_alpha = min(max_alpha, step_limiter.eval(x, d))
-        
+
         ## f(alpha) the linesearch_eval but wraps and returns an energy
         def f(alpha):
-            x_old = prob.getVars()
             with benchmark.ScopedTimer('linesearch_eval'):
                 x_new = extrapolator.linesearch_eval(alpha)
             with benchmark.ScopedTimer('energy eval'):
-                prob.setVars(x_new.ravel())
-                new_energy = prob.energy()
-                prob.setVars(x_old)
-            return new_energy
+                o = prob.objectiveAtVars(x_new.ravel())
+            return o
         
         ## Linesearch Routine
-        alpha = linesearch_func(f, alpha_step_size=alpha_step, max_alpha = max_alpha)
+        alpha = linesearch_func(f, x, d)
         prob.setVars(extrapolator.linesearch_eval(alpha).ravel())
         
         if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha)
@@ -66,11 +54,48 @@ def newton_extrapolate(extrapolator, linesearch_func, callback_func = None,
     
     return np.array([fv.reshape(-1, 2) for fv in flow_vertices])
 
+class LineSearchBase:
+    def __init__(self, max_alpha = 5, step_limiter = None):
+        self.max_alpha = max_alpha
+        self.step_limiter = step_limiter
 
+    def __call__(self, f, x, d):
+        """
+        Run line search on a univariate function f(alpha), where
+        alpha parametrizes the ray `x + alpha * d`.
+        Note that the `x` and `d` vectors are needed only for the `step_limiter`
+        and are not used for evaluating `f`.
+        """
+        max_alpha = self.max_alpha
+        if self.step_limiter is not None:
+            max_alpha = min(max_alpha, self.step_limiter.eval(x, d))
+        return self._linesearch_impl(f, max_alpha)
+
+    def _linesearch_impl(self, f, max_alpha):
+        raise Exception('_linesearch_impl must be implemented in derived class')
+
+class BruteForceLinesearch(LineSearchBase):
+    def __init__(self, alpha_step_size = 0.1, **kwargs):
+        super().__init__(**kwargs)
+        self.alpha_step_size = alpha_step_size
+
+    def _linesearch_impl(self, f, max_alpha):
+        alphas = np.arange(0, max_alpha, self.alpha_step_size)
+        energies = [f(a) for a in alphas]
+        a = alphas[np.argmin(energies)]
+        if a == 0:
+            # Brute-force search got us stuck: use a backtracking fallback
+            curr_energy = energies[0]
+            e = energies[0]
+            a = alphas[1]
+            while e > curr_energy: # TODO: use true Armijo line search
+                a *= 0.5
+                e = f(a)
+        return a
 
 ## Linesearch Routines
 
-def brute_force_linesearch(f, alpha_step_size=0.1, max_alpha=5):
+def brute_force_linesearch(f, alpha_step_size=0.01, max_alpha=5):
     """
     Finds the alpha that minimizes f(alpha) from a given list.
     

@@ -1,6 +1,6 @@
 import numpy as np
 
-def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, max_iters=None, verbose=False, step_limiter = None):
+def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, max_iters=None, verbose=False, step_limiter = None, cb = None):
     prob = optimizer.get_problem()
     flow_vertices = []
     if x_init is None: x_init = prob.getVars()
@@ -9,6 +9,7 @@ def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, max_
     g = prob.gradient()
     while np.linalg.norm(g) > grad_tol:
         it = len(flow_vertices) - 1
+        if cb is not None: cb(prob, it)
         if it == max_iters: break
         d = optimizer.newton_step()
         curr_energy = prob.energy()
@@ -22,7 +23,7 @@ def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, max_
                 alpha = 0.5 * alpha
             else: break
         g = prob.gradient()
-        if verbose: print(it, np.linalg.norm(g), prob.hessianWasProjected, alpha)
+        if verbose: print(it, prob.energy(), np.linalg.norm(g), prob.hessianWasProjected, alpha)
         flow_vertices.append(prob.getVars())
     prob.setVars(x_init)
     return np.array([fv.reshape(-1, 2) for fv in flow_vertices])
