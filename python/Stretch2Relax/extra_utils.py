@@ -334,6 +334,7 @@ class PadeExtrapolator:
         opt = self.opt
         opt.update_factorizations()
         proj = self.prob.hessianWasProjected
+        # proj = False
         if self.constant_speed:
             speed = np.linalg.norm(d)
             scales = speed ** (np.arange(self.max_degree) + 1)
@@ -342,18 +343,21 @@ class PadeExtrapolator:
             d_coeffs = self.nf.computeTaylorCoefficients(opt.hessian_factorization, self.max_degree, proj)
         self.x0 = x0
         self.d_coeffs = d_coeffs
+        coeffs = self.d_coeffs[:self.max_degree]
+        degree = len(coeffs)
+        if degree < 2:
+            self.f = lambda alpha : (self.x0 + coeffs[0] * alpha).reshape(-1, 2)
+            return 
+        
+        an = np.vstack([self.x0.ravel(), coeffs])
+        deg_q = degree // 2
+        deg_p = degree - deg_q
+        dc, nc, f = vector_pade.hermite_pade_ls(an, deg_p, deg_q)
+        self.f = f
         
     def linesearch_eval(self, alpha):
         """
         same with nfu.eval_trajectory_vector_pade
         """
-        coeffs = self.d_coeffs[:self.max_degree]
-        degree = len(coeffs)
-        if degree < 2:
-            return (self.x0 + coeffs[0] * alpha).reshape(-1, 2)
-        an = np.vstack([self.x0.ravel(), coeffs])
-        deg_q = degree // 2
-        deg_p = degree - deg_q
-        dc, nc, f = vector_pade.hermite_pade_ls(an, deg_p, deg_q)
-        return f(alpha).reshape(-1, 2)
+        return self.f(alpha).reshape(-1, 2)
     
