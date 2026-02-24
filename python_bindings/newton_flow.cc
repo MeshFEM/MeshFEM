@@ -12,7 +12,6 @@ template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
 auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) {
     using NFME = NewtonFlowMeshEnergy<Dim, FEMDeg, Psi_>;
     return bindMeshEnergy<NFME>(name, m, detail)
-        .def("setRestVertexPositions", &NFME::setRestVertexPositions, py::arg("V"))
         .def("computeTaylorCoefficients", &NFME::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("projectHessian") = false)
         .def("computeTaylorCoefficientsArclen", &NFME::computeTaylorCoefficientsArclen, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("projectHessian") = false)
         .def("elementDeformationGradient", [](const NFME &me, size_t ei) {

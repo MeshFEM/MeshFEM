@@ -17,7 +17,7 @@ import igl
 import extra_utils
 
 @benchmark.benchmarkit
-def newton_extrapolate(opt, extrapolator, linesearch_func, callback_func = None,
+def newton_extrapolate(opt, extrapolator, linesearch_func, post_step_cb=None,
                       grad_tol=1e-6, max_iters = 200, x_init = None, verbose=False):
     prob = opt.get_problem()
     flow_vertices = []
@@ -48,7 +48,9 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, callback_func = None,
         ## Linesearch Routine
         alpha = linesearch_func(f, x, d)
         prob.setVars(extrapolator.linesearch_eval(alpha).ravel())
-        
+
+        if post_step_cb is not None: post_step_cb(prob, iter_count)
+
         if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha)
         iter_count += 1
     
@@ -87,7 +89,7 @@ class BruteForceLinesearch(LineSearchBase):
             # Brute-force search got us stuck: use a backtracking fallback
             curr_energy = energies[0]
             e = energies[0]
-            a = alphas[1]
+            a = min(max_alpha, self.alpha_step_size)
             while e > curr_energy: # TODO: use true Armijo line search
                 a *= 0.5
                 e = f(a)

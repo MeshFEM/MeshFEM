@@ -293,36 +293,6 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
         }
     }
 
-    void setRestVertexPositions(const Eigen::MatrixXd &V) {
-        if (V.rows() != Base::mesh().numVertices()) throw std::runtime_error("setRestVertexPositions: wrong number of vertices");
-        bool parametrization = (Dim == 2) && (V.cols() == 3); // Support the parametrization of 2D meshes in 3D space by allowing 3D "rest" vertex positions when `Dim == 2`.
-        if ((V.cols() != Dim) && !parametrization) throw std::runtime_error("setRestVertexPositions: wrong vertex dimension");
-
-        if (!parametrization) {
-            auto F = getF(Base::mesh());
-            for (auto &e : Base::elements)
-                e.embed(V, F);
-        }
-        else {
-            // Emulate a parametrization element: express the triangle rest
-            // positions in 2D using an orthonormal basis for the tangent plane.
-            const auto &m = Base::mesh();
-            parallel_for_range(m.numElements(), [this, &V, &m](size_t ei) {
-                auto evi = m.elementVertexIndices(ei);
-
-                Eigen::Matrix<double, 3, 3> P;
-                P.col(0) = V.row(evi[0]).transpose();
-                P.col(1) = V.row(evi[1]).transpose();
-                P.col(2) = V.row(evi[2]).transpose();
-                Eigen::Matrix<double, 3, 2> U;
-                U.col(0) = (P.col(1) - P.col(0)).normalized();
-                Eigen::Vector3d n = U.col(0).cross(P.col(2) - P.col(0));
-                U.col(1) = n.cross(U.col(0)).normalized();
-                Base::elements[ei].embed(P.transpose() * U);
-            });
-        }
-    }
-
     static constexpr int MaxDegree = 20;
     std::vector<VXd> computeTaylorCoefficients(const NewtonHessianFactorization &Hf, int degree, bool projectHessian = false) const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonFlow.computeTaylorCoefficients");
