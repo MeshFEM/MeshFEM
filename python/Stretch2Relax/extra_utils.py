@@ -262,6 +262,53 @@ class RotationStrainExtrapolation:
         uv_ex = getUVnewSolvePoission(self.param.mesh, F_ex, self.Linv)
         return uv_ex + (self.c0 - uv_ex.mean(axis=0))
 
+class RSNewtonFlowExtrapolation:
+    def __init__(self, prob, method='Eulerian'):
+        """
+        Constructor caches quantities that depend only on the input mesh
+        (remaining constant throughout optimization).
+        """
+        self.prob = prob
+        self.nf = self.prob.term(0)
+        m = self.nf.mesh
+        self.method = method
+        self.Linv = getLaplacianFactorizer(m, fixedVars=[0])
+
+    @benchmark.benchmarkit_customname('RotationStrainExtrapolation')
+    def __call__(self, x0, coeffs, alphas):
+        """
+        Evaluate extrapolation for ray `x0 + alpha coeffs[0]` at each value in `alphas`.
+        """
+        self.linesearch_begin(x0, coeffs[0])
+        return np.array([self.linesearch_eval(a) for a in alphas])
+
+    def linesearch_begin(self, x0, d):
+        """
+        Precompute and cache quantities used to extrapolate away from base point `x0`
+        along direction `d`.
+        This must be called in preparation for calls to `linesearch_eval`.
+        """
+        self.prob.setVars(x0)
+        self.F = np.array([self.nf.elementDeformationGradient(ei) for ei in range(self.nf.numElements())]) 
+        self.Finv = np.linalg.inv(self.F)
+        self.c0 = x0.reshape(-1,2).mean(axis=0)
+
+        u_in_d_col = d.reshape(-1,2)[:,0]
+        v_in_d_col = d.reshape(-1,2)[:,1]
+        u_grad = differential_operators.gradient(self.nf.mesh, u_in_d_col)
+        v_grad = differential_operators.gradient(self.nf.mesh, v_in_d_col) 
+        self.d_grad = np.stack((u_grad, v_grad), axis=1)
+
+    def linesearch_eval(self, alpha):
+        """
+        Evaluate extrapolation for `x0 + alpha d`, where `x0` and `d`
+        have been specified by a previous call to `linesearch_begin`.
+        """
+        with benchmark.ScopedTimer('F_ex@Bt'):
+            F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) 
+        uv_ex = getUVnewSolvePoission(self.nf.mesh, F_ex, self.Linv)
+        return uv_ex + (self.c0 - uv_ex.mean(axis=0))
+    
 class LinearExtrapolator:
     def linesearch_begin(self, x0, d):
         self.x0 = x0
