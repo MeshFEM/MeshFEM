@@ -262,7 +262,7 @@ class RotationStrainExtrapolation:
         uv_ex = getUVnewSolvePoission(self.param.mesh, F_ex, self.Linv)
         return uv_ex + (self.c0 - uv_ex.mean(axis=0))
 
-class RSNewtonFlowExtrapolation:
+class RSNewtonFlowExtrapolator:
     def __init__(self, prob, method='Eulerian'):
         """
         Constructor caches quantities that depend only on the input mesh
