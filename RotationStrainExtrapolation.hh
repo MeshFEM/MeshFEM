@@ -28,6 +28,7 @@
 
 #include <Eigen/Dense>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <stdexcept>
 #include <type_traits>
@@ -59,6 +60,54 @@ getLaplacianFactorizer(const Mesh &m, const std::vector<size_t> &fixedVars = {})
     auto Linv = make_cholesky_factorizer(get_default_cholesky_provider());
     Linv->factorize(Lsparse, fixedVars);
     return Linv;
+}
+
+// C++ counterpart of python/Stretch2Relax/extra_utils.py:getUVnewSolvePoission.
+// `F_extra` stores one 2x2 matrix per element; each matrix row is the per-element
+// gradient used to build a Poisson RHS for u and v respectively.
+template<class Mesh>
+UVMat getUVnewSolvePoisson(const Mesh &m,
+                            const std::vector<MNd> &F_extra,
+                            const CholeskyFactorizerBase &LFactorizer,
+                            std::optional<size_t> fixedVind = std::nullopt,
+                            std::optional<V2d> fixedUV = std::nullopt)
+{
+    static_assert(Mesh::EmbeddingDimension == 2,
+                  "getUVnewSolvePoission currently expects a 2D embedding.");
+
+    if (F_extra.size() != m.numElements())
+        throw std::runtime_error("getUVnewSolvePoission: F_extra must have one 2x2 matrix per mesh element.");
+
+    MNd F_extra_u(m.numElements(), 2), F_extra_v(m.numElements(), 2);
+    for (size_t ei = 0; ei < m.numElements(); ++ei) {
+        const MNd &Fe = F_extra[ei];
+        if ((Fe.rows() != 2) || (Fe.cols() != 2))
+            throw std::runtime_error("getUVnewSolvePoission: each F_extra[ei] must be a 2x2 matrix.");
+        F_extra_u.row(ei) = Fe.row(0);
+        F_extra_v.row(ei) = Fe.row(1);
+    }
+
+    VXd rhs_u = poisson_gradient_integration::rhs(m, F_extra_u);
+    VXd rhs_v = poisson_gradient_integration::rhs(m, F_extra_v);
+
+    VXd u_sol = LFactorizer.solve(rhs_u);
+    VXd v_sol = LFactorizer.solve(rhs_v);
+
+    UVMat uv_new(u_sol.size(), 2);
+    uv_new.col(0) = u_sol;
+    uv_new.col(1) = v_sol;
+
+    if (fixedVind.has_value()) {
+        if (!fixedUV.has_value())
+            throw std::runtime_error("getUVnewSolvePoission: fixedUV must be provided when fixedVind is specified.");
+        if (*fixedVind >= static_cast<size_t>(uv_new.rows()))
+            throw std::runtime_error("getUVnewSolvePoission: fixedVind is out of range.");
+
+        const V2d shift = *fixedUV - uv_new.row(*fixedVind).transpose();
+        uv_new.rowwise() += shift.transpose();
+    }
+
+    return uv_new;
 }
 
 template<typename Real>

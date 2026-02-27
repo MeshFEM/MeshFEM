@@ -30,6 +30,46 @@ struct RSEBinder {
                 sparse_matrices.detail.CholeskyFactorizerBase
                     A factorized Laplacian solver object with `.solve(rhs)`.
             )pbdoc");
+
+        if constexpr (Mesh::EmbeddingDimension == 2) {
+            m.def(
+                "getUVnewSolvePoisson",
+                [](const Mesh &mesh,
+                   const std::vector<rotation_strain_extrapolation::MNd> &F_extra,
+                   const CholeskyFactorizerBase &LFactorizer,
+                   std::optional<size_t> fixedVind,
+                   std::optional<rotation_strain_extrapolation::V2d> fixedUV) {
+                    return rotation_strain_extrapolation::getUVnewSolvePoisson(
+                        mesh, F_extra, LFactorizer, fixedVind, fixedUV);
+                },
+                py::arg("mesh"),
+                py::arg("F_extra"),
+                py::arg("LFactorizer"),
+                py::arg("fixedVind") = std::nullopt,
+                py::arg("fixedUV") = std::nullopt,
+                R"pbdoc(
+                    Reconstruct UV coordinates by solving two Poisson systems from
+                    extrapolated deformation gradients.
+
+                    Parameters
+                    ----------
+                    mesh : MeshFEM.FEMMesh
+                        The finite element mesh.
+                    F_extra : list[numpy.ndarray]
+                        Per-element 2x2 matrices (one matrix per element).
+                    LFactorizer : sparse_matrices.detail.CholeskyFactorizerBase
+                        Factorized Laplacian solver.
+                    fixedVind : int, optional
+                        Vertex index used to anchor translation.
+                    fixedUV : numpy.ndarray, optional
+                        Target UV position (2-vector) for `fixedVind`.
+
+                    Returns
+                    -------
+                    numpy.ndarray
+                        UV matrix with shape (num_nodes, 2).
+                )pbdoc");
+        }
     }
 };
 

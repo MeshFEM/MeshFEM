@@ -306,9 +306,11 @@ class RSNewtonFlowExtrapolator:
         Evaluate extrapolation for `x0 + alpha d`, where `x0` and `d`
         have been specified by a previous call to `linesearch_begin`.
         """
-        with benchmark.ScopedTimer('F_ex@Bt'):
+        with benchmark.ScopedTimer('get F_ex'):
             F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) 
-        uv_ex = getUVnewSolvePoission(self.nf.mesh, F_ex, self.Linv)
+        with benchmark.ScopedTimer('Solve Poisson'):
+            # uv_ex = rotation_strain_extrapolation.getUVnewSolvePoisson(self.nf.mesh, F_ex, self.Linv)
+            uv_ex = getUVnewSolvePoission(self.nf.mesh, F_ex, self.Linv)
         return uv_ex + (self.c0 - uv_ex.mean(axis=0))
     
 class LinearExtrapolator:
