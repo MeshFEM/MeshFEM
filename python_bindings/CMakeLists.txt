@@ -59,3 +59,8 @@ pybind11_add_module(poisson_gradient_integration poisson_gradient_integration.cc
 set_target_properties(poisson_gradient_integration PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(poisson_gradient_integration PUBLIC MeshFEM)
 target_compile_options(poisson_gradient_integration PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(rotation_strain_extrapolation rotation_strain_extrapolation.cc)
+set_target_properties(rotation_strain_extrapolation PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(rotation_strain_extrapolation PUBLIC MeshFEM)
+target_compile_options(rotation_strain_extrapolation PRIVATE -ftemplate-backtrace-limit=0)
