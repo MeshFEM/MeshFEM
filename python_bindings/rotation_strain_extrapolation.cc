@@ -3,13 +3,47 @@
 #include <pybind11/stl.h>
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
+#include <MeshFEM/../../python_bindings/BindingInstantiations.hh>
 #include "../RotationStrainExtrapolation.hh"
+
+struct RSEBinder {
+    template<class Mesh>
+    static void bind(py::module &m, py::module & /* detail_module */) {
+        m.def(
+            "getLaplacianFactorizer",
+            [](const Mesh &mesh, const std::vector<size_t> &fixedVars) {
+                return rotation_strain_extrapolation::getLaplacianFactorizer(mesh, fixedVars);
+            },
+            py::arg("mesh"), py::arg("fixedVars") = std::vector<size_t>(),
+            R"pbdoc(
+                Build and factorize the FEM Laplacian matrix.
+
+                Parameters
+                ----------
+                mesh : MeshFEM.FEMMesh
+                    The finite element mesh.
+                fixedVars : list[int], optional
+                    Pinned scalar DoF indices used to remove Laplacian nullspace.
+
+                Returns
+                -------
+                sparse_matrices.detail.CholeskyFactorizerBase
+                    A factorized Laplacian solver object with `.solve(rhs)`.
+            )pbdoc");
+    }
+};
 
 PYBIND11_MODULE(rotation_strain_extrapolation, m) {
     using Base = rotation_strain_extrapolation::Extrapolator<double>;
     using Linear = rotation_strain_extrapolation::LinearExtrapolator<double>;
     using VXd = rotation_strain_extrapolation::VXd;
     using UVMat = rotation_strain_extrapolation::UVMat;
+
+    py::module::import("MeshFEM");
+    py::module::import("mesh");
+    py::module::import("sparse_matrices");
+    py::module detail_module = m.def_submodule("detail");
+    generateMeshSpecificBindings(m, detail_module, RSEBinder());
 
     py::class_<Base, std::shared_ptr<Base>>(m, "Extrapolator")
         .def("linesearch_begin", &Base::linesearch_begin, py::arg("x0"), py::arg("d"))

@@ -22,6 +22,7 @@ import newton_flow
 import newton_flow_utils as nfu
 import vector_pade
 import param_utils, sim_utils
+import rotation_strain_extrapolation
 
 
 def getColorStr(method):
@@ -230,6 +231,7 @@ class RotationStrainExtrapolation:
         self.Bt = np.transpose(self.B, (0, 2, 1))
         self.method = method
         self.Linv = getLaplacianFactorizer(m, fixedVars=[0])
+        
 
     @benchmark.benchmarkit_customname('RotationStrainExtrapolation')
     def __call__(self, x0, coeffs, alphas):
@@ -272,7 +274,7 @@ class RSNewtonFlowExtrapolator:
         self.nf = self.prob.term(0)
         m = self.nf.mesh
         self.method = method
-        self.Linv = getLaplacianFactorizer(m, fixedVars=[0])
+        self.Linv = rotation_strain_extrapolation.getLaplacianFactorizer(m, fixedVars=[0])
 
     @benchmark.benchmarkit_customname('RotationStrainExtrapolation')
     def __call__(self, x0, coeffs, alphas):

@@ -20,11 +20,14 @@
 #ifndef ROTATIONSTRAINEXTRAPOLATION_HH
 #define ROTATIONSTRAINEXTRAPOLATION_HH
 #include <MeshFEM/FEMMesh.hh>
+#include <MeshFEM/Laplacian.hh>
+#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 #include <MeshFEM/Types.hh>
 #include "NewtonFlow.hh"
 #include "PoissonGradientIntegration.hh"
 
 #include <Eigen/Dense>
+#include <memory>
 #include <vector>
 #include <stdexcept>
 #include <type_traits>
@@ -43,6 +46,20 @@ using UVMatMapConst = Eigen::Map<const UVMat>;
 using UVMatMap = Eigen::Map<UVMat>;
 using VecMapConst = Eigen::Map<const VXd>;
 using VecMap = Eigen::Map<VXd>;
+
+// C++ counterpart of python/Stretch2Relax/extra_utils.py:getLaplacianFactorizer.
+// `fixedVars` are pinned scalar DoF indices used to remove the nullspace.
+template<class Mesh>
+std::unique_ptr<CholeskyFactorizerBase>
+getLaplacianFactorizer(const Mesh &m, const std::vector<size_t> &fixedVars = {}) {
+    auto L = Laplacian::construct(m); // upper triangle by construction
+    SuiteSparseMatrix Lsparse(std::move(L));
+    Lsparse.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+
+    auto Linv = make_cholesky_factorizer(get_default_cholesky_provider());
+    Linv->factorize(Lsparse, fixedVars);
+    return Linv;
+}
 
 template<typename Real>
 struct Extrapolator {
