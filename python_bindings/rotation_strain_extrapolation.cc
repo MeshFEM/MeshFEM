@@ -4,6 +4,7 @@
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include <MeshFEM/../../python_bindings/BindingInstantiations.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 #include "../RotationStrainExtrapolation.hh"
 
 struct RSEBinder {
@@ -39,6 +40,7 @@ struct RSEBinder {
                    const CholeskyFactorizerBase &LFactorizer,
                    std::optional<size_t> fixedVind,
                    std::optional<rotation_strain_extrapolation::V2d> fixedUV) {
+                    // BENCHMARK_SCOPED_TIMER_SECTION timer("getUVnewSolvePoisson Python Binding");
                     return rotation_strain_extrapolation::getUVnewSolvePoisson(
                         mesh, F_extra, LFactorizer, fixedVind, fixedUV);
                 },
@@ -84,6 +86,36 @@ PYBIND11_MODULE(rotation_strain_extrapolation, m) {
     py::module::import("sparse_matrices");
     py::module detail_module = m.def_submodule("detail");
     generateMeshSpecificBindings(m, detail_module, RSEBinder());
+
+    m.def(
+        "extrapolateDeformGrad",
+        &rotation_strain_extrapolation::extrapolateDeformGrad,
+        py::arg("F"),
+        py::arg("alpha"),
+        py::arg("d_grad"),
+        py::arg("method") = "Eulerian",
+        py::arg("F_inv") = std::nullopt,
+        R"pbdoc(
+            Extrapolate per-element deformation gradients.
+
+            Parameters
+            ----------
+            F : list[numpy.ndarray]
+                Per-element 2x2 deformation gradients.
+            alpha : float
+                Extrapolation scale.
+            d_grad : list[numpy.ndarray]
+                Per-element 2x2 displacement gradients.
+            method : str, optional
+                Supported modes: "Eulerian" and "Linear".
+            F_inv : list[numpy.ndarray] or None, optional
+                Optional per-element 2x2 inverses of F.
+
+            Returns
+            -------
+            list[numpy.ndarray]
+                Extrapolated per-element 2x2 deformation gradients.
+        )pbdoc");
 
     py::class_<Base, std::shared_ptr<Base>>(m, "Extrapolator")
         .def("linesearch_begin", &Base::linesearch_begin, py::arg("x0"), py::arg("d"))

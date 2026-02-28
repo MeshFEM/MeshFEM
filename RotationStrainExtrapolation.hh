@@ -21,12 +21,14 @@
 #define ROTATIONSTRAINEXTRAPOLATION_HH
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/Laplacian.hh>
+#include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 #include <MeshFEM/Types.hh>
 #include "NewtonFlow.hh"
 #include "PoissonGradientIntegration.hh"
 
 #include <Eigen/Dense>
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -62,6 +64,80 @@ getLaplacianFactorizer(const Mesh &m, const std::vector<size_t> &fixedVars = {})
     return Linv;
 }
 
+// C++ counterpart of python/Stretch2Relax/extra_utils.py:extrapolateDeformGrad.
+// Supported modes intentionally mirror the currently requested scope:
+//   - "Eulerian"
+//   - "Linear"
+// and throw for "Lagrangian".
+inline std::vector<MNd>
+extrapolateDeformGrad(const std::vector<MNd> &F,
+                      Real alpha,
+                      const std::vector<MNd> &d_grad,
+                      const std::string &method = "Eulerian",
+                      const std::optional<std::vector<MNd>> &F_inv = std::nullopt)
+{
+    BENCHMARK_START_TIMER_SECTION("extrapolateDeformGrad");
+    if (F.size() != d_grad.size())
+        throw std::runtime_error("extrapolateDeformGrad: F and d_grad must have the same number of elements.");
+
+    const size_t ne = F.size();
+    // for (size_t ei = 0; ei < ne; ++ei) {
+    //     if ((F[ei].rows() != 2) || (F[ei].cols() != 2))
+    //         throw std::runtime_error("extrapolateDeformGrad: each F[ei] must be 2x2.");
+    //     if ((d_grad[ei].rows() != 2) || (d_grad[ei].cols() != 2))
+    //         throw std::runtime_error("extrapolateDeformGrad: each d_grad[ei] must be 2x2.");
+    // }
+
+    if (F_inv.has_value()) {
+        if (F_inv->size() != ne)
+            throw std::runtime_error("extrapolateDeformGrad: F_inv must have the same number of elements as F.");
+        // for (size_t ei = 0; ei < ne; ++ei) {
+        //     if (((*F_inv)[ei].rows() != 2) || ((*F_inv)[ei].cols() != 2))
+        //         throw std::runtime_error("extrapolateDeformGrad: each F_inv[ei] must be 2x2.");
+        // }
+    }
+
+    std::vector<MNd> F_extra(ne, MNd(2, 2));
+
+    if (method == "Linear") {
+        for (size_t ei = 0; ei < ne; ++ei)
+            F_extra[ei] = F[ei] + alpha * d_grad[ei];
+        return F_extra;
+    }
+
+    if (method == "Eulerian") {
+        for (size_t ei = 0; ei < ne; ++ei) {
+            const M2d Fi = F[ei];
+            const M2d dFi = d_grad[ei];
+            const M2d Finvi = F_inv.has_value() ? M2d((*F_inv)[ei]) : Fi.inverse();
+
+            const M2d DFinv = dFi * Finvi;
+            const M2d R_tilde_zero = 0.5 * alpha * (DFinv - DFinv.transpose());
+            const M2d S_tilde_zero = 0.5 * alpha * (DFinv + DFinv.transpose());
+
+            M2d S_extra = S_tilde_zero;
+            S_extra(0, 0) += 1.0;
+            S_extra(1, 1) += 1.0;
+
+            const Real theta = R_tilde_zero(1, 0);
+            const Real c = std::cos(theta), s = std::sin(theta);
+            M2d R_extra;
+            R_extra << c, -s,
+                       s,  c;
+
+            const M2d F_tilde = R_extra * S_extra;
+            F_extra[ei] = F_tilde * Fi;
+        }
+        BENCHMARK_STOP_TIMER_SECTION("extrapolateDeformGrad");
+        return F_extra;
+    }
+    
+    if (method == "Lagrangian")
+        throw std::runtime_error("extrapolateDeformGrad: method 'Lagrangian' is not implemented in the C++ path yet.");
+
+    throw std::runtime_error("extrapolateDeformGrad: method '" + method + "' not implemented.");
+}
+
 // C++ counterpart of python/Stretch2Relax/extra_utils.py:getUVnewSolvePoission.
 // `F_extra` stores one 2x2 matrix per element; each matrix row is the per-element
 // gradient used to build a Poisson RHS for u and v respectively.
@@ -72,13 +148,17 @@ UVMat getUVnewSolvePoisson(const Mesh &m,
                             std::optional<size_t> fixedVind = std::nullopt,
                             std::optional<V2d> fixedUV = std::nullopt)
 {
+    BENCHMARK_START_TIMER_SECTION("getUVnewSolvePoisson");
+    BENCHMARK_START_TIMER_SECTION("Static Assert Checks");
     static_assert(Mesh::EmbeddingDimension == 2,
                   "getUVnewSolvePoission currently expects a 2D embedding.");
 
     if (F_extra.size() != m.numElements())
         throw std::runtime_error("getUVnewSolvePoission: F_extra must have one 2x2 matrix per mesh element.");
+    BENCHMARK_STOP_TIMER_SECTION("Static Assert Checks");
 
     MNd F_extra_u(m.numElements(), 2), F_extra_v(m.numElements(), 2);
+    BENCHMARK_START_TIMER_SECTION("F_extra_u and F_extra_v extraction");
     for (size_t ei = 0; ei < m.numElements(); ++ei) {
         const MNd &Fe = F_extra[ei];
         if ((Fe.rows() != 2) || (Fe.cols() != 2))
@@ -86,17 +166,25 @@ UVMat getUVnewSolvePoisson(const Mesh &m,
         F_extra_u.row(ei) = Fe.row(0);
         F_extra_v.row(ei) = Fe.row(1);
     }
+    BENCHMARK_STOP_TIMER_SECTION("F_extra_u and F_extra_v extraction");
 
+    BENCHMARK_START_TIMER_SECTION("Poisson RHS extraction");
     VXd rhs_u = poisson_gradient_integration::rhs(m, F_extra_u);
     VXd rhs_v = poisson_gradient_integration::rhs(m, F_extra_v);
+    BENCHMARK_STOP_TIMER_SECTION("Poisson RHS extraction");
 
+    BENCHMARK_START_TIMER_SECTION("Poisson Solver");    
     VXd u_sol = LFactorizer.solve(rhs_u);
     VXd v_sol = LFactorizer.solve(rhs_v);
+    BENCHMARK_STOP_TIMER_SECTION("Poisson Solver");
 
+    BENCHMARK_START_TIMER_SECTION("UV Matrix Construction");
     UVMat uv_new(u_sol.size(), 2);
     uv_new.col(0) = u_sol;
     uv_new.col(1) = v_sol;
+    BENCHMARK_STOP_TIMER_SECTION("UV Matrix Construction");
 
+    BENCHMARK_START_TIMER_SECTION("Fixed Vertex Shift");
     if (fixedVind.has_value()) {
         if (!fixedUV.has_value())
             throw std::runtime_error("getUVnewSolvePoission: fixedUV must be provided when fixedVind is specified.");
@@ -106,7 +194,8 @@ UVMat getUVnewSolvePoisson(const Mesh &m,
         const V2d shift = *fixedUV - uv_new.row(*fixedVind).transpose();
         uv_new.rowwise() += shift.transpose();
     }
-
+    BENCHMARK_STOP_TIMER_SECTION("Fixed Vertex Shift");
+    BENCHMARK_STOP_TIMER_SECTION("getUVnewSolvePoisson");
     return uv_new;
 }
 
