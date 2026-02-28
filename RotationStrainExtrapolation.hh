@@ -24,6 +24,7 @@
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 #include <MeshFEM/Types.hh>
+#include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
 #include "NewtonFlow.hh"
 #include "PoissonGradientIntegration.hh"
 
@@ -302,6 +303,97 @@ private:
     VXd m_x0, m_d;
     bool m_lsBegin = false;
 
+};
+
+template<typename Real, class NFME>
+struct RSNewtonFlowExtrapolator : public Extrapolator<Real> {
+public:
+    using Base = Extrapolator<Real>;
+    using Mesh = typename NFME::Mesh;
+
+    RSNewtonFlowExtrapolator(NewtonMultiobjectiveProblem &prob, const std::string &method = "Eulerian")
+        : m_prob(prob), m_nf(extractNF(prob)), m_method(method), m_Linv(getLaplacianFactorizer(m_nf.mesh(), {0})) { }
+
+    void linesearch_begin(const VXd &x0, const VXd &d) override {
+        if (x0.size() != d.size())
+            throw std::runtime_error("RSNewtonFlowExtrapolator: x0 and d must have the same size.");
+        if (x0.size() % 2 != 0)
+            throw std::runtime_error("RSNewtonFlowExtrapolator: x0 and d must have even size (2N).");
+
+        m_prob.setVars(x0);
+
+        const size_t ne = m_nf.numElements();
+        m_F.resize(ne);
+        m_Finv.resize(ne);
+        for (size_t ei = 0; ei < ne; ++ei) {
+            m_F[ei] = m_nf.elementJacobian(ei, x0);
+            m_Finv[ei] = m_F[ei].inverse();
+        }
+
+        const UVMat x0_uv = Base::unflatten(x0);
+        m_c0 = x0_uv.colwise().mean().transpose();
+
+        const auto d_uv = Base::unflatten_view(d);
+        const VXd d_u = d_uv.col(0);
+        const VXd d_v = d_uv.col(1);
+        const MNd u_grad = scalarGradient(m_nf.mesh(), d_u);
+        const MNd v_grad = scalarGradient(m_nf.mesh(), d_v);
+
+        m_d_grad.resize(ne);
+        for (size_t ei = 0; ei < ne; ++ei) {
+            M2d dF;
+            dF.row(0) = u_grad.row(ei);
+            dF.row(1) = v_grad.row(ei);
+            m_d_grad[ei] = dF;
+        }
+
+        m_lsBegin = true;
+    }
+
+    UVMat linesearch_eval(Real alpha) const override {
+        if (!m_lsBegin)
+            throw std::runtime_error("RSNewtonFlowExtrapolator: linesearch_begin must be called before linesearch_eval.");
+
+        const std::vector<MNd> F_ex = extrapolateDeformGrad(m_F, alpha, m_d_grad, m_method, m_Finv);
+        UVMat uv_ex = getUVnewSolvePoisson(m_nf.mesh(), F_ex, *m_Linv);
+
+        const V2d shift = m_c0 - uv_ex.colwise().mean().transpose();
+        uv_ex.rowwise() += shift.transpose();
+        return uv_ex;
+    }
+
+private:
+    static NFME &extractNF(NewtonMultiobjectiveProblem &prob) {
+        try {
+            return dynamic_cast<NFME &>(prob.term(0));
+        }
+        catch (const std::bad_cast &) {
+            throw std::runtime_error("RSNewtonFlowExtrapolator: prob.term(0) is not the expected NewtonFlow type.");
+        }
+    }
+
+    static MNd scalarGradient(const Mesh &mesh, const VXd &scalarField) {
+        if (size_t(scalarField.size()) != mesh.numNodes())
+            throw std::runtime_error("RSNewtonFlowExtrapolator: scalarField size mismatch in gradient assembly.");
+
+        MNd g(mesh.numElements(), Mesh::EmbeddingDimension);
+        g.setZero();
+        for (const auto e : mesh.elements()) {
+            for (const auto n : e.nodes()) {
+                g.row(e.index()) += scalarField[n.index()] * e->gradPhi(n.localIndex()).average();
+            }
+        }
+        return g;
+    }
+
+    NewtonMultiobjectiveProblem &m_prob;
+    NFME &m_nf;
+    std::string m_method;
+    std::unique_ptr<CholeskyFactorizerBase> m_Linv;
+
+    std::vector<MNd> m_F, m_Finv, m_d_grad;
+    V2d m_c0 = V2d::Zero();
+    bool m_lsBegin = false;
 };
 
 

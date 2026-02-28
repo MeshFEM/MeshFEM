@@ -308,6 +308,8 @@ class RSNewtonFlowExtrapolator:
         """
         with benchmark.ScopedTimer('get F_ex'):
             F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) 
+            # F_ex = rotation_strain_extrapolation.extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) 
+            # F_ex = np.array(F_ex)
         with benchmark.ScopedTimer('Solve Poisson'):
             # uv_ex = rotation_strain_extrapolation.getUVnewSolvePoisson(self.nf.mesh, F_ex, self.Linv)
             uv_ex = getUVnewSolvePoission(self.nf.mesh, F_ex, self.Linv)
