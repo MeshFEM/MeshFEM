@@ -70,10 +70,11 @@ getLaplacianFactorizer(const Mesh &m, const std::vector<size_t> &fixedVars = {})
 //   - "Eulerian"
 //   - "Linear"
 // and throw for "Lagrangian".
-inline std::vector<MNd>
-extrapolateDeformGrad(const std::vector<MNd> &F,
+
+void extrapolateDeformGrad(const std::vector<MNd> &F,
                       Real alpha,
                       const std::vector<MNd> &d_grad,
+                      std::vector<MNd> &F_extra,
                       const std::string &method = "Eulerian",
                       const std::optional<std::vector<MNd>> &F_inv = std::nullopt)
 {
@@ -98,12 +99,10 @@ extrapolateDeformGrad(const std::vector<MNd> &F,
         // }
     }
 
-    std::vector<MNd> F_extra(ne, MNd(2, 2));
-
     if (method == "Linear") {
         for (size_t ei = 0; ei < ne; ++ei)
             F_extra[ei] = F[ei] + alpha * d_grad[ei];
-        return F_extra;
+        return;
     }
 
     if (method == "Eulerian") {
@@ -130,7 +129,7 @@ extrapolateDeformGrad(const std::vector<MNd> &F,
             F_extra[ei] = F_tilde * Fi;
         }
         BENCHMARK_STOP_TIMER_SECTION("extrapolateDeformGrad");
-        return F_extra;
+        return;
     }
     
     if (method == "Lagrangian")
@@ -325,6 +324,7 @@ public:
         const size_t ne = m_nf.numElements();
         m_F.resize(ne);
         m_Finv.resize(ne);
+        m_F_ex.resize(ne);
         for (size_t ei = 0; ei < ne; ++ei) {
             m_F[ei] = m_nf.elementJacobian(ei, x0);
             m_Finv[ei] = m_F[ei].inverse();
@@ -351,14 +351,18 @@ public:
     }
 
     UVMat linesearch_eval(Real alpha) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("linesearch_eval call in C++");
         if (!m_lsBegin)
             throw std::runtime_error("RSNewtonFlowExtrapolator: linesearch_begin must be called before linesearch_eval.");
 
-        const std::vector<MNd> F_ex = extrapolateDeformGrad(m_F, alpha, m_d_grad, m_method, m_Finv);
-        UVMat uv_ex = getUVnewSolvePoisson(m_nf.mesh(), F_ex, *m_Linv);
+        extrapolateDeformGrad(m_F, alpha, m_d_grad, m_F_ex, m_method, m_Finv);
+        UVMat uv_ex = getUVnewSolvePoisson(m_nf.mesh(), m_F_ex, *m_Linv);
 
+        BENCHMARK_START_TIMER_SECTION("centroid correction");
         const V2d shift = m_c0 - uv_ex.colwise().mean().transpose();
         uv_ex.rowwise() += shift.transpose();
+        BENCHMARK_STOP_TIMER_SECTION("centroid correction");
+
         return uv_ex;
     }
 
@@ -392,6 +396,7 @@ private:
     std::unique_ptr<CholeskyFactorizerBase> m_Linv;
 
     std::vector<MNd> m_F, m_Finv, m_d_grad;
+    mutable std::vector<MNd> m_F_ex;
     V2d m_c0 = V2d::Zero();
     bool m_lsBegin = false;
 };

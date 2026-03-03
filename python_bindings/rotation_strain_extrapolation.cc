@@ -93,6 +93,7 @@ PYBIND11_MODULE(rotation_strain_extrapolation, m) {
         py::arg("F"),
         py::arg("alpha"),
         py::arg("d_grad"),
+        py::arg("F_extra"),
         py::arg("method") = "Eulerian",
         py::arg("F_inv") = std::nullopt,
         R"pbdoc(
