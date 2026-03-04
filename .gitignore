@@ -49,6 +49,7 @@ __pycache__
 /build
 /build2
 /build_debug
+/build_relwdebug
 /cmake-build-*
 /data
 

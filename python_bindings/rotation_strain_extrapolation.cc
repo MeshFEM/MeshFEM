@@ -5,6 +5,7 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include <MeshFEM/../../python_bindings/BindingInstantiations.hh>
 #include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEM/FEMMesh.hh>
 #include "../RotationStrainExtrapolation.hh"
 
 struct RSEBinder {
@@ -78,6 +79,9 @@ struct RSEBinder {
 PYBIND11_MODULE(rotation_strain_extrapolation, m) {
     using Base = rotation_strain_extrapolation::Extrapolator<double>;
     using Linear = rotation_strain_extrapolation::LinearExtrapolator<double>;
+
+    using Mesh = FEMMesh<2, 1, Eigen::Vector2d>;
+    using RS = rotation_strain_extrapolation::RSNewtonFlowExtrapolator<double, Mesh>;
     using VXd = rotation_strain_extrapolation::VXd;
     using UVMat = rotation_strain_extrapolation::UVMat;
 
@@ -94,8 +98,8 @@ PYBIND11_MODULE(rotation_strain_extrapolation, m) {
         py::arg("alpha"),
         py::arg("d_grad"),
         py::arg("F_extra"),
+        py::arg("F_inv"),
         py::arg("method") = "Eulerian",
-        py::arg("F_inv") = std::nullopt,
         R"pbdoc(
             Extrapolate per-element deformation gradients.
 
@@ -152,4 +156,11 @@ PYBIND11_MODULE(rotation_strain_extrapolation, m) {
 
     py::class_<Linear, Base, std::shared_ptr<Linear>>(m, "LinearExtrapolator")
         .def(py::init<>());
+
+    py::class_<RS, Base, std::shared_ptr<RS>>(m, "RSNewtonFlowExtrapolator")
+        .def(py::init([](Mesh &m, const std::string &method) {
+                return std::make_shared<RS>(m, method);
+            }),
+            py::arg("m"),
+            py::arg("method") = "Eulerian");
 }

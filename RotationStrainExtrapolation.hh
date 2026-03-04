@@ -24,8 +24,6 @@
 #include <MeshFEM/GlobalBenchmark.hh>
 #include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
 #include <MeshFEM/Types.hh>
-#include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
-#include "NewtonFlow.hh"
 #include "PoissonGradientIntegration.hh"
 
 #include <Eigen/Dense>
@@ -39,13 +37,17 @@
 
 namespace rotation_strain_extrapolation {
 
+static constexpr size_t N = 2;
+
 using V2d   = Eigen::Vector2d;
 using V3d   = Eigen::Vector3d;
 using VXd   = Eigen::VectorXd;
-using M2d   = Eigen::Matrix<Real, 2, 2>;
-using MNd   = Eigen::MatrixXd;
+using MNd   = Eigen::Matrix<Real, N, N>;
 
-using UVMat = Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>; // Nx2
+using MXd   = Eigen::MatrixXd;
+using MXNd  = Eigen::Matrix<Real, Eigen::Dynamic, N, Eigen::RowMajor>;
+
+using UVMat = MXNd;
 using UVMatMapConst = Eigen::Map<const UVMat>;
 using UVMatMap = Eigen::Map<UVMat>;
 using VecMapConst = Eigen::Map<const VXd>;
@@ -70,15 +72,14 @@ getLaplacianFactorizer(const Mesh &m, const std::vector<size_t> &fixedVars = {})
 //   - "Eulerian"
 //   - "Linear"
 // and throw for "Lagrangian".
-
 void extrapolateDeformGrad(const std::vector<MNd> &F,
                       Real alpha,
                       const std::vector<MNd> &d_grad,
                       std::vector<MNd> &F_extra,
-                      const std::string &method = "Eulerian",
-                      const std::optional<std::vector<MNd>> &F_inv = std::nullopt)
+                      const std::vector<MNd> &F_inv,
+                      const std::string &method = "Eulerian")
 {
-    BENCHMARK_START_TIMER_SECTION("extrapolateDeformGrad");
+    BENCHMARK_SCOPED_TIMER_SECTION timer("extrapolateDeformGrad");
     if (F.size() != d_grad.size())
         throw std::runtime_error("extrapolateDeformGrad: F and d_grad must have the same number of elements.");
 
@@ -90,14 +91,12 @@ void extrapolateDeformGrad(const std::vector<MNd> &F,
     //         throw std::runtime_error("extrapolateDeformGrad: each d_grad[ei] must be 2x2.");
     // }
 
-    if (F_inv.has_value()) {
-        if (F_inv->size() != ne)
+        if (F_inv.size() != ne)
             throw std::runtime_error("extrapolateDeformGrad: F_inv must have the same number of elements as F.");
         // for (size_t ei = 0; ei < ne; ++ei) {
         //     if (((*F_inv)[ei].rows() != 2) || ((*F_inv)[ei].cols() != 2))
         //         throw std::runtime_error("extrapolateDeformGrad: each F_inv[ei] must be 2x2.");
         // }
-    }
 
     if (method == "Linear") {
         for (size_t ei = 0; ei < ne; ++ei)
@@ -106,29 +105,28 @@ void extrapolateDeformGrad(const std::vector<MNd> &F,
     }
 
     if (method == "Eulerian") {
-        for (size_t ei = 0; ei < ne; ++ei) {
-            const M2d Fi = F[ei];
-            const M2d dFi = d_grad[ei];
-            const M2d Finvi = F_inv.has_value() ? M2d((*F_inv)[ei]) : Fi.inverse();
+        parallel_for_range(ne, [&](size_t ei) {
+            const MNd Fi = F[ei];
+            const MNd dFi = d_grad[ei];
+            const MNd &Finvi = F_inv[ei];
 
-            const M2d DFinv = dFi * Finvi;
-            const M2d R_tilde_zero = 0.5 * alpha * (DFinv - DFinv.transpose());
-            const M2d S_tilde_zero = 0.5 * alpha * (DFinv + DFinv.transpose());
+            const MNd DFinv = dFi * Finvi;
+            const MNd R_tilde_zero = 0.5 * alpha * (DFinv - DFinv.transpose());
+            const MNd S_tilde_zero = 0.5 * alpha * (DFinv + DFinv.transpose());
 
-            M2d S_extra = S_tilde_zero;
+            MNd S_extra = S_tilde_zero;
             S_extra(0, 0) += 1.0;
             S_extra(1, 1) += 1.0;
 
             const Real theta = R_tilde_zero(1, 0);
             const Real c = std::cos(theta), s = std::sin(theta);
-            M2d R_extra;
+            MNd R_extra;
             R_extra << c, -s,
                        s,  c;
 
-            const M2d F_tilde = R_extra * S_extra;
+            const MNd F_tilde = R_extra * S_extra;
             F_extra[ei] = F_tilde * Fi;
-        }
-        BENCHMARK_STOP_TIMER_SECTION("extrapolateDeformGrad");
+        });
         return;
     }
     
@@ -157,15 +155,15 @@ UVMat getUVnewSolvePoisson(const Mesh &m,
         throw std::runtime_error("getUVnewSolvePoission: F_extra must have one 2x2 matrix per mesh element.");
     BENCHMARK_STOP_TIMER_SECTION("Static Assert Checks");
 
-    MNd F_extra_u(m.numElements(), 2), F_extra_v(m.numElements(), 2);
+    MXNd F_extra_u(m.numElements(), 2), F_extra_v(m.numElements(), 2);
     BENCHMARK_START_TIMER_SECTION("F_extra_u and F_extra_v extraction");
-    for (size_t ei = 0; ei < m.numElements(); ++ei) {
+    parallel_for_range(F_extra.size(), [&](size_t ei) {
         const MNd &Fe = F_extra[ei];
         if ((Fe.rows() != 2) || (Fe.cols() != 2))
             throw std::runtime_error("getUVnewSolvePoission: each F_extra[ei] must be a 2x2 matrix.");
         F_extra_u.row(ei) = Fe.row(0);
         F_extra_v.row(ei) = Fe.row(1);
-    }
+    });
     BENCHMARK_STOP_TIMER_SECTION("F_extra_u and F_extra_v extraction");
 
     BENCHMARK_START_TIMER_SECTION("Poisson RHS extraction");
@@ -304,14 +302,13 @@ private:
 
 };
 
-template<typename Real, class NFME>
+template<typename Real, class Mesh>
 struct RSNewtonFlowExtrapolator : public Extrapolator<Real> {
 public:
     using Base = Extrapolator<Real>;
-    using Mesh = typename NFME::Mesh;
 
-    RSNewtonFlowExtrapolator(NewtonMultiobjectiveProblem &prob, const std::string &method = "Eulerian")
-        : m_prob(prob), m_nf(extractNF(prob)), m_method(method), m_Linv(getLaplacianFactorizer(m_nf.mesh(), {0})) { }
+    RSNewtonFlowExtrapolator(const Mesh &m, const std::string &method = "Eulerian")
+        : m_mesh(m), m_method(method), m_Linv(getLaplacianFactorizer(m, {0})) { }
 
     void linesearch_begin(const VXd &x0, const VXd &d) override {
         if (x0.size() != d.size())
@@ -319,14 +316,12 @@ public:
         if (x0.size() % 2 != 0)
             throw std::runtime_error("RSNewtonFlowExtrapolator: x0 and d must have even size (2N).");
 
-        m_prob.setVars(x0);
-
-        const size_t ne = m_nf.numElements();
+        const size_t ne = m_mesh.numElements();
         m_F.resize(ne);
         m_Finv.resize(ne);
         m_F_ex.resize(ne);
         for (size_t ei = 0; ei < ne; ++ei) {
-            m_F[ei] = m_nf.elementJacobian(ei, x0);
+            m_F[ei] = elementJacobian(ei, x0);
             m_Finv[ei] = m_F[ei].inverse();
         }
 
@@ -336,12 +331,12 @@ public:
         const auto d_uv = Base::unflatten_view(d);
         const VXd d_u = d_uv.col(0);
         const VXd d_v = d_uv.col(1);
-        const MNd u_grad = scalarGradient(m_nf.mesh(), d_u);
-        const MNd v_grad = scalarGradient(m_nf.mesh(), d_v);
+        const MXNd u_grad = scalarGradient(mesh(), d_u);
+        const MXNd v_grad = scalarGradient(mesh(), d_v);
 
         m_d_grad.resize(ne);
         for (size_t ei = 0; ei < ne; ++ei) {
-            M2d dF;
+            MNd dF;
             dF.row(0) = u_grad.row(ei);
             dF.row(1) = v_grad.row(ei);
             m_d_grad[ei] = dF;
@@ -355,8 +350,13 @@ public:
         if (!m_lsBegin)
             throw std::runtime_error("RSNewtonFlowExtrapolator: linesearch_begin must be called before linesearch_eval.");
 
-        extrapolateDeformGrad(m_F, alpha, m_d_grad, m_F_ex, m_method, m_Finv);
-        UVMat uv_ex = getUVnewSolvePoisson(m_nf.mesh(), m_F_ex, *m_Linv);
+        BENCHMARK_START_TIMER_SECTION("extrapolateDeformGrad call in linesearch_eval");
+        extrapolateDeformGrad(m_F, alpha, m_d_grad, m_F_ex, m_Finv, m_method);
+        BENCHMARK_STOP_TIMER_SECTION("extrapolateDeformGrad call in linesearch_eval");
+        
+        BENCHMARK_START_TIMER_SECTION("getUVnewSolvePoisson call in linesearch_eval");
+        UVMat uv_ex = getUVnewSolvePoisson(mesh(), m_F_ex, *m_Linv);
+        BENCHMARK_STOP_TIMER_SECTION("getUVnewSolvePoisson call in linesearch_eval");
 
         BENCHMARK_START_TIMER_SECTION("centroid correction");
         const V2d shift = m_c0 - uv_ex.colwise().mean().transpose();
@@ -366,21 +366,27 @@ public:
         return uv_ex;
     }
 
-private:
-    static NFME &extractNF(NewtonMultiobjectiveProblem &prob) {
-        try {
-            return dynamic_cast<NFME &>(prob.term(0));
-        }
-        catch (const std::bad_cast &) {
-            throw std::runtime_error("RSNewtonFlowExtrapolator: prob.term(0) is not the expected NewtonFlow type.");
-        }
+    const Mesh &mesh() const { return m_mesh; }
+
+    // Compute the Jacobian of a nodal vector field `x` at the center of element `ei`.
+    MNd elementJacobian(size_t ei, const VXd &x) const {
+        const auto &m = mesh();
+        const auto &e = m.element(ei);
+        // Note: the following assumes elements are piecewise linear
+        MNd result = MNd::Zero();
+        auto gphis = e->gradBarycentric();
+        for (auto v : e.vertices())
+            result += x.template segment<N>(N * v.index()) * gphis.col(v.localIndex()).transpose();
+        return result;
     }
 
-    static MNd scalarGradient(const Mesh &mesh, const VXd &scalarField) {
+private:
+
+    static MXNd scalarGradient(const Mesh &mesh, const VXd &scalarField) {
         if (size_t(scalarField.size()) != mesh.numNodes())
             throw std::runtime_error("RSNewtonFlowExtrapolator: scalarField size mismatch in gradient assembly.");
 
-        MNd g(mesh.numElements(), Mesh::EmbeddingDimension);
+        MXNd g(mesh.numElements(), Mesh::EmbeddingDimension);
         g.setZero();
         for (const auto e : mesh.elements()) {
             for (const auto n : e.nodes()) {
@@ -389,9 +395,7 @@ private:
         }
         return g;
     }
-
-    NewtonMultiobjectiveProblem &m_prob;
-    NFME &m_nf;
+    const Mesh &m_mesh;
     std::string m_method;
     std::unique_ptr<CholeskyFactorizerBase> m_Linv;
 

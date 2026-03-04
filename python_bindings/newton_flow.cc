@@ -7,7 +7,6 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/EnergyDensities/LinearElasticEnergy.hh>
 
 #include "../NewtonFlow.hh"
-#include "../RotationStrainExtrapolation.hh"
 
 template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
 auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) {
@@ -38,16 +37,5 @@ PYBIND11_MODULE(newton_flow, m)
     py::module detail = m.def_submodule("detail");
 
     bindNewtonFlow<2, 1, SymmetricDirichlet>("symmetric_dirichlet", m, detail);
-    using NFME = NewtonFlowMeshEnergy<2, 1, SymmetricDirichlet>;
-    using Base = rotation_strain_extrapolation::Extrapolator<double>;
-    using RSNF = rotation_strain_extrapolation::RSNewtonFlowExtrapolator<double, NFME>;
-
-    py::class_<RSNF, Base, std::shared_ptr<RSNF>>(m, "RSNewtonFlowExtrapolator")
-        .def(py::init([](NewtonMultiobjectiveProblem &prob, const std::string &method) {
-                return std::make_shared<RSNF>(prob, method);
-            }),
-            py::arg("prob"),
-            py::arg("method") = "Eulerian");
-
     // bindNewtonFlow<2, 1, LinearElasticEnergy>("linear_elastic", m, detail);
 }
