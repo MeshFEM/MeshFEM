@@ -321,6 +321,31 @@ class LinearExtrapolator:
         self.d = d
     def linesearch_eval(self, alpha):
         return self.x0 + alpha * self.d
+
+class HybridExtrapolator:
+    def __init__(self, extrapolators):
+        """
+        Cycle through a list of extrapolators on each line-search begin call.
+        """
+        self.extrapolators = list(extrapolators)
+        if len(self.extrapolators) == 0:
+            raise ValueError("HybridExtrapolator requires at least one extrapolator")
+        for extrapolator in self.extrapolators:
+            if not hasattr(extrapolator, 'linesearch_begin') or not hasattr(extrapolator, 'linesearch_eval'):
+                raise TypeError("HybridExtrapolator inputs must implement linesearch_begin and linesearch_eval")
+        
+        self._active_extrapolator = None
+        self._next_extrapolator_idx = 0
+
+    def linesearch_begin(self, x0, d):
+        self._active_extrapolator = self.extrapolators[self._next_extrapolator_idx]
+        self._next_extrapolator_idx = (self._next_extrapolator_idx + 1) % len(self.extrapolators)
+        self._active_extrapolator.linesearch_begin(x0, d)
+
+    def linesearch_eval(self, alpha):
+        if self._active_extrapolator is None:
+            raise RuntimeError("linesearch_begin must be called before linesearch_eval")
+        return self._active_extrapolator.linesearch_eval(alpha)
     
 class TaylorExtrapolator:
     def __init__(self, prob, opt, max_degree, constant_speed=True):
