@@ -191,7 +191,7 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     plt.sca(axs[0])
     with benchmark.ScopedTimer('Plot Trajectories'):
         for i in range(len(trajectories)):
-            t = trajectories[i]
+            t = np.array(trajectories[i])
             plot_trajectory(t[:, trajectory_slice, :], color=colors[i], zorder = len(trajectories) - i)
 
     plt.text(0.01, 0.01, f"Step {frame} (⍺={0.02 * frame:0.3})", transform=axs[0].transAxes, ha="left", va="bottom")
@@ -204,6 +204,8 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
 
     benchmark.stop_timer_section('extrapolate')
     prob.setVars(fv[frame].ravel())
+    
+    return axs
 
 import video_writer
 def writeVideo(path, num_frames, plot_frame, skipFrame=1, framerate=30):
