@@ -36,20 +36,26 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, post_step_cb=None,
         ## Prepare
         with benchmark.ScopedTimer('linesearch_begin'):
             extrapolator.linesearch_begin(x, d)
-
+    
+        # Cache
+        last_eval = None
+        
         ## f(alpha) the linesearch_eval but wraps and returns an energy
         def f(alpha):
+            nonlocal last_eval
             with benchmark.ScopedTimer('linesearch_eval'):
                 x_new = extrapolator.linesearch_eval(alpha)
             with benchmark.ScopedTimer('energy eval'):
                 o = prob.objectiveAtVars(x_new.ravel())
+            last_eval = (alpha, x_new)
             return o
         
         ## Linesearch Routine
         alpha = linesearch_func(f, x, d)
-        prob.setVars(extrapolator.linesearch_eval(alpha).ravel())
+        x = last_eval[1].ravel() if alpha == last_eval[0] else extrapolator.linesearch_eval(alpha).ravel()
+        prob.setVars(x)
 
-        if post_step_cb is not None: post_step_cb(prob, iter_count)
+        if post_step_cb is not None: post_step_cb(prob, iter_count, alpha)
 
         if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha)
         iter_count += 1
@@ -115,7 +121,8 @@ class ExpLinesearch(LineSearchBase):
         if max_alpha <= 0:
             return 0.0
 
-        cache = {}
+        self.cache = {} 
+        cache = self.cache
 
         def eval_f(alpha: float) -> float:
             alpha = float(np.clip(alpha, 0.0, max_alpha))
