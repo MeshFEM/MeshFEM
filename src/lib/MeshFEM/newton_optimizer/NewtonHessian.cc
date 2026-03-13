@@ -90,6 +90,7 @@ Real NewtonHessianFactorization::update(const WorkingSet &ws, Real &beta, const 
     // `H_hn` will be updated in-place!
     // (This is what we want for the subsequent dense factorization steps.)
     // std::cout << "NewtonHessianFactorization update hProjCtr.shouldUseProjection(): " << hProjCtr.shouldUseProjection() << std::endl;
+    hProjCtr.prepareForInitialFactorizationAttempt();
     const NewtonHessian &H_nh = m_problem->hessian(hProjCtr.shouldUseProjection());
 
     H_nh.validate(); // Make sure everything in H_nh is of the expected size.
@@ -150,8 +151,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
     if (ws.size()) throw std::runtime_error("TODO: WorkingSet support has been disabled for refactoring and must be reimplemented.");
 
     Real currentTauScale = 0; // simple caching mechanism to avoid excessive calls to tauScale()
-    size_t numIndefiniteFactorizations = 0;
-    bool hessianReevaluated = false; // whether the projection controller forced a reevaluation of the Hessian with projection within this step
+    size_t numIndefiniteFactorizationsOfCurrentHessian = 0; // Number of times the *same* underlying Hessian has been found to be indefinite; this is reset if the Hessian is reevaluated.
     while (true) {
         try {
             if (tau != 0) {
@@ -186,16 +186,17 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
             break;
         }
         catch (std::exception &e) {
-            ++numIndefiniteFactorizations;
-            if (numIndefiniteFactorizations == 1) { // First time we've encountered indefiniteness
-                // We immediately notify the projection controller of
-                // indefiniteness of the unshifted Hessian; if the controller
-                // returns `true`, then we need to recompute the Hessian with
-                // projection before trying shifts.
+            ++numIndefiniteFactorizationsOfCurrentHessian;
+            if (numIndefiniteFactorizationsOfCurrentHessian == 1) {
+                // Immediately notify the projection controller of indefiniteness of
+                // the unshifted, potentially reevaluated Hessian;
+                // if the controller returns `true`, then we need to recompute
+                // the Hessian with projection before trying shifts.
                 if (m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ true)) {
                     // std::cout << "Indefinite Hessian; hessian projection controller requested a reevaluation of the Hessian with projection.\n";
                     m_problem->invalidateCachedHessian();
                     m_problem->hessian(true).validate(); // Updates the Hessian obtained by `getH` in-place.
+                    numIndefiniteFactorizationsOfCurrentHessian = 0;
                     continue; // No shifts at this time; we've just enabled projection
                 }
             }
@@ -220,15 +221,6 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
         // Eigen::VectorXd a = ws.getFreeComponent(m_problem->LEQConstraintMatrix());
         // kkt_solver.update(s, a);
         throw std::runtime_error("Unimplemented (LEQ constraints are disabled during refactoring)");
-    }
-
-    // If the Hessian was reevaluated with projection and was found to *still*
-    // be indefinite, we notify the controller of this fact.
-    // However we don't want to send a second notification for the original
-    // Hessian if it was not reevaluated.
-    if (hessianReevaluated && (tau > 0.0)) {
-        // Notify the projection controller of the definiteness of the Hessian used to compute this step.
-        m_options.getHessianProjectionController().notifyDefiniteness(/* isIndefinite = */ true);
     }
 
     // The projection controller has only been notified so far if the Hessian was indefinite;

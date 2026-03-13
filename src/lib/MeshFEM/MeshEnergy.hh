@@ -13,14 +13,14 @@
 #ifndef MESHENERGY_HH
 #define MESHENERGY_HH
 #include <MeshFEM/FEMMesh.hh>
-#include <MeshFEM/newton_optimizer/newton_optimizer.hh>
-#include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
+
 #include <MeshFEM/SystemAssembler.hh>
 #include <MeshFEM/ParallelAssembly.hh>
 #include "MeshFEM/Parallelism.hh"
 #include "Stencils.hh"
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include "Elements/MaterialAssignment.hh"
+#include "MeshEnergyBase.hh"
 
 enum class MeshVarType { PER_NODE, PER_EDGE, PER_CELL };
 template<MeshVarType MVT, size_t N> struct MeshVarSpecification {
@@ -90,27 +90,6 @@ struct NameMangler<MeshEnergyVars<MVSpec...>> {
 
 template<size_t N>
 using NodalVars = MeshEnergyVars<MeshVarSpecification<MeshVarType::PER_NODE, N>>;
-
-struct MeshEnergyBase : public NewtonObjectiveTerm { 
-    MeshEnergyBase(std::shared_ptr<NewtonVarsBase> vars)
-        : NewtonObjectiveTerm(vars) { }
-
-    MaterialBase &materialForElement(size_t ei) {
-        if (ei >= numElements()) throw std::runtime_error("Element index out of bounds");
-        auto &mat = m_getMaterial(ei);
-        return mat;
-    }
-
-    virtual size_t numElements() const = 0;
-
-    virtual ~MeshEnergyBase() { }
-
-    bool useXBasedProjection = false;
-    double xBasedProjectionClampEps = 0.0;
-    double elementHessianShift = 0.0;
-private:
-    virtual MaterialBase &m_getMaterial(size_t ei) = 0;
-};
 
 // The instantiation of a stencil-based energy term for a given mesh
 // and variable definition.
@@ -210,47 +189,42 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
-    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
-        using ElementHessian = typename Element::Hessian;
-        const bool needsXBasedProjection = useXBasedProjection && projectionMask;
+    using ElementHessian = typename Element::Hessian;
+    ElementHessian elementHessian(size_t ei, Real weight, bool projectionMask) const {
+        if constexpr (Element::CachesDeformedQuantities)
+            return elements[ei].hessian(weight, projectionMask);
+        else
+            return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+    }
 
+    template<class ShouldProject>
+    void accumulateHessianImpl(Real weight, NewtonHessian &H, const ShouldProject &shouldProjectHE) const {
         if (elementHessianShift != 0.0) {
             // This mode is intended only for apples-to-apples comparison
             // against the Composite Majorization codebase, which addresses
             // Hessian rank deficiency by adding a small, fixed multiple of the identity to
             // each element Hessian.
-            if (needsXBasedProjection) throw std::runtime_error("Combining x-based projection with elementHessianShift not supported");
+            if (useXBasedProjection) throw std::runtime_error("Combining x-based projection with elementHessianShift not supported");
 
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                ElementHessian H_e;
-                if constexpr (Element::CachesDeformedQuantities)
-                     H_e = elements[ei].hessian(weight, projectionMask);
-                else H_e = elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+                ElementHessian H_e = elementHessian(ei, weight, shouldProjectHE(ei));
                 H_e.diagonal().array() += weight * elementHessianShift;
                 return H_e;
             }, [this](size_t ei) { return stencils[ei].blockVars; });
             return;
         }
 
-        if (!needsXBasedProjection) {
+        if (!useXBasedProjection) {
             // Use projection implemented by the element itself (e.g., F-based projection)
-            assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                if constexpr (Element::CachesDeformedQuantities)
-                    return elements[ei].hessian(weight, projectionMask);
-                else
-                    return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
+            assembler().assembleHessian(H, elements.size(),
+                    [&](size_t ei) { return elementHessian(ei, weight, shouldProjectHE(ei)); },
+                    [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
             // Use a brute-force x-based projection
             auto getProjectedHessian = [&](size_t ei) -> ElementHessian {
-                ElementHessian H_e;
-                if constexpr (Element::CachesDeformedQuantities)
-                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false);
-                else
-                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
-
+                ElementHessian H_e = elementHessian(ei, weight, false);
+                if (!shouldProjectHE(ei)) return H_e;
                 Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e.transpose()); // WARNING: uses *lower* triangle, while we compute upper triangle!
                 if (Hes.eigenvalues()[0] >= xBasedProjectionClampEps) return H_e; // sorted increasing
                 return (Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(xBasedProjectionClampEps).asDiagonal() * Hes.eigenvectors().transpose()).eval();
@@ -260,10 +234,33 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
+    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
+        if (!projectionMask || !hasPerElementHessianProjectionMasks()) {
+            // No per-element projection mask customization.
+            accumulateHessianImpl(weight, H, [projectionMask](size_t ei) { return projectionMask; });
+        }
+        else {
+            accumulateHessianImpl(weight, H, [this](size_t ei) { return elementHessianProjectionMasks[ei]; });
+        }
+    }
+
     NewtonHessian hessianSparsityPattern() const override {
         return assembler().sparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
+    }
+
+    using MeshEnergyBase::elementGradientNorms; // don't hide overloads.
+    VXd elementGradientNorms(const VXd &g) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy.elementGradientNorms");
+        const size_t ne = numElements();
+        VXd result(ne);
+        parallel_for_range(ne, [this, &result, &g](size_t ei) {
+            auto g_e = extractLocalVars(ei, g);
+            result[ei] = g_e.norm();
+        });
+        return result;
     }
 
     void varsUpdated() override {
