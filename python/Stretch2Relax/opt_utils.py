@@ -17,17 +17,19 @@ import igl
 import extra_utils
 
 @benchmark.benchmarkit
-def newton_extrapolate(opt, extrapolator, linesearch_func, post_step_cb=None,
+def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, post_step_cb = None,
                       grad_tol=1e-6, max_iters = 200, x_init = None, verbose=False):
     prob = opt.get_problem()
     flow_vertices = []
-    
+
     if x_init is None: x_init = prob.getVars()
     else:  prob.setVars(x_init)
-    
+
     # Newton Optimization Loop
     iter_count = 0
     while np.linalg.norm(prob.gradient()) > grad_tol and iter_count < max_iters:
+        if pre_step_cb is not None: pre_step_cb(prob, iter_count)
+
         d = opt.newton_step()
         flow_vertices.append(prob.getVars())
         x = prob.getVars()
