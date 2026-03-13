@@ -38,20 +38,26 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
         ## Prepare
         with benchmark.ScopedTimer('linesearch_begin'):
             extrapolator.linesearch_begin(x, d)
-
+    
+        # Cache
+        last_eval = None
+        
         ## f(alpha) the linesearch_eval but wraps and returns an energy
         def f(alpha):
+            nonlocal last_eval
             with benchmark.ScopedTimer('linesearch_eval'):
                 x_new = extrapolator.linesearch_eval(alpha)
             with benchmark.ScopedTimer('energy eval'):
                 o = prob.objectiveAtVars(x_new.ravel())
+            last_eval = (alpha, x_new)
             return o
         
         ## Linesearch Routine
         alpha = linesearch_func(f, x, d)
-        prob.setVars(extrapolator.linesearch_eval(alpha).ravel())
+        x = last_eval[1].ravel() if alpha == last_eval[0] else extrapolator.linesearch_eval(alpha).ravel()
+        prob.setVars(x)
 
-        if post_step_cb is not None: post_step_cb(prob, iter_count)
+        if post_step_cb is not None: post_step_cb(prob, iter_count, alpha)
 
         if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha)
         iter_count += 1
@@ -96,6 +102,127 @@ class BruteForceLinesearch(LineSearchBase):
                 a *= 0.5
                 e = f(a)
         return a
+
+class ExpLinesearch(LineSearchBase):
+    def __init__(self, alpha_step_size: float, max_doublings: int = 60, max_bin_iters: int = 60, **kwargs):
+        super().__init__(**kwargs)
+        if alpha_step_size <= 0:
+            raise ValueError("alpha_step_size must be > 0")
+        if max_doublings < 0:
+            raise ValueError("max_doublings must be >= 0")
+        if max_bin_iters < 0:
+            raise ValueError("max_bin_iters must be >= 0")
+
+        self.alpha_step_size = float(alpha_step_size)
+        self.max_doublings = int(max_doublings)
+        self.max_bin_iters = int(max_bin_iters)
+
+    def _linesearch_impl(self, f, max_alpha):
+        max_alpha = float(max_alpha)
+        step = self.alpha_step_size
+        if max_alpha <= 0:
+            return 0.0
+
+        self.cache = {} 
+        cache = self.cache
+
+        def eval_f(alpha: float) -> float:
+            alpha = float(np.clip(alpha, 0.0, max_alpha))
+            alpha_key = round(alpha, 14)
+            if alpha_key not in cache:
+                val = float(f(alpha))
+                cache[alpha_key] = val if np.isfinite(val) else np.inf
+            return cache[alpha_key]
+
+        def best_cached_alpha() -> float:
+            return min(cache, key=cache.get) if cache else 0.0
+
+        f0 = eval_f(0.0)
+        first_alpha = min(max_alpha, step)
+        f1 = eval_f(first_alpha)
+
+        # BruteForceLinesearch-style fallback on immediate rise.
+        if f1 > f0:
+            a = first_alpha
+            e = f1
+            max_backtracks = max(1, self.max_doublings + 1)
+            for _ in range(max_backtracks):
+                if e <= f0:
+                    return a
+                a *= 0.5
+                e = eval_f(a)
+            return 0.0
+
+        # If we cannot even place one full grid step, keep the best feasible alpha.
+        if max_alpha < step:
+            return best_cached_alpha()
+
+        k_max = int(np.floor(max_alpha / step))
+        if k_max <= 0:
+            return best_cached_alpha()
+
+        def eval_k(k: int) -> float:
+            k = int(np.clip(k, 0, k_max))
+            return eval_f(k * step)
+
+        # 1) Exponential bracketing on the discrete grid.
+        prev_k, curr_k = 0, 1
+        prev_f, curr_f = eval_k(prev_k), eval_k(curr_k)
+        left_k, right_k = None, None
+
+        for _ in range(self.max_doublings):
+            next_k = min(k_max, 2 * curr_k)
+            if next_k == curr_k:
+                break
+
+            next_f = eval_k(next_k)
+            if next_f > curr_f:
+                left_k = prev_k
+                right_k = next_k
+                break
+
+            prev_k, prev_f = curr_k, curr_f
+            curr_k, curr_f = next_k, next_f
+
+        if left_k is None or right_k is None:
+            return best_cached_alpha()
+
+        L, R = left_k, right_k
+        if R <= L:
+            return best_cached_alpha()
+
+        # 2) Discrete binary search via neighbor comparisons.
+        for _ in range(self.max_bin_iters):
+            if R - L <= 2:
+                break
+
+            mid = (L + R) // 2
+            f_mid = eval_k(mid)
+            f_left = eval_k(mid - 1) if mid - 1 >= 0 else np.inf
+            f_right = eval_k(mid + 1)
+
+            if f_left <= f_mid:
+                R = mid - 1
+            elif f_right < f_mid:
+                L = mid + 1
+            else:
+                return mid * step
+
+        # 3) Final scan on the remaining small bracket.
+        scan_L = max(0, L)
+        scan_R = min(k_max, R)
+        if scan_R < scan_L:
+            return best_cached_alpha()
+
+        best_k = scan_L
+        best_e = eval_k(scan_L)
+        for k in range(scan_L + 1, scan_R + 1):
+            e = eval_k(k)
+            if e < best_e:
+                best_e = e
+                best_k = k
+
+        return best_k * step
 
 ## Linesearch Routines
 

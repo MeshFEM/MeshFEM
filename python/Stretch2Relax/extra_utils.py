@@ -22,6 +22,7 @@ import newton_flow
 import newton_flow_utils as nfu
 import vector_pade
 import param_utils, sim_utils
+import rotation_strain_extrapolation
 
 
 def getColorStr(method):
@@ -230,6 +231,7 @@ class RotationStrainExtrapolation:
         self.Bt = np.transpose(self.B, (0, 2, 1))
         self.method = method
         self.Linv = getLaplacianFactorizer(m, fixedVars=[0])
+        
 
     @benchmark.benchmarkit_customname('RotationStrainExtrapolation')
     def __call__(self, x0, coeffs, alphas):
@@ -262,7 +264,7 @@ class RotationStrainExtrapolation:
         uv_ex = getUVnewSolvePoission(self.param.mesh, F_ex, self.Linv)
         return uv_ex + (self.c0 - uv_ex.mean(axis=0))
 
-class RSNewtonFlowExtrapolation:
+class RSNewtonFlowExtrapolator:
     def __init__(self, prob, method='Eulerian'):
         """
         Constructor caches quantities that depend only on the input mesh
@@ -272,7 +274,7 @@ class RSNewtonFlowExtrapolation:
         self.nf = self.prob.term(0)
         m = self.nf.mesh
         self.method = method
-        self.Linv = getLaplacianFactorizer(m, fixedVars=[0])
+        self.Linv = rotation_strain_extrapolation.getLaplacianFactorizer(m, fixedVars=[0])
 
     @benchmark.benchmarkit_customname('RotationStrainExtrapolation')
     def __call__(self, x0, coeffs, alphas):
@@ -304,9 +306,13 @@ class RSNewtonFlowExtrapolation:
         Evaluate extrapolation for `x0 + alpha d`, where `x0` and `d`
         have been specified by a previous call to `linesearch_begin`.
         """
-        with benchmark.ScopedTimer('F_ex@Bt'):
+        with benchmark.ScopedTimer('get F_ex'):
             F_ex = extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) 
-        uv_ex = getUVnewSolvePoission(self.nf.mesh, F_ex, self.Linv)
+            # F_ex = rotation_strain_extrapolation.extrapolateDeformGrad(self.F, alpha, self.d_grad, self.method, F_inv = self.Finv) 
+            # F_ex = np.array(F_ex)
+        with benchmark.ScopedTimer('Solve Poisson'):
+            # uv_ex = rotation_strain_extrapolation.getUVnewSolvePoisson(self.nf.mesh, F_ex, self.Linv)
+            uv_ex = getUVnewSolvePoission(self.nf.mesh, F_ex, self.Linv)
         return uv_ex + (self.c0 - uv_ex.mean(axis=0))
     
 class LinearExtrapolator:
@@ -315,6 +321,31 @@ class LinearExtrapolator:
         self.d = d
     def linesearch_eval(self, alpha):
         return self.x0 + alpha * self.d
+
+class HybridExtrapolator:
+    def __init__(self, extrapolators):
+        """
+        Cycle through a list of extrapolators on each line-search begin call.
+        """
+        self.extrapolators = list(extrapolators)
+        if len(self.extrapolators) == 0:
+            raise ValueError("HybridExtrapolator requires at least one extrapolator")
+        for extrapolator in self.extrapolators:
+            if not hasattr(extrapolator, 'linesearch_begin') or not hasattr(extrapolator, 'linesearch_eval'):
+                raise TypeError("HybridExtrapolator inputs must implement linesearch_begin and linesearch_eval")
+        
+        self._active_extrapolator = None
+        self._next_extrapolator_idx = 0
+
+    def linesearch_begin(self, x0, d):
+        self._active_extrapolator = self.extrapolators[self._next_extrapolator_idx]
+        self._next_extrapolator_idx = (self._next_extrapolator_idx + 1) % len(self.extrapolators)
+        self._active_extrapolator.linesearch_begin(x0, d)
+
+    def linesearch_eval(self, alpha):
+        if self._active_extrapolator is None:
+            raise RuntimeError("linesearch_begin must be called before linesearch_eval")
+        return self._active_extrapolator.linesearch_eval(alpha)
     
 class TaylorExtrapolator:
     def __init__(self, opt, max_degree, constant_speed=True):

@@ -35,6 +35,8 @@ auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) 
 PYBIND11_MODULE(newton_flow, m)
 {
     py::module::import("mesh_energy");
+    py::module::import("py_newton_optimizer");
+    py::module::import("rotation_strain_extrapolation");
     py::module detail = m.def_submodule("detail");
 
     bindNewtonFlow<2, 1, SymmetricDirichlet>("symmetric_dirichlet", m, detail);
