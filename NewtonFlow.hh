@@ -23,13 +23,72 @@
 #include <MeshFEM/Elements/SolidElement.hh>
 
 template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
-struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<double, Dim>> {
+struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> {
     using Psi = Psi_<double, Dim>;
     using SE = SolidElement<FEMDeg, Psi>;
-    using Base = SolidMeshEnergyReembeddable<FEMDeg, Psi>;
+    static constexpr size_t NumVarsPerElement = SE::HLE::NumVarsPerElement;
+    using Base = SolidMeshEnergy<FEMDeg, Psi>;
     using Base::Base;
 
     using VXd = Eigen::VectorXd;
+
+    template<bool ProjectHessian, int Degree, class VarStructure>
+    VecN_T<double, NumVarsPerElement> elementTaylorRHS(size_t ei, std::vector<VXd> &x_coeffs, const VarStructure &vs) const {
+        const auto &edata = Base::elements[ei].elementData();
+
+        using TAD = TaylorAutodiff<double, ProjectHessian ? Degree - 1 : Degree>;
+        using Psi_AD = Psi_<TAD, Dim>;
+        using HLE_AD = elements::HyperelasticLagrange<Psi_AD, Dim, Dim, FEMDeg>;
+        using LocalVars     = typename HLE_AD::NodePositions;
+        using LocalGradient = typename HLE_AD::Gradient;
+        using LocalHessian  = typename HLE_AD::Hessian;
+
+        Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
+
+        if constexpr (!ProjectHessian) {
+            // When the Hessian is exact, we can simply build a
+            // `Degree`-order expansion of the gradient to reconstruct the
+            // right-hand side vector.
+            LocalVars x_e;
+            setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
+            for (int j = 1; j < Degree; ++j)
+                setTaylorCoefficient(x_e, j, Base::extractLocalVars(ei, x_coeffs[j - 1], vs));
+            zeroTaylorCoefficient(x_e, Degree);
+            VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(psi_ad, x_e, edata, -1.0);
+            return (extractTaylorCoefficient(neg_g_e_ad, Degree - 1) + Degree * extractTaylorCoefficient(neg_g_e_ad, Degree)).eval();
+        }
+        else {
+            // When using a projected Hessian, we cannot rely on the
+            // relationship `H = g'` that led to the simplified approach
+            // above...
+            LocalVars x_e, x_e_prime;
+            setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
+            for (int j = 1; j < Degree; ++j) {
+                // Note that `x_coeffs[j - 1]` is the j-th derivative of `x`
+                // divided by `j!`. This eliminates the factorial terms
+                // normally included in the Taylor expansion:
+                //      x (⍺) = x_0 + ⍺ x_1 + ⍺^2 x_2 + ⍺^3 x_3...
+                // We therefore must multiply coefficient `c[j]` by `j` instead
+                // of simply shifting them to obtain the derivative coefficients:
+                //      x'(⍺) = x_1 + 2 ⍺ x_2 + 3 ⍺^2 x_3...
+                auto d_j = Base::extractLocalVars(ei, x_coeffs[j - 1], vs);
+                setTaylorCoefficient(x_e, j, d_j);
+                setTaylorCoefficient(x_e_prime, j - 1, d_j * j);
+            }
+
+            // TODO: avoid by using mixed-degree types.
+            zeroTaylorCoefficient(x_e_prime, Degree - 1);
+
+            auto H_e_ad = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
+            // Note: any constant Hessian shift does not affect coefficient `Degree - 1` 
+
+            // TODO: Implement Hessian matvec for efficiency?
+            VecN_T<TAD, NumVarsPerElement> neg_g_e_ad
+                        = HLE_AD::gradient(psi_ad, x_e, edata, -1.0)
+                        - H_e_ad * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
+            return extractTaylorCoefficient(neg_g_e_ad, Degree - 1);
+        }
+    }
 
     template<bool ProjectHessian, int Degree>
     void computeTaylorCoefficientsImpl(const NewtonHessianFactorization &Hf, int degree, std::vector<VXd> &result) const {
@@ -39,97 +98,26 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
 
         result.reserve(degree);
 
-        using TAD = TaylorAutodiff<double, ProjectHessian ? Degree - 1 : Degree>;
-        using Psi_AD = Psi_<TAD, Dim>;
-        using HLE_AD = elements::HyperelasticLagrange<Psi_AD, Dim, Dim, FEMDeg>;
-        static constexpr size_t NumVarsPerElement = HLE_AD::NumVarsPerElement;
-        using LocalVars     = typename HLE_AD::NodePositions;
-        using LocalGradient = typename HLE_AD::Gradient;
-        using LocalHessian  = typename HLE_AD::Hessian;
-
         BENCHMARK_START_TIMER_SECTION("Assemble RHS");
         BENCHMARK_START_TIMER_SECTION("order " + std::to_string(Degree));
-        VXd neg_delta_g;
-        neg_delta_g.setZero(Base::numVars());
+        VXd neg_delta_g = VXd::Zero(Base::numVars());
 
         const auto &vs = Base::assembler().varStructure();
-        Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(), [&](size_t ei) {
-            const auto &edata = Base::elements[ei].elementData();
-
-            Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
-
-            if constexpr (!ProjectHessian) {
-                // When the Hessian is exact, we can simply build a
-                // `Degree`-order expansion of the gradient to reconstruct the
-                // right-hand side vector.
-                LocalVars x_e;
-                setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
-                for (int j = 1; j < Degree; ++j)
-                    setTaylorCoefficient(x_e, j, Base::extractLocalVars(ei, result[j - 1], vs));
-                zeroTaylorCoefficient(x_e, Degree);
-                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(psi_ad, x_e, edata, -1.0);
-                return (extractTaylorCoefficient(neg_g_e_ad, Degree - 1) + Degree * extractTaylorCoefficient(neg_g_e_ad, Degree)).eval();
-            }
-            else {
-                // When using a projected Hessian, we cannot rely on the
-                // relationship `H = g'` that led to the simplified approach
-                // above...
-                LocalVars x_e, x_e_prime;
-                setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
-                for (int j = 1; j < Degree; ++j) {
-                    // Note that `result[j - 1]` is the j-th derivative of `x`
-                    // divided by `j!`. This eliminates the factorial terms
-                    // normally included in the Taylor expansion:
-                    //      x (⍺) = x_0 + ⍺ x_1 + ⍺^2 x_2 + ⍺^3 x_3...
-                    // We therefore must multiply coefficient `c[j]` by `j` instead
-                    // of simply shifting them to obtain the derivative coefficients:
-                    //      x'(⍺) = x_1 + 2 ⍺ x_2 + 3 ⍺^2 x_3...
-                    auto d_j = Base::extractLocalVars(ei, result[j - 1], vs);
-                    setTaylorCoefficient(x_e, j, d_j);
-                    setTaylorCoefficient(x_e_prime, j - 1, d_j * j);
-                }
-
-                // TODO: avoid by using mixed-degree types.
-                zeroTaylorCoefficient(x_e_prime, Degree - 1);
-
-                auto H_e_ad = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
-                // Note: any constant Hessian shift does not affect coefficient `Degree - 1` 
-                // if (Base::elementHessianShift != 0.0)
-                //     H_e_ad.diagonal().array() += Base::elementHessianShift;
-
-                // TODO: Implement Hessian matvec for efficiency?
-                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad
-                            = HLE_AD::gradient(psi_ad, x_e, edata, -1.0)
-                            - H_e_ad * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
-                // NaN debugging:
-                // if (Degree == 2) {
-                //     auto H_e = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
-                //     std::cout << "Element " << ei << " hessian:\n" << extractTaylorCoefficient(H_e, 0) << std::endl << extractTaylorCoefficient(H_e, 1) << std::endl;
-                //     std::cout << "Element " << ei << " x_e:\n" << extractTaylorCoefficient(x_e, 0) << std::endl << extractTaylorCoefficient(x_e, 1) << std::endl;
-                //     std::cout << "Element " << ei << " x_e_prime:\n" << extractTaylorCoefficient(x_e_prime, 0) << std::endl << extractTaylorCoefficient(x_e_prime, 1) << std::endl;
-                //     std::cout << "Element " << ei << " neg_g_e_ad:\n" << extractTaylorCoefficient(neg_g_e_ad, Degree - 1) << std::endl;
-                // }
-
-                // if (Degree == 2 && ei == 8782) {
-                //     std::cout.precision(17);
-                //     auto H_e = HLE_AD:: template hessian</* SetLowerTri = */ true, /* Verbose = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
-                //     std::cout << "Element " << ei << " hessian:\n" << extractTaylorCoefficient(H_e, 0) << std::endl << extractTaylorCoefficient(H_e, 1) << std::endl;
-                //     std::cout << "Element " << ei << " x_e:\n" << extractTaylorCoefficient(x_e, 0) << std::endl << extractTaylorCoefficient(x_e, 1) << std::endl;
-                //     std::cout << "Element " << ei << " x_e_prime:\n" << extractTaylorCoefficient(x_e_prime, 0) << std::endl << extractTaylorCoefficient(x_e_prime, 1) << std::endl;
-                //     std::cout << "Element " << ei << " neg_g_e_ad:\n" << extractTaylorCoefficient(neg_g_e_ad, Degree - 1) << std::endl;
-                // }
-                return extractTaylorCoefficient(neg_g_e_ad, Degree - 1);
-            }
-        }, [this](size_t ei) { return Base::stencils[ei].blockVars; });
+        if (!(ProjectHessian && this->hasPerElementHessianProjectionMasks())) {
+            Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(),
+                                              [this, &result, &vs](size_t ei) { return elementTaylorRHS<ProjectHessian, Degree>(ei, result, vs); },
+                                              [this](size_t ei) { return Base::stencils[ei].blockVars; });
+        }
+        else {
+            Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(),
+                                              [this, &result, &vs](size_t ei) {
+                                                    if (this->elementHessianProjectionMasks[ei]) return elementTaylorRHS</* ProjectHessian = */  true, Degree>(ei, result, vs);
+                                                    else                                         return elementTaylorRHS</* ProjectHessian = */ false, Degree>(ei, result, vs);
+                                              },
+                                              [this](size_t ei) { return Base::stencils[ei].blockVars; });
+        }
         BENCHMARK_STOP_TIMER_SECTION("order " + std::to_string(Degree));
         BENCHMARK_STOP_TIMER_SECTION("Assemble RHS");
-
-        // // TODO: search for potential discontinuities. Are we conditionally projecting elements?
-        // { // write `neg_delta_g` file for debugging discontinuities.
-        //     std::ofstream out("neg_delta_g_" + std::to_string(Degree) + ".txt");
-        //     out.precision(17);
-        //     out << neg_delta_g.transpose() << std::endl;
-        // }
 
         result.emplace_back();
         removeNetForceAndTorque(neg_delta_g);
@@ -139,6 +127,63 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
         // We just computed coefficient `Degree - 1` of  x'  which is
         // coefficient `Degree` of x scaled by `Degree`...
         result.back() *= (1.0 / Degree);
+    }
+
+    template<bool ProjectHessian, int Degree, class LambdaAD, class VarStructure>
+    VecN_T<double, NumVarsPerElement> elementTaylorRHS(size_t ei, std::vector<VXd> &x_coeffs, const LambdaAD &lambda_ad, const VarStructure &vs) const {
+        const auto &edata = Base::elements[ei].elementData();
+        using TAD = TaylorAutodiff<double, ProjectHessian ? Degree - 1 : Degree>;
+        using Psi_AD = Psi_<TAD, Dim>;
+        using HLE_AD = elements::HyperelasticLagrange<Psi_AD, Dim, Dim, FEMDeg>;
+        static constexpr size_t NumVarsPerElement = HLE_AD::NumVarsPerElement;
+        using LocalVars     = typename HLE_AD::NodePositions;
+        using LocalGradient = typename HLE_AD::Gradient;
+        using LocalHessian  = typename HLE_AD::Hessian;
+
+        Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
+
+        if constexpr (!ProjectHessian) {
+            // When the Hessian is exact, we can simply build a
+            // `Degree`-order expansion of the gradient to reconstruct the
+            // right-hand side vector.
+            LocalVars x_e;
+            setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
+            for (int j = 1; j < Degree; ++j)
+                setTaylorCoefficient(x_e, j, Base::extractLocalVars(ei, x_coeffs[j - 1], vs));
+            zeroTaylorCoefficient(x_e, Degree);
+            VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(psi_ad, x_e, edata, -1.0);
+            VecN_T<TAD, NumVarsPerElement> lambda_neg_g_e_ad = lambda_ad * neg_g_e_ad;
+            return (extractTaylorCoefficient(lambda_neg_g_e_ad, Degree - 1) + Degree * extractTaylorCoefficient(neg_g_e_ad, Degree)).eval();
+        }
+        else {
+            // When using a projected Hessian, we cannot rely on the
+            // relationship `H = g'` that led to the simplified approach
+            // above...
+            LocalVars x_e, x_e_prime;
+            setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
+            for (int j = 1; j < Degree; ++j) {
+                // Note that `x[j - 1]` is the j-th derivative of `x_coeffs`
+                // divided by `j!`. This eliminates the factorial terms
+                // normally included in the Taylor expansion:
+                //      x (⍺) = x_0 + ⍺ x_1 + ⍺^2 x_2 + ⍺^3 x_3...
+                // We therefore must multiply coefficient `c[j]` by `j` instead
+                // of simply shifting them to obtain the derivative coefficients:
+                //      x'(⍺) = x_1 + 2 ⍺ x_2 + 3 ⍺^2 x_3...
+                auto d_j = Base::extractLocalVars(ei, x_coeffs[j - 1], vs);
+                setTaylorCoefficient(x_e, j, d_j);
+                setTaylorCoefficient(x_e_prime, j - 1, d_j * j);
+            }
+
+            zeroTaylorCoefficient(x_e_prime, Degree - 1);
+            auto H_e_ad = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
+            // Note: any constant Hessian shift does not affect coefficient `Degree - 1`
+            // if (Base::elementHessianShift != 0.0)
+            //     H_e_ad.diagonal().array() += Base::elementHessianShift;
+            VecN_T<TAD, NumVarsPerElement> neg_g_e_ad
+                        = lambda_ad * HLE_AD::gradient(psi_ad, x_e, edata, -1.0)
+                        - H_e_ad * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
+            return extractTaylorCoefficient(neg_g_e_ad, Degree - 1);
+        }
     }
 
     template<bool ProjectHessian, int Degree>
@@ -151,18 +196,9 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
         x.reserve(degree);
         lambda.reserve(degree - 1);
 
-        using TAD = TaylorAutodiff<double, ProjectHessian ? Degree - 1 : Degree>;
-        using Psi_AD = Psi_<TAD, Dim>;
-        using HLE_AD = elements::HyperelasticLagrange<Psi_AD, Dim, Dim, FEMDeg>;
-        static constexpr size_t NumVarsPerElement = HLE_AD::NumVarsPerElement;
-        using LocalVars     = typename HLE_AD::NodePositions;
-        using LocalGradient = typename HLE_AD::Gradient;
-        using LocalHessian  = typename HLE_AD::Hessian;
-
         BENCHMARK_START_TIMER_SECTION("Assemble RHS");
         BENCHMARK_START_TIMER_SECTION("order " + std::to_string(Degree));
-        VXd neg_delta_g;
-        neg_delta_g.setZero(Base::numVars());
+        VXd neg_delta_g = VXd::Zero(Base::numVars());
 
         if (lambda.size() != Degree - 1) throw std::runtime_error("computeTaylorCoefficientsArclenImpl: lambda size should be degree - 1");
         TaylorAutodiff<double, Degree - 1> lambda_ad;
@@ -171,54 +207,19 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
         if (Degree == 1) lambda_ad.c[0] = 1.0; // Kickstart with the standard Newton direction, computing the first-order normalization factor below.
 
         const auto &vs = Base::assembler().varStructure();
-        Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(), [&](size_t ei) {
-            const auto &edata = Base::elements[ei].elementData();
-
-            Psi_AD psi_ad(Base::elements[0].material().psi, UninitializedDeformationTag{});
-
-            if constexpr (!ProjectHessian) {
-                // When the Hessian is exact, we can simply build a
-                // `Degree`-order expansion of the gradient to reconstruct the
-                // right-hand side vector.
-                LocalVars x_e;
-                setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
-                for (int j = 1; j < Degree; ++j)
-                    setTaylorCoefficient(x_e, j, Base::extractLocalVars(ei, x[j - 1], vs));
-                zeroTaylorCoefficient(x_e, Degree);
-                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad = HLE_AD::gradient(psi_ad, x_e, edata, -1.0);
-                VecN_T<TAD, NumVarsPerElement> lambda_neg_g_e_ad = lambda_ad * neg_g_e_ad;
-                return (extractTaylorCoefficient(lambda_neg_g_e_ad, Degree - 1) + Degree * extractTaylorCoefficient(neg_g_e_ad, Degree)).eval();
-            }
-            else {
-                // When using a projected Hessian, we cannot rely on the
-                // relationship `H = g'` that led to the simplified approach
-                // above...
-                LocalVars x_e, x_e_prime;
-                setTaylorCoefficient(x_e, 0, Base::extractLocalVars(ei, this->globalVars(), vs));
-                for (int j = 1; j < Degree; ++j) {
-                    // Note that `x[j - 1]` is the j-th derivative of `x`
-                    // divided by `j!`. This eliminates the factorial terms
-                    // normally included in the Taylor expansion:
-                    //      x (⍺) = x_0 + ⍺ x_1 + ⍺^2 x_2 + ⍺^3 x_3...
-                    // We therefore must multiply coefficient `c[j]` by `j` instead
-                    // of simply shifting them to obtain the derivative coefficients:
-                    //      x'(⍺) = x_1 + 2 ⍺ x_2 + 3 ⍺^2 x_3...
-                    auto d_j = Base::extractLocalVars(ei, x[j - 1], vs);
-                    setTaylorCoefficient(x_e, j, d_j);
-                    setTaylorCoefficient(x_e_prime, j - 1, d_j * j);
-                }
-
-                zeroTaylorCoefficient(x_e_prime, Degree - 1);
-                auto H_e_ad = HLE_AD:: template hessian</* SetLowerTri = */ true>(psi_ad, x_e, edata, /* disableProjection = */ false, 1.0);
-                // Note: any constant Hessian shift does not affect coefficient `Degree - 1`
-                // if (Base::elementHessianShift != 0.0)
-                //     H_e_ad.diagonal().array() += Base::elementHessianShift;
-                VecN_T<TAD, NumVarsPerElement> neg_g_e_ad
-                            = lambda_ad * HLE_AD::gradient(psi_ad, x_e, edata, -1.0)
-                            - H_e_ad * Eigen::Map<const VecN_T<TAD, NumVarsPerElement>>(x_e_prime.data());
-                return extractTaylorCoefficient(neg_g_e_ad, Degree - 1);
-            }
-        }, [this](size_t ei) { return Base::stencils[ei].blockVars; });
+        if (!(ProjectHessian && this->hasPerElementHessianProjectionMasks())) {
+            Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(),
+                                              [this, &x, &lambda_ad, &vs](size_t ei) { return elementTaylorRHS<ProjectHessian, Degree>(ei, x, lambda_ad, vs); },
+                                              [this](size_t ei) { return Base::stencils[ei].blockVars; });
+        }
+        else {
+            Base::assembler().assembleGradient(neg_delta_g, Base::elements.size(),
+                                              [this, &x, &lambda_ad, &vs](size_t ei) {
+                                                    if (this->elementHessianProjectionMasks[ei]) return elementTaylorRHS</* ProjectHessian = */  true, Degree>(ei, x, lambda_ad, vs);
+                                                    else                                         return elementTaylorRHS</* ProjectHessian = */ false, Degree>(ei, x, lambda_ad, vs);
+                                              },
+                                              [this](size_t ei) { return Base::stencils[ei].blockVars; });
+        }
         BENCHMARK_STOP_TIMER_SECTION("order " + std::to_string(Degree));
         BENCHMARK_STOP_TIMER_SECTION("Assemble RHS");
 
@@ -323,7 +324,8 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
         return Base::elements[ei].deformationGradient(x_e, q);
     }
 
-    VXd elementHessianMinimumEigenvalues() const {
+    VXd elementHessianMinimumEigenvalues() const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonFlow.elementHessianMinimumEigenvalues");
         const size_t ne = Base::mesh().numElements();
         VXd result(ne);
         const auto &x = Base::globalVars();
@@ -347,13 +349,13 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergyReembeddable<FEMDeg, Psi_<do
         return getPsi().smoothingEpsilon;
     }
 
-    void setEigenvalueClampTarget(double tgt) {
+    void setEigenvalueClampTarget(double tgt) override {
         Base::materials.foreach([tgt](typename Base::Material &mat) {
             mat.psi.eigenvalueClampTarget = tgt;
         });
     }
 
-    double getEigenvalueClampTarget() const {
+    double getEigenvalueClampTarget() const override {
         return getPsi().eigenvalueClampTarget;
     }
 

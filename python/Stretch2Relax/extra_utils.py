@@ -348,12 +348,12 @@ class HybridExtrapolator:
         return self._active_extrapolator.linesearch_eval(alpha)
     
 class TaylorExtrapolator:
-    def __init__(self, prob, opt, max_degree, constant_speed=True):
+    def __init__(self, opt, max_degree, constant_speed=True):
         """
-        Assume prob contains one nfu(newton_flow_utils) object
+        Assume opt.get_problem() contains one nfu(newton_flow_utils) object
         """
-        self.prob = prob
         self.opt = opt
+        self.prob = opt.get_problem()
         self.nf = self.prob.term(0)
         self.max_degree = max_degree
         self.constant_speed = constant_speed
@@ -368,7 +368,6 @@ class TaylorExtrapolator:
     
     def linesearch_begin(self, x0, d):
         opt = self.opt
-        opt.update_factorizations()
         proj = self.prob.hessianWasProjected
         if self.constant_speed:
             speed = np.linalg.norm(d)
@@ -390,12 +389,12 @@ class TaylorExtrapolator:
         return x.reshape(-1, 2)
     
 class PadeExtrapolator:
-    def __init__(self, prob, opt, max_degree, constant_speed=True):
+    def __init__(self, opt, max_degree, constant_speed=True):
         """
-        Assume prob contains one nfu(newton_flow_utils) object
+        Assume opt.get_problem() contains one nfu(newton_flow_utils) object
         """
-        self.prob = prob
         self.opt = opt
+        self.prob = opt.get_problem()
         self.nf = self.prob.term(0)
         self.max_degree = max_degree
         self.constant_speed = constant_speed
@@ -410,7 +409,6 @@ class PadeExtrapolator:
     
     def linesearch_begin(self, x0, d):
         opt = self.opt
-        opt.update_factorizations()
         proj = self.prob.hessianWasProjected
         # proj = False
         if self.constant_speed:

@@ -20,7 +20,10 @@ auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) 
             q.fill(1.0 / (Dim + 1)); // sample at element center
             return me.elements[ei].deformationGradient(x, q);
         }, py::arg("ei"), "Get the (average) deformation gradient over element ei.")
+
         .def("elementHessianMinimumEigenvalues", &NFME::elementHessianMinimumEigenvalues)
+        .def("elementGradientNorms", [](const NFME &me) { return me.elementGradientNorms(); })
+
         .def_property("projectionSmoothingEpsilon", &NFME::getProjectionSmoothingEpsilon, &NFME::setProjectionSmoothingEpsilon)
         .def_property("eigenvalueClampTarget", &NFME::getEigenvalueClampTarget, &NFME::setEigenvalueClampTarget)
         .def_property("eigenvalueProjectionModulation", &NFME::getEigenvalueProjectionModulation, &NFME::setEigenvalueProjectionModulation)
