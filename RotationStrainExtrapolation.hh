@@ -346,22 +346,16 @@ public:
     }
 
     UVMat linesearch_eval(Real alpha) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("linesearch_eval call in C++");
+        BENCHMARK_SCOPED_TIMER_SECTION timer("linesearch_eval_call_in_Cpp");
         if (!m_lsBegin)
             throw std::runtime_error("RSNewtonFlowExtrapolator: linesearch_begin must be called before linesearch_eval.");
 
-        BENCHMARK_START_TIMER_SECTION("extrapolateDeformGrad call in linesearch_eval");
         extrapolateDeformGrad(m_F, alpha, m_d_grad, m_F_ex, m_Finv, m_method);
-        BENCHMARK_STOP_TIMER_SECTION("extrapolateDeformGrad call in linesearch_eval");
         
-        BENCHMARK_START_TIMER_SECTION("getUVnewSolvePoisson call in linesearch_eval");
         UVMat uv_ex = getUVnewSolvePoisson(mesh(), m_F_ex, *m_Linv);
-        BENCHMARK_STOP_TIMER_SECTION("getUVnewSolvePoisson call in linesearch_eval");
 
-        BENCHMARK_START_TIMER_SECTION("centroid correction");
         const V2d shift = m_c0 - uv_ex.colwise().mean().transpose();
         uv_ex.rowwise() += shift.transpose();
-        BENCHMARK_STOP_TIMER_SECTION("centroid correction");
 
         return uv_ex;
     }
