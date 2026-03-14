@@ -136,7 +136,7 @@ class ExpLinesearch(LineSearchBase):
             return min(cache, key=cache.get) if cache else 0.0
 
         f0 = eval_f(0.0)
-        first_alpha = min(max_alpha, step)
+        first_alpha = min(max_alpha, 1) 
         f1 = eval_f(first_alpha)
 
         # BruteForceLinesearch-style fallback on immediate rise.
@@ -164,7 +164,7 @@ class ExpLinesearch(LineSearchBase):
             return eval_f(k * step)
 
         # 1) Exponential bracketing on the discrete grid.
-        prev_k, curr_k = 0, 1
+        prev_k, curr_k = 0, int(1 / step)
         prev_f, curr_f = eval_k(prev_k), eval_k(curr_k)
         left_k, right_k = None, None
 
