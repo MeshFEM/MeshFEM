@@ -224,6 +224,229 @@ class ExpLinesearch(LineSearchBase):
 
         return best_k * step
 
+class TernaryLinesearch(LineSearchBase):
+    def __init__(
+        self,
+        backtrack_factor: float = 0.5,
+        min_alpha: float = 1e-12,
+        ternary_tol: float = 1e-6,
+        max_growth_steps: int = 60,
+        max_ternary_iters: int = 80,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        if not (0.0 < backtrack_factor < 1.0):
+            raise ValueError("backtrack_factor must be in (0, 1)")
+        if min_alpha <= 0.0:
+            raise ValueError("min_alpha must be > 0")
+        if ternary_tol <= 0.0:
+            raise ValueError("ternary_tol must be > 0")
+        if max_growth_steps < 0:
+            raise ValueError("max_growth_steps must be >= 0")
+        if max_ternary_iters < 0:
+            raise ValueError("max_ternary_iters must be >= 0")
+
+        self.backtrack_factor = float(backtrack_factor)
+        self.min_alpha = float(min_alpha)
+        self.ternary_tol = float(ternary_tol)
+        self.max_growth_steps = int(max_growth_steps)
+        self.max_ternary_iters = int(max_ternary_iters)
+
+    def _linesearch_impl(self, f, max_alpha):
+        max_alpha = float(max_alpha)
+        if max_alpha <= 0.0:
+            return 0.0
+
+        self.cache = {}
+        cache = self.cache
+
+        def eval_f(alpha: float) -> float:
+            alpha = float(np.clip(alpha, 0.0, max_alpha))
+            alpha_key = round(alpha, 14)
+            if alpha_key not in cache:
+                val = float(f(alpha))
+                cache[alpha_key] = val if np.isfinite(val) else np.inf
+            return cache[alpha_key]
+
+        def best_cached_alpha() -> float:
+            return float(min(cache, key=cache.get)) if cache else 0.0
+
+        # Always evaluate the first two points at alpha=0 and alpha=1 (clamped by max_alpha).
+        a0 = 0.0
+        f0 = eval_f(a0)
+        a1 = min(1.0, max_alpha)
+        f1 = eval_f(a1)
+
+        # Immediate-rise case: backtrack from alpha=1 by multiplying by 0.5
+        # until the energy drops below f(0).
+        if f1 >= f0:
+            a = a1
+            while a > self.min_alpha:
+                if eval_f(a) < f0:
+                    return a
+                a *= self.backtrack_factor
+            return 0.0
+
+        # Exponential bracketing: 1, 2, 4, 8, ... until energy rises.
+        prev_a = a0
+        curr_a, curr_f = a1, f1
+        left, right = None, None
+
+        for _ in range(self.max_growth_steps):
+            next_a = min(max_alpha, 2.0 * curr_a)
+            if next_a <= curr_a:
+                break
+            next_f = eval_f(next_a)
+
+            if next_f > curr_f:
+                left, right = prev_a, next_a
+                break
+
+            prev_a = curr_a
+            curr_a, curr_f = next_a, next_f
+
+        # If we never observe the rise (e.g., still descending at max_alpha),
+        # return the best alpha among evaluated points.
+        if left is None or right is None or right <= left:
+            return best_cached_alpha()
+
+        # Iterative ternary search (minimum variant) on [left, right].
+        l, r = float(left), float(right)
+        for _ in range(self.max_ternary_iters):
+            if abs(r - l) < self.ternary_tol:
+                break
+            m1 = l + (r - l) / 3.0
+            m2 = r - (r - l) / 3.0
+            fm1 = eval_f(m1)
+            fm2 = eval_f(m2)
+
+            if fm1 > fm2:
+                l = m1
+            else:
+                r = m2
+
+        eval_f(0.5 * (l + r))
+        return best_cached_alpha()
+
+class GoldenSectionSearch(LineSearchBase):
+    def __init__(
+        self,
+        backtrack_factor: float = 0.5,
+        min_alpha: float = 1e-12,
+        golden_tol: float = 1e-6,
+        max_growth_steps: int = 60,
+        max_golden_iters: int = 80,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        if not (0.0 < backtrack_factor < 1.0):
+            raise ValueError("backtrack_factor must be in (0, 1)")
+        if min_alpha <= 0.0:
+            raise ValueError("min_alpha must be > 0")
+        if golden_tol <= 0.0:
+            raise ValueError("golden_tol must be > 0")
+        if max_growth_steps < 0:
+            raise ValueError("max_growth_steps must be >= 0")
+        if max_golden_iters < 0:
+            raise ValueError("max_golden_iters must be >= 0")
+
+        self.backtrack_factor = float(backtrack_factor)
+        self.min_alpha = float(min_alpha)
+        self.golden_tol = float(golden_tol)
+        self.max_growth_steps = int(max_growth_steps)
+        self.max_golden_iters = int(max_golden_iters)
+
+    def _linesearch_impl(self, f, max_alpha):
+        max_alpha = float(max_alpha)
+        if max_alpha <= 0.0:
+            return 0.0
+
+        self.cache = {}
+        cache = self.cache
+
+        def eval_f(alpha: float) -> float:
+            alpha = float(np.clip(alpha, 0.0, max_alpha))
+            alpha_key = round(alpha, 14)
+            if alpha_key not in cache:
+                val = float(f(alpha))
+                cache[alpha_key] = val if np.isfinite(val) else np.inf
+            return cache[alpha_key]
+
+        def best_cached_alpha() -> float:
+            return float(min(cache, key=cache.get)) if cache else 0.0
+
+        # Always evaluate alpha=0 and alpha=1 first (clamped by max_alpha).
+        a0 = 0.0
+        f0 = eval_f(a0)
+        a1 = min(1.0, max_alpha)
+        f1 = eval_f(a1)
+
+        # Immediate-rise case: backtrack from alpha=1 via multiplicative halving.
+        if f1 >= f0:
+            a = a1
+            while a > self.min_alpha:
+                if eval_f(a) < f0:
+                    return a
+                a *= self.backtrack_factor
+            return 0.0
+
+        # Exponential bracketing: 1, 2, 4, 8, ... until energy rises.
+        prev_a = a0
+        curr_a, curr_f = a1, f1
+        left, right = None, None
+
+        for _ in range(self.max_growth_steps):
+            next_a = min(max_alpha, 2.0 * curr_a)
+            if next_a <= curr_a:
+                break
+            next_f = eval_f(next_a)
+
+            if next_f > curr_f:
+                left, right = prev_a, next_a
+                break
+
+            prev_a = curr_a
+            curr_a, curr_f = next_a, next_f
+
+        # If no rise is observed (e.g., still descending at max_alpha),
+        # return the best alpha seen so far.
+        if left is None or right is None or right <= left:
+            return best_cached_alpha()
+
+        # Iterative golden-section search (minimum variant) on [left, right].
+        l, r = float(left), float(right)
+        sqrt5 = np.sqrt(5.0)
+        invphi = (sqrt5 - 1.0) / 2.0
+        invphi2 = (3.0 - sqrt5) / 2.0
+
+        h = r - l
+        c = l + invphi2 * h
+        d = l + invphi * h
+        fc = eval_f(c)
+        fd = eval_f(d)
+
+        for _ in range(self.max_golden_iters):
+            # h *= invphi #TODO: check if this is correct
+            # h = r - l
+            # if h < self.golden_tol:
+            #     break
+            h *= invphi
+            if fc < fd:
+                if d - l < self.golden_tol:
+                    break
+                r, d, fd = d, c, fc
+                c = l + invphi2 * h
+                fc = eval_f(c)
+            else:
+                if r - c < self.golden_tol:
+                    break
+                l, c, fc = c, d, fd
+                d = l + invphi * h
+                fd = eval_f(d)
+
+        # eval_f(0.5 * (l + r))
+        return best_cached_alpha()
+
 ## Linesearch Routines
 
 def brute_force_linesearch(f, alpha_step_size=0.01, max_alpha=5):
