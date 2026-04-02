@@ -33,6 +33,7 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
         d = opt.newton_step()
         flow_vertices.append(prob.getVars())
         x = prob.getVars()
+        f0 = prob.energy() # initial energy f0 = f(0)
         
         # Linesearch
         ## Prepare
@@ -53,7 +54,7 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
             return o
         
         ## Linesearch Routine
-        alpha = linesearch_func(f, x, d)
+        alpha = linesearch_func(f, x, d, f0)
         x = last_eval[1].ravel() if alpha == last_eval[0] else extrapolator.linesearch_eval(alpha).ravel()
         prob.setVars(x)
 
@@ -69,19 +70,21 @@ class LineSearchBase:
         self.max_alpha = max_alpha
         self.step_limiter = step_limiter
 
-    def __call__(self, f, x, d):
+    def __call__(self, f, x, d, f0):
         """
         Run line search on a univariate function f(alpha), where
         alpha parametrizes the ray `x + alpha * d`.
         Note that the `x` and `d` vectors are needed only for the `step_limiter`
         and are not used for evaluating `f`.
+
+        To avoid evaluating at alpha = 0, we use f0 = f(0)
         """
         max_alpha = self.max_alpha
         if self.step_limiter is not None:
             max_alpha = min(max_alpha, self.step_limiter.eval(x, d))
-        return self._linesearch_impl(f, max_alpha)
+        return self._linesearch_impl(f, max_alpha, f0)
 
-    def _linesearch_impl(self, f, max_alpha):
+    def _linesearch_impl(self, f, max_alpha, f0):
         raise Exception('_linesearch_impl must be implemented in derived class')
 
 class BruteForceLinesearch(LineSearchBase):
@@ -89,7 +92,7 @@ class BruteForceLinesearch(LineSearchBase):
         super().__init__(**kwargs)
         self.alpha_step_size = alpha_step_size
 
-    def _linesearch_impl(self, f, max_alpha):
+    def _linesearch_impl(self, f, max_alpha, f0):
         alphas = np.arange(0, max_alpha, self.alpha_step_size)
         energies = [f(a) for a in alphas]
         a = alphas[np.argmin(energies)]
@@ -252,13 +255,14 @@ class TernaryLinesearch(LineSearchBase):
         self.max_growth_steps = int(max_growth_steps)
         self.max_ternary_iters = int(max_ternary_iters)
 
-    def _linesearch_impl(self, f, max_alpha):
+    def _linesearch_impl(self, f, max_alpha, f0):
         max_alpha = float(max_alpha)
         if max_alpha <= 0.0:
             return 0.0
 
         self.cache = {}
         cache = self.cache
+        cache[0] = f0  # insert f0
 
         def eval_f(alpha: float) -> float:
             alpha = float(np.clip(alpha, 0.0, max_alpha))
@@ -356,13 +360,14 @@ class GoldenSectionSearch(LineSearchBase):
         self.max_growth_steps = int(max_growth_steps)
         self.max_golden_iters = int(max_golden_iters)
 
-    def _linesearch_impl(self, f, max_alpha):
+    def _linesearch_impl(self, f, max_alpha, f0):
         max_alpha = float(max_alpha)
         if max_alpha <= 0.0:
             return 0.0
 
         self.cache = {}
         cache = self.cache
+        cache[0] = f0
 
         def eval_f(alpha: float) -> float:
             alpha = float(np.clip(alpha, 0.0, max_alpha))
@@ -445,6 +450,117 @@ class GoldenSectionSearch(LineSearchBase):
                 fd = eval_f(d)
 
         # eval_f(0.5 * (l + r))
+        return best_cached_alpha()
+
+class ParabolaFitSearch(LineSearchBase):
+    def __init__(
+        self,
+        backtrack_factor: float = 0.5,
+        min_alpha: float = 1e-12,
+        max_growth_steps: int = 60,
+        use_extrapolation: bool = True,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        if not (0.0 < backtrack_factor < 1.0):
+            raise ValueError("backtrack_factor must be in (0, 1)")
+        if min_alpha <= 0.0:
+            raise ValueError("min_alpha must be > 0")
+        if max_growth_steps < 0:
+            raise ValueError("max_growth_steps must be >= 0")
+
+        self.backtrack_factor = float(backtrack_factor)
+        self.min_alpha = float(min_alpha)
+        self.max_growth_steps = int(max_growth_steps)
+        self.use_extrapolation = bool(use_extrapolation)
+
+    def _linesearch_impl(self, f, max_alpha, f0):
+        max_alpha = float(max_alpha)
+        if max_alpha <= 0.0:
+            return 0.0
+
+        self.cache = {}
+        cache = self.cache
+        cache[0] = f0
+
+        def eval_f(alpha: float) -> float:
+            alpha = float(np.clip(alpha, 0.0, max_alpha))
+            alpha_key = round(alpha, 14)
+            if alpha_key not in cache:
+                val = float(f(alpha))
+                cache[alpha_key] = val if np.isfinite(val) else np.inf
+            return cache[alpha_key]
+
+        def best_cached_alpha() -> float:
+            return float(min(cache, key=cache.get)) if cache else 0.0
+
+        a0 = 0.0
+        f0 = eval_f(a0)
+        a1 = min(1.0, max_alpha)
+        f1 = eval_f(a1)
+
+        # Phase 1: backtrack if f(1) >= f(0).
+        if f1 >= f0:
+            a = a1
+            while a > self.min_alpha:
+                if eval_f(a) < f0:
+                    return a
+                a *= self.backtrack_factor
+            return 0.0
+
+        # Extrapolation: fit parabola through f(0), f(1), f(2) directly.
+        if self.use_extrapolation:
+            a, b, c = a0, a1, min(2.0, max_alpha)
+            fa, fb, fc = f0, f1, eval_f(c)
+
+            denom = (b - a) * (fb - fc) - (b - c) * (fb - fa)
+            if abs(denom) < 1e-30:
+                return best_cached_alpha()
+
+            alpha_star = b - 0.5 * (
+                (b - a) ** 2 * (fb - fc) - (b - c) ** 2 * (fb - fa)
+            ) / denom
+            alpha_star = float(np.clip(alpha_star, 0.0, max_alpha))
+
+            eval_f(alpha_star)
+            return best_cached_alpha()
+
+        # Phase 2: exponential bracketing (1, 2, 4, 8, ...).
+        prev_a = a0
+        curr_a, curr_f = a1, f1
+
+        bracket = None
+        for _ in range(self.max_growth_steps):
+            next_a = min(max_alpha, 2.0 * curr_a)
+            if next_a <= curr_a:
+                break
+            next_f = eval_f(next_a)
+
+            if next_f > curr_f:
+                bracket = (prev_a, curr_a, next_a,
+                           eval_f(prev_a), curr_f, next_f)
+                break
+
+            prev_a = curr_a
+            curr_a, curr_f = next_a, next_f
+
+        if bracket is None:
+            return best_cached_alpha()
+
+        # Phase 3: quadratic interpolation on the 3-point bracket.
+        a, b, c = bracket[0], bracket[1], bracket[2]
+        fa, fb, fc = bracket[3], bracket[4], bracket[5]
+
+        denom = (b - a) * (fb - fc) - (b - c) * (fb - fa)
+        if abs(denom) < 1e-30:
+            return best_cached_alpha()
+
+        alpha_star = b - 0.5 * (
+            (b - a) ** 2 * (fb - fc) - (b - c) ** 2 * (fb - fa)
+        ) / denom
+        alpha_star = float(np.clip(alpha_star, 0.0, max_alpha))
+
+        eval_f(alpha_star)
         return best_cached_alpha()
 
 ## Linesearch Routines
