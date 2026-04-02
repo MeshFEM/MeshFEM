@@ -18,19 +18,23 @@ def build_perfect_binary_tree(
     x0: np.ndarray,
     funcA: Callable[[np.ndarray], np.ndarray],
     funcB: Callable[[np.ndarray], np.ndarray],
-    height: int,
+    max_height: int,
+    prob,
     *,
     copy_values: bool = True,
     left_label: str = "A",
     right_label: str = "B",
-    eval_x = None,
+    eval_stats = None,
+    energy_tol = None,
+    grad_tol = None,
 ) -> Node:
     """
     Build a perfect binary tree of intermediate iterates.
 
     The tree uses a map-based representation:
         {
-            'val': <numpy array>,
+            'energy': <float>,
+            'grad_norm': <float>,
             'depth': <int>,
             'path': <str>,
             'op_name': <str | None>,
@@ -41,16 +45,16 @@ def build_perfect_binary_tree(
     Parameters
     ----------
     x0
-        Root value.
+        Initial UV.
     funcA, funcB
         Update functions. For a node value x:
             left child  = funcA(x)
             right child = funcB(x)
-    height
-        Number of edges from the root to each leaf.
+    max_height
+        (Max) Number of edges from the root to each leaf.
         height=0 returns a tree containing only the root.
     copy_values
-        Whether to store defensive copies of the arrays.
+        Whether to store defensive copies of the uv arrays.
     left_label, right_label
         Labels appended to the path when descending left/right.
 
@@ -63,22 +67,43 @@ def build_perfect_binary_tree(
         raise TypeError("x0 must be a numpy.ndarray")
     if x0.ndim != 1:
         raise ValueError("x0 must be a 1D numpy array")
-    if height < 0:
+    if max_height < 0:
         raise ValueError("height must be nonnegative")
 
     def store(x: np.ndarray) -> np.ndarray:
         return _copy_value(x) if copy_values else x
+    
+    def eval_x(x: np.ndarray):
+        x_curr = _copy_value(x) if copy_values else x
+        x_ori = prob.getVars()
+        prob.setVars(x_curr)
+        energy_curr = prob.energy()
+        grad_norm_curr = np.linalg.norm(prob.gradient())
+        
+        prob.setVars(x_ori)
+        return energy_curr, grad_norm_curr
 
     def _build(x: np.ndarray, depth: int, path: str, op_name: Optional[str]) -> Node:
+        energy, grad_norm = eval_x(x)
+
         node: Node = {
-            "val": store(x),
+            "energy": energy,
+            "grad_norm": grad_norm,
             "depth": depth,
             "path": path,
             "op_name": op_name,
-            "stats": None if eval_x is None else eval_x(_copy_value(x) if copy_values else x),
+            "stats": None if eval_stats is None else eval_stats(_copy_value(x) if copy_values else x),
         }
-        if depth == height:
+        # return node
+        if depth == max_height:
             return node
+        
+        if energy_tol is not None and grad_tol is None:
+            if energy < energy_tol:  return node
+        elif energy_tol is None and grad_tol is not None:
+            if grad_norm < grad_tol:  return node
+        elif energy_tol is not None and grad_tol is not None:
+            if energy < energy_tol and grad_norm < grad_tol:  return node
 
         x_left = funcA(_copy_value(x) if copy_values else x)
         x_right = funcB(_copy_value(x) if copy_values else x)
@@ -128,7 +153,7 @@ def get_value_by_path(
     tree: Node,
     path: str,
     *,
-    field: str = "val",
+    field: str = "energy",
     left_label: str = "A",
     right_label: str = "B",
 ) -> Any:
@@ -161,7 +186,7 @@ def iter_leaves(tree: Node) -> Iterator[Node]:
         yield from iter_leaves(tree["right"])
 
 
-def collect_leaf_values(tree: Node, *, field: str = "val") -> Dict[str, Any]:
+def collect_leaf_values(tree: Node, *, field: str = "energy") -> Dict[str, Any]:
     """Return a dict mapping each leaf path to the requested node field."""
     out: Dict[str, Any] = {}
     for node in iter_leaves(tree):
@@ -172,7 +197,7 @@ def collect_leaf_values(tree: Node, *, field: str = "val") -> Dict[str, Any]:
     return out
 
 
-def collect_all_values(tree: Node, *, field: str = "val") -> Dict[str, Any]:
+def collect_all_values(tree: Node, *, field: str = "energy") -> Dict[str, Any]:
     """Return a dict mapping each node path to the requested node field."""
     out: Dict[str, Any] = {}
     for node in iter_nodes_preorder(tree):
@@ -221,9 +246,9 @@ def tree_to_records(tree: Node) -> List[Dict[str, Any]]:
             'is_leaf': True,
             'parent_path': 'AB',
             'branch': 'A',
-            'energy': 2.0,      # from node['stats']
-            'grad_norm': 1.35,  # from node['stats']
-            'val': np.ndarray(...),
+            'energy': 2.0,      
+            'grad_norm': 1.35, 
+            # (key, value) pair from stats
         }
     """
     records: List[Dict[str, Any]] = []
@@ -236,7 +261,8 @@ def tree_to_records(tree: Node) -> List[Dict[str, Any]]:
             "is_leaf": is_leaf(node),
             "parent_path": path[:-1] if path else None,
             "branch": path[-1] if path else None,
-            "val": node["val"],
+            "energy": node["energy"],
+            "grad_norm": node["grad_norm"],
         }
 
         stats = node.get("stats")
@@ -258,17 +284,18 @@ def tree_to_flat_records(
     """
     Flatten the tree into table-ready records while keeping full vectors.
 
-    Unlike coordinate-expansion layouts, each output row stores the full
+    (Deprecated: Unlike coordinate-expansion layouts, each output row stores the full
     1D vector in a single ``val`` column as a Python list, which is
-    directly compatible with polars list columns. Stats columns from
-    ``tree_to_records`` are preserved in each row.
+    directly compatible with polars list columns.) 
+    
+    Stats columns from ``tree_to_records`` are preserved in each row.
+    (Assume stats contains only (key-single-metric) pairs)
 
     Example output row:
         {
             'path': 'AB',
             'depth': 2,
             'is_leaf': False,
-            'val': [...],
             'energy': 2.0049,
             'grad_norm': 1.3528,
         }
@@ -278,9 +305,9 @@ def tree_to_flat_records(
     out_rows: List[Dict[str, Any]] = []
     for row in tree_to_records(tree):
         out = dict(row)
-        val = out.get("val")
-        if isinstance(val, np.ndarray):
-            out["val"] = val.tolist()
+        # val = out.get("val")
+        # if isinstance(val, np.ndarray):
+        #     out["val"] = val.tolist()
         out_rows.append(out)
     return out_rows
 
@@ -356,7 +383,7 @@ def load_tree_pickle(file_path: str, *, use_gzip: Optional[bool] = None) -> Node
 
     if not isinstance(tree, dict):
         raise TypeError("Loaded object is not a tree dict")
-    if "val" not in tree or "depth" not in tree or "path" not in tree:
+    if "energy" not in tree or "depth" not in tree or "path" not in tree:
         raise ValueError("Loaded dict does not match expected tree node schema")
     return tree
 
