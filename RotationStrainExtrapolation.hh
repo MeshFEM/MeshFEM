@@ -320,27 +320,31 @@ public:
         m_F.resize(ne);
         m_Finv.resize(ne);
         m_F_ex.resize(ne);
-        for (size_t ei = 0; ei < ne; ++ei) {
+
+        // can be parallelized
+        m_d_grad.resize(ne);
+        parallel_for_range(ne, [&](size_t ei) {
             m_F[ei] = elementJacobian(ei, x0);
             m_Finv[ei] = m_F[ei].inverse();
-        }
+            m_d_grad[ei] = elementJacobian(ei, d);
+        });
 
-        const UVMat x0_uv = Base::unflatten(x0);
+        const auto x0_uv = Base::unflatten_view(x0);
         m_c0 = x0_uv.colwise().mean().transpose();
 
-        const auto d_uv = Base::unflatten_view(d);
-        const VXd d_u = d_uv.col(0);
-        const VXd d_v = d_uv.col(1);
-        const MXNd u_grad = scalarGradient(mesh(), d_u);
-        const MXNd v_grad = scalarGradient(mesh(), d_v);
+        // const auto d_uv = Base::unflatten_view(d);
+        // const VXd d_u = d_uv.col(0);
+        // const VXd d_v = d_uv.col(1);
+        // const MXNd u_grad = scalarGradient(mesh(), d_u);
+        // const MXNd v_grad = scalarGradient(mesh(), d_v);
 
-        m_d_grad.resize(ne);
-        for (size_t ei = 0; ei < ne; ++ei) {
-            MNd dF;
-            dF.row(0) = u_grad.row(ei);
-            dF.row(1) = v_grad.row(ei);
-            m_d_grad[ei] = dF;
-        }
+        // m_d_grad.resize(ne);
+        // for (size_t ei = 0; ei < ne; ++ei) {
+        //     MNd dF;
+        //     dF.row(0) = u_grad.row(ei);
+        //     dF.row(1) = v_grad.row(ei);
+        //     m_d_grad[ei] = dF;
+        // }
 
         m_lsBegin = true;
     }
