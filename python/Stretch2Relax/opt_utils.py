@@ -27,13 +27,19 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
 
     # Newton Optimization Loop
     iter_count = 0
-    while np.linalg.norm(prob.gradient()) > grad_tol and iter_count < max_iters:
+    while iter_count < max_iters:
+        g = prob.gradient()
+        if np.linalg.norm(g) < grad_tol:
+            break
+        
         if pre_step_cb is not None: pre_step_cb(prob, iter_count)
 
-        d = opt.newton_step()
-        flow_vertices.append(prob.getVars())
-        x = prob.getVars()
-        f0 = prob.energy() # initial energy f0 = f(0)
+        with benchmark.ScopedTimer('compute_d_x_f0_df0'):
+            d = opt.newton_step()
+            f0 = prob.energy() # initial energy f0 = f(0)
+            df0 = np.dot(d, g)
+            x = prob.getVars()
+            flow_vertices.append(x)
         
         # Linesearch
         ## Prepare
@@ -54,13 +60,18 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
             return o
         
         ## Linesearch Routine
-        alpha = linesearch_func(f, x, d, f0)
-        x = last_eval[1].ravel() if alpha == last_eval[0] else extrapolator.linesearch_eval(alpha).ravel()
-        prob.setVars(x)
+        with benchmark.ScopedTimer('call_linesearch_func'):
+            alpha = linesearch_func(f, x, d, f0, df0)
+            x = last_eval[1].ravel() if alpha == last_eval[0] else extrapolator.linesearch_eval(alpha).ravel()
+            prob.setVars(x)
 
-        if post_step_cb is not None: post_step_cb(prob, iter_count, alpha)
+        ## post_step_cb
+        with benchmark.ScopedTimer('post_step_cb'):
+            if post_step_cb is not None: post_step_cb(prob, iter_count, alpha)
 
-        if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha)
+        ## verbose print
+        with benchmark.ScopedTimer('verbose_print'):
+            if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha)
         iter_count += 1
     
     return np.array([fv.reshape(-1, 2) for fv in flow_vertices])
@@ -70,7 +81,7 @@ class LineSearchBase:
         self.max_alpha = max_alpha
         self.step_limiter = step_limiter
 
-    def __call__(self, f, x, d, f0):
+    def __call__(self, f, x, d, f0, df0):
         """
         Run line search on a univariate function f(alpha), where
         alpha parametrizes the ray `x + alpha * d`.
@@ -78,11 +89,12 @@ class LineSearchBase:
         and are not used for evaluating `f`.
 
         To avoid evaluating at alpha = 0, we use f0 = f(0)
+        df(0): directional derivative at f(0): f'(0)
         """
         max_alpha = self.max_alpha
         if self.step_limiter is not None:
             max_alpha = min(max_alpha, self.step_limiter.eval(x, d))
-        return self._linesearch_impl(f, max_alpha, f0)
+        return self._linesearch_impl(f, max_alpha, f0, df0)
 
     def _linesearch_impl(self, f, max_alpha, f0):
         raise Exception('_linesearch_impl must be implemented in derived class')
@@ -92,7 +104,7 @@ class BruteForceLinesearch(LineSearchBase):
         super().__init__(**kwargs)
         self.alpha_step_size = alpha_step_size
 
-    def _linesearch_impl(self, f, max_alpha, f0):
+    def _linesearch_impl(self, f, max_alpha, f0, df0):
         alphas = np.arange(0, max_alpha, self.alpha_step_size)
         energies = [f(a) for a in alphas]
         a = alphas[np.argmin(energies)]
@@ -255,7 +267,7 @@ class TernaryLinesearch(LineSearchBase):
         self.max_growth_steps = int(max_growth_steps)
         self.max_ternary_iters = int(max_ternary_iters)
 
-    def _linesearch_impl(self, f, max_alpha, f0):
+    def _linesearch_impl(self, f, max_alpha, f0, df0):
         max_alpha = float(max_alpha)
         if max_alpha <= 0.0:
             return 0.0
@@ -360,7 +372,7 @@ class GoldenSectionSearch(LineSearchBase):
         self.max_growth_steps = int(max_growth_steps)
         self.max_golden_iters = int(max_golden_iters)
 
-    def _linesearch_impl(self, f, max_alpha, f0):
+    def _linesearch_impl(self, f, max_alpha, f0, df0):
         max_alpha = float(max_alpha)
         if max_alpha <= 0.0:
             return 0.0
@@ -474,7 +486,7 @@ class ParabolaFitSearch(LineSearchBase):
         self.max_growth_steps = int(max_growth_steps)
         self.use_extrapolation = bool(use_extrapolation)
 
-    def _linesearch_impl(self, f, max_alpha, f0):
+    def _linesearch_impl(self, f, max_alpha, f0, df0):
         max_alpha = float(max_alpha)
         if max_alpha <= 0.0:
             return 0.0
@@ -493,11 +505,36 @@ class ParabolaFitSearch(LineSearchBase):
 
         def best_cached_alpha() -> float:
             return float(min(cache, key=cache.get)) if cache else 0.0
-
+        
         a0 = 0.0
         f0 = eval_f(a0)
         a1 = min(1.0, max_alpha)
         f1 = eval_f(a1)
+        
+        # Extrapolation: fit parabola using f(0), f'(0), and f(1) directly.
+        if self.use_extrapolation:
+
+            denom = 2*(f1 - df0 - f0)
+            if abs(denom) < 1e-30:
+                return best_cached_alpha()
+            
+            alpha_star = - df0 / denom
+
+            # a, b, c = a0, 0.5, a1, 
+            # fa, fb, fc = f0, eval_f(b), f1,
+
+            # denom = (b - a) * (fb - fc) - (b - c) * (fb - fa)
+            # if abs(denom) < 1e-30:
+            #     return best_cached_alpha()
+
+            # alpha_star = b - 0.5 * (
+            #     (b - a) ** 2 * (fb - fc) - (b - c) ** 2 * (fb - fa)
+            # ) / denom
+
+            alpha_star = float(np.clip(alpha_star, 0.0, max_alpha))
+
+            eval_f(alpha_star)
+            return best_cached_alpha()
 
         # Phase 1: backtrack if f(1) >= f(0).
         if f1 >= f0:
@@ -507,23 +544,6 @@ class ParabolaFitSearch(LineSearchBase):
                     return a
                 a *= self.backtrack_factor
             return 0.0
-
-        # Extrapolation: fit parabola through f(0), f(1), f(2) directly.
-        if self.use_extrapolation:
-            a, b, c = a0, a1, min(2.0, max_alpha)
-            fa, fb, fc = f0, f1, eval_f(c)
-
-            denom = (b - a) * (fb - fc) - (b - c) * (fb - fa)
-            if abs(denom) < 1e-30:
-                return best_cached_alpha()
-
-            alpha_star = b - 0.5 * (
-                (b - a) ** 2 * (fb - fc) - (b - c) ** 2 * (fb - fa)
-            ) / denom
-            alpha_star = float(np.clip(alpha_star, 0.0, max_alpha))
-
-            eval_f(alpha_star)
-            return best_cached_alpha()
 
         # Phase 2: exponential bracketing (1, 2, 4, 8, ...).
         prev_a = a0
