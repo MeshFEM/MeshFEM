@@ -18,7 +18,8 @@ import extra_utils
 
 @benchmark.benchmarkit
 def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, post_step_cb = None,
-                      grad_tol=1e-6, max_iters = 200, x_init = None, verbose=False):
+                      grad_tol=1e-6, newton_step_tol=1e-5, max_iters=200, 
+                      x_init = None, verbose=False, max_extraNewton_stop_counter=None):
     prob = opt.get_problem()
     flow_vertices = []
 
@@ -27,10 +28,16 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
 
     # Newton Optimization Loop
     iter_count = 0
+    newton_extra_stop_count = 0
+    
     while iter_count < max_iters:
         g = prob.gradient()
         if np.linalg.norm(g) < grad_tol:
             break
+        # stop extrapolation
+        if max_extraNewton_stop_counter is not None:
+            if newton_extra_stop_count > max_extraNewton_stop_counter:
+                break
         
         if pre_step_cb is not None: pre_step_cb(prob, iter_count)
 
@@ -62,8 +69,17 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
         ## Linesearch Routine
         with benchmark.ScopedTimer('call_linesearch_func'):
             alpha = linesearch_func(f, x, d, f0, df0)
-            x = last_eval[1].ravel() if alpha == last_eval[0] else extrapolator.linesearch_eval(alpha).ravel()
-            prob.setVars(x)
+            x_extra = last_eval[1].ravel() if alpha == last_eval[0] else extrapolator.linesearch_eval(alpha).ravel()
+            prob.setVars(x_extra)
+            
+        ## Compare ordinary newton and extrapolated newton
+        with benchmark.ScopedTimer('compare_ordinary_newton_extra_newton'):
+            ord_newton_step = alpha * d + x
+            newton_step_diff_norm = np.linalg.norm(x_extra - x) # np.linalg.norm(x_extra - x - ord_newton_step) # / np.linalg.norm(x_extra - x)
+            if newton_step_diff_norm < newton_step_tol:
+                newton_extra_stop_count += 1
+            else:
+                newton_extra_stop_count = 0
 
         ## post_step_cb
         with benchmark.ScopedTimer('post_step_cb'):
@@ -71,7 +87,8 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
 
         ## verbose print
         with benchmark.ScopedTimer('verbose_print'):
-            if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha)
+            if verbose: print(len(flow_vertices) - 1, prob.energy(), np.linalg.norm(prob.gradient()), np.linalg.norm(d), prob.hessianWasProjected, alpha, newton_extra_stop_count, newton_step_diff_norm) #, np.linalg.norm(x_extra - x))
+            
         iter_count += 1
     
     return np.array([fv.reshape(-1, 2) for fv in flow_vertices])
