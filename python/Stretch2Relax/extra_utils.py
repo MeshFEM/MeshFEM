@@ -320,7 +320,7 @@ class LinearExtrapolator:
         self.x0 = x0
         self.d = d
     def linesearch_eval(self, alpha):
-        return self.x0 + alpha * self.d
+        return (self.x0 + alpha * self.d).reshape(-1, 2)
 
 class HybridExtrapolator:
     def __init__(self, extrapolators):
