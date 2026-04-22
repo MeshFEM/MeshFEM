@@ -65,6 +65,9 @@ target_link_libraries(benchmark_assembly MeshFEM)
 add_executable(benchmark_assembly_exhaustive benchmark_assembly_exhaustive.cc)
 target_link_libraries(benchmark_assembly_exhaustive MeshFEM)
 
+add_executable(test_product_based_assembly test_product_based_assembly.cc)
+target_link_libraries(test_product_based_assembly MeshFEM)
+
 if (MESHFEM_WITH_SCOTCH)
     add_executable(benchmark_scotch benchmark_scotch.cc)
     target_link_libraries(benchmark_scotch MeshFEM)
