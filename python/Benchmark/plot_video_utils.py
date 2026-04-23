@@ -10,21 +10,66 @@ import os, sys
 sys.path.append('../')
 import MeshFEM, mesh, mesh_energy,viewer, benchmark
 import mesh_operations
+from helper_funcs import HessianStats
 import numpy as np, copy
 import re
 import math, bisect, time
 import pickle
+from pathlib import Path
+from typing import List, Union
+from param_modelname_utils import getModelNameDict
+
 import video_writer
 import matplotlib
-matplotlib.use('agg')
+# matplotlib.use('agg')
 from matplotlib import pyplot as plt
 from matplotlib.ticker import MaxNLocator
+from matplotlib.colors import ListedColormap
 
-def getColorLineList(options):
+def smart_cmap(n=None, base='Set1'):
+    """
+    If n is None: return the continuous `base` colormap (defaults to 'Set1').
+    If n is an int: return a categorical ListedColormap with n distinct colors.
+      - Up to 8:  Okabe–Ito (colorblind-friendly).
+      - 9–20:     use tab20 (20 distinct colors).
+      - >20:      sample the continuous `base` colormap evenly (avoids the 'all purple' issue).
+    """
+    # Okabe–Ito: widely recommended, colorblind-friendly
+    okabe_ito = [
+        (  0/255,158/255,115/255),  # bluish green
+        (230/255,159/255,  0/255),  # orange
+        ( 86/255,180/255,233/255),  # sky blue
+        (204/255,121/255,167/255),  # reddish purple
+        (213/255, 94/255,  0/255),  # vermillion
+        (240/255,228/255, 66/255),  # yellow
+        (  0/255,114/255,178/255),  # blue
+        (0, 0, 0),                  # black
+    ]
+
+    if n is None:
+        # Continuous: behave exactly like the base map 
+        return plt.cm.get_cmap(base)
+
+    if n <= len(okabe_ito):
+        return ListedColormap(okabe_ito[:n], name='okabe_ito')
+
+    if n <= 20:
+        # 20 well-separated categorical colors
+        tab20 = plt.cm.get_cmap('tab20', 20)
+        return ListedColormap([tab20(i) for i in range(n)], name='tab20_n')
+
+    # Large N: evenly sample the continuous base map, trimming the very ends
+    # to avoid end-stop clustering; this prevents the “everything looks purple” vibe.
+    cont = plt.cm.get_cmap(base)
+    samples = np.linspace(0.03, 0.97, n)  # avoid extreme ends
+    return ListedColormap([cont(x) for x in samples], name=f'{base}_sampled_{n}')
+
+def getColorLineList(options : int):
     # color_list = ['dodgerblue', 'magenta', 'tomato', 'forestgreen', 
     #               'gold', 'darkorange', 'mediumvioletred', 'royalblue']
     
-    cmap = plt.get_cmap("Set1")  # or "Set1", "viridis", etc.
+    # cmap = plt.get_cmap("plasma")  # or "Set1", "viridis", etc.
+    cmap = smart_cmap(options)
     color_list = [cmap(i) for i in range(options)]
     
     line_style_list = [
@@ -40,12 +85,13 @@ def getColorLineList(options):
         (0, (4, 4, 1, 4))   # Alternating wide/narrow dashes
     ]
 
-    lw_step = 0.5
+    lw_step = 0.2
     lw_list = []
     for i in range(options):
         lw_temp = 2.0 + lw_step * i
         lw_list.append(lw_temp)
     lw_list.reverse()
+    lw_list = np.logspace(np.log10(5), np.log10(1), options)
     return color_list[:options], line_style_list[:options], lw_list
 
 
@@ -72,6 +118,16 @@ def list_to_string(int_list):
     str: A string with all integers concatenated in sequence.
     """
     return ''.join(map(str, int_list))
+
+def list_subfolder_names(root: Union[str, Path]) -> List[str]:
+    """
+    Return the names of all first-level subfolders under `root` as a sorted list.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        raise NotADirectoryError(f"{root} is not a directory")
+
+    return [p.name for p in root.iterdir() if p.is_dir()]
 
 def check_adap_option_format(string : str):
     pattern = re.compile(r"^C\d+P\d+$")  # Matches 'C' + digits + 'P' + digits
@@ -117,12 +173,21 @@ def readOptionData(directory, filename):
         print(f"File '{filename}' not found in {directory}. Initialized as an empty NumPy array.")
     return option_data
 
+def load_hessian_stats(path: str) -> HessianStats:
+    with np.load(path) as data:  # allow_pickle=False by default (safer)
+        return HessianStats(
+            projected=data["projected"].astype(np.int_, copy=False),
+            shifted=data["shifted"].astype(np.float_, copy=False),
+            indefinite=data["indefinite"].astype(np.int_, copy=False),
+        )
 
 def read_HessianProjected_data(directory):
     obj_filename = 'obj_history.npy'
     grad_norm_filename = 'grad_norm_history.npy'
+    time_file_name = 'time_history.npy'
     obj_data = np.load(os.path.join(directory, obj_filename))
     grad_norm_data = np.load(os.path.join(directory, grad_norm_filename))
+    time_data = np.load(os.path.join(directory, time_file_name))
 
     step_filename = 'step_size_history.npy'
     dd_filename = 'directional_derivative_history.npy'
@@ -138,7 +203,7 @@ def read_HessianProjected_data(directory):
     hessian_shifted_amount_data = readOptionData(directory, hs_file_name)
     hessian_indef_data = readOptionData(directory, hindef_file_name)
 
-    return obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, hessian_indef_data, step_size_data, dd_data
+    return obj_data, grad_norm_data, time_data, hessian_projected_data, hessian_shifted_amount_data, hessian_indef_data, step_size_data, dd_data
 
 # Under Hessian_Option/thread_i/
 def getFastestRepeatIndex(directory):
@@ -155,45 +220,62 @@ def getFastestRepeatIndex(directory):
         return fast_ind
 
 # Under Hessian_Option/thread_i/repeat_i
-def read_benchmark_data(directory, read_hessian_data=False):
+def read_benchmark_data(directory, read_npz_data=True, read_hessian_data=False):
     # Full paths to the files
     pkl_file_path = os.path.join(directory, "benchmark_dict.pkl")
-    npz_file_path = os.path.join(directory, "obj_time_gradnorm.npz")
     
     # Check if files exist
     if not os.path.isfile(pkl_file_path):
         raise FileNotFoundError(f"'benchmark_dict.pkl' not found in {directory}")
-    if not os.path.isfile(npz_file_path):
-        raise FileNotFoundError(f"'obj_and_time.npz' not found in {directory}")
 
     # Load the dictionary from pickle file
     with open(pkl_file_path, "rb") as f:
         benchmark_dict = pickle.load(f)
-
-    # Load numpy arrays from .npz file
-    npz_data = np.load(npz_file_path)
-    obj_arr = npz_data['obj_arr']
-    time_arr = npz_data['time_arr']
-    grad_norm_arr = npz_data['grad_norm_arr']
-
+    
+    if read_npz_data:
+        npz_file_path = os.path.join(directory, "obj_time_gradnorm.npz")
+        if not os.path.isfile(npz_file_path):
+            raise FileNotFoundError(f"'obj_and_time.npz' not found in {directory}")
+        
+        # Load numpy arrays from .npz file
+        npz_data = np.load(npz_file_path)
+        obj_arr = npz_data['obj_arr']
+        time_arr = npz_data['time_arr']
+        grad_norm_arr = npz_data['grad_norm_arr']
+    else:
+        obj_arr = np.load(os.path.join(directory, "obj_history.npy"))
+        time_arr = np.load(os.path.join(directory, "time_history.npy"))
+        grad_norm_arr = np.load(os.path.join(directory, "grad_norm_history.npy"))
+    
     if read_hessian_data:
+        # Two different scenarios: if exists "hessian_data.npz": 2 parameter experiments
+        # if exists "hessian_stats.npz": new MeshFEMVariant experiments
         hessian_npz_file_path = os.path.join(directory, "hessian_data.npz")
-        if not os.path.isfile(hessian_npz_file_path):  raise FileNotFoundError(f"'hessian_data.npz' not found in {directory}")
-        hessian_npz_data = np.load(hessian_npz_file_path)
-        hessian_projected_arr = hessian_npz_data['hp_arr']
-        hessian_shift_arr = hessian_npz_data['hs_arr']
-        hessian_indef_arr = hessian_npz_data['hi_arr']
-        step_size_arr = hessian_npz_data['step_size_arr']
-        dd_arr = hessian_npz_data['dd_arr']
+        hessian_stats_file_path = os.path.join(directory, "hessian_stats.npz")
 
-        return obj_arr, time_arr, grad_norm_arr, hessian_projected_arr, hessian_shift_arr, hessian_indef_arr, step_size_arr, dd_arr 
+        if os.path.isfile(hessian_npz_file_path):
+            hessian_npz_data = np.load(hessian_npz_file_path)
+            hessian_projected_arr = hessian_npz_data['hp_arr']
+            hessian_shift_arr = hessian_npz_data['hs_arr']
+            hessian_indef_arr = hessian_npz_data['hi_arr']
+            step_size_arr = hessian_npz_data['step_size_arr']
+            dd_arr = hessian_npz_data['dd_arr']
+            return obj_arr, time_arr, grad_norm_arr, hessian_projected_arr, hessian_shift_arr, hessian_indef_arr, step_size_arr, dd_arr 
+
+        if os.path.isfile(hessian_stats_file_path):
+            hessian_stats = load_hessian_stats(hessian_stats_file_path)
+            return obj_arr, time_arr, grad_norm_arr, benchmark_dict, hessian_stats
 
     return obj_arr, time_arr, grad_norm_arr, benchmark_dict
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
-def readConvergenceTimingData(directory, thread_num_list=[0], hessian_option_list = ['Adaptive', 'Always', 'Never']):
-    obj_grad_time_list = create_list_of_lists(len(hessian_option_list))
+def readConvergenceTimingData(directory, thread_num_list, hessian_option_list, readMeshFEMVariantsOnly=False):
+    num_hessian_options = len(hessian_option_list)
+    obj_grad_time_list = create_list_of_lists(num_hessian_options)
+    benchmark_dict_list = create_list_of_lists(num_hessian_options)
+    hessian_stats_namedtuple_list = create_list_of_lists(num_hessian_options)
+
     for hessopt_ind, hessian_option in enumerate(hessian_option_list):
         # read obj, grad_norm, timing data
         for thread_num in thread_num_list:
@@ -202,7 +284,10 @@ def readConvergenceTimingData(directory, thread_num_list=[0], hessian_option_lis
             fast_ind = getFastestRepeatIndex(cur_dir) # read file 'summary.txt'
             repeat_dir_name = 'repeat' + '_' + fast_ind
             data_dir = os.path.join(cur_dir, repeat_dir_name)
-            obj_arr, time_arr, grad_norm_arr, benchmark_dict = read_benchmark_data(data_dir)
+            if readMeshFEMVariantsOnly:
+                obj_arr, time_arr, grad_norm_arr, benchmark_dict, hessian_stats = read_benchmark_data(data_dir, read_hessian_data=True)
+            else:
+                obj_arr, time_arr, grad_norm_arr, benchmark_dict = read_benchmark_data(data_dir)
             # add analyze_pattern_time for CompMajor
             if hessian_option == "CompMajor":
                 iter_steps = time_arr.shape[0]
@@ -210,14 +295,24 @@ def readConvergenceTimingData(directory, thread_num_list=[0], hessian_option_lis
 
             obj_grad_time = np.vstack((obj_arr, grad_norm_arr, time_arr)) # make a (3,n) numpy array
             obj_grad_time_list[hessopt_ind].append(obj_grad_time)
+            benchmark_dict_list[hessopt_ind].append(benchmark_dict)
+            if readMeshFEMVariantsOnly:
+                hessian_stats_namedtuple_list[hessopt_ind].append(hessian_stats)
     
-    return obj_grad_time_list
+    if readMeshFEMVariantsOnly:
+        return obj_grad_time_list, benchmark_dict_list, hessian_stats_namedtuple_list
+    else:
+        return obj_grad_time_list, benchmark_dict_list
 
 # For all Hessian_Option/
 # Input parameter: directory = base_path/user_model_name
 def readHessianData(directory, hessian_option_list = ['Adaptive', 'Always', 'Never']):
+    '''
+    Deprecated: Johnson 2025-10-17 08:58PM
+    '''
     obj_list = []
     grad_norm_list = []
+    time_list = []
     hessian_projected_list = []
     hessian_shifted_amount_list = []
     hessian_indef_list = []
@@ -227,17 +322,39 @@ def readHessianData(directory, hessian_option_list = ['Adaptive', 'Always', 'Nev
         # read UV_related Hessian data
         uv_folder_name = 'UVs'
         uv_dir = os.path.join(directory, hessian_option, uv_folder_name)
-        obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, hessian_indef_data, step_data, dd_data = read_HessianProjected_data(uv_dir)
+        obj_data, grad_norm_data, time_data, hessian_projected_data, hessian_shifted_amount_data, hessian_indef_data, step_data, dd_data = read_HessianProjected_data(uv_dir)
 
         obj_list.append(obj_data)
         grad_norm_list.append(grad_norm_data)
+        time_list.append(time_data)
         hessian_projected_list.append(hessian_projected_data)
         hessian_shifted_amount_list.append(hessian_shifted_amount_data)
         hessian_indef_list.append(hessian_indef_data)
         step_size_list.append(step_data)
         dd_list.append(dd_data)
     
-    return obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, hessian_indef_list, step_size_list, dd_list
+    return obj_list, grad_norm_list, time_list, hessian_projected_list, hessian_shifted_amount_list, hessian_indef_list, step_size_list, dd_list
+
+# For all UVs/ under each method folder
+def readUVsFolderstats(directory : str, solver_option_list : list) -> dict:
+    method_uvdata_dict = {}
+    for solver_option in solver_option_list:
+        uv_stats_dict = {}
+        uv_folder_name = 'UVs'
+        uv_dir = os.path.join(directory, solver_option, uv_folder_name)
+        obj_data, grad_norm_data, hessian_projected_data, hessian_shifted_amount_data, hessian_indef_data, step_data, dd_data = read_HessianProjected_data(uv_dir)
+
+        uv_stats_dict['obj_arr'] = obj_data
+        uv_stats_dict['grad_norm_arr'] = grad_norm_data
+        uv_stats_dict['hessian_projected_arr'] = hessian_projected_data
+        uv_stats_dict['hessian_shifted_amount_arr'] = hessian_shifted_amount_data
+        uv_stats_dict['hessian_indef_arr'] = hessian_indef_data
+        uv_stats_dict['step_arr'] = step_data
+        uv_stats_dict['directional_derivative_arr'] = dd_data
+        method_uvdata_dict[solver_option] = uv_stats_dict
+    
+    return method_uvdata_dict
+
 
 # For input step_tuples
 # Input parameter: directory = base_path/user_model_name a string
@@ -311,13 +428,24 @@ def readDictData(directory : str, thread_num_list, hessian_option_list):
             thread_dict = {}
             thread_dict['iter'] = obj_arr.shape[0]
             thread_dict['final_energy'] = obj_arr[-1]
+            thread_dict['final_grad_norm'] = grad_norm_arr[-1]
             thread_dict['time'] = time_arr[-1]
-            if hessian_option == 'CompMajor':  thread_dict['time'] += benchmark_dict['symbolic_fac_time']
+
+            thread_dict['obj_arr'] = obj_arr
+            thread_dict['time_arr'] = time_arr
+            thread_dict['grad_norm_arr'] = grad_norm_arr
+
+            if hessian_option == 'CompMajor':  
+                thread_dict['time'] += benchmark_dict['symbolic_fac_time']
+                thread_dict['time_arr'][1:] += benchmark_dict['symbolic_fac_time']
 
             if hessian_option == 'TinyAD':
-                thread_dict['linsolve'] = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
                 thread_dict['hessian_eval'] = benchmark.totalTime('Hessian Evaluation$', d=benchmark_dict)
                 thread_dict['line_search'] = benchmark.totalTime('Line Search$', d=benchmark_dict)
+                thread_dict['linsolve'] = benchmark.totalTime('Linear Solve$', d=benchmark_dict)
+                thread_dict['symbol'] = benchmark.totalTime('Linear Solve.Symbolic Factorization$', d=benchmark_dict)
+                thread_dict['numeric'] = benchmark.totalTime('Linear Solve.Numeric Factorization$', d=benchmark_dict)
+                thread_dict['solve'] = benchmark.totalTime('Linear Solve.Solve$', d=benchmark_dict)
             elif hessian_option in ['SLIM', 'CompMajor']:
                 thread_dict['hessian_eval'] = benchmark_dict['hessian_eval_time']
                 thread_dict['symbol'] = benchmark_dict['symbolic_fac_time']
@@ -332,6 +460,21 @@ def readDictData(directory : str, thread_num_list, hessian_option_list):
         model_dict[hessian_option] = hessian_dict
     
     return model_dict
+
+def extractFastestThreadExp(model_dict, solver_option, thread_num_list, query_str='time'):
+    '''
+    Get the Fastest Thread number for one model for one method
+    ModelBase_Dict: return by function readDictData
+    '''
+    time_min = np.inf
+    method_dict = model_dict[solver_option]
+    for thread_ind, thread_num in enumerate(thread_num_list):
+        thread_dict = method_dict[thread_num]
+        total_time = thread_dict[query_str]
+        if total_time < time_min:
+            time_min = total_time
+            thread_min_thread_number = thread_num
+    return thread_min_thread_number
 
 # align timing
 def alignTiming(obj_grad_time_list, grad_norm_list, thread_ind=0):
@@ -594,7 +737,56 @@ def save_obj_grad_time_figure_MiddleCut(obj_grad_time_list, user_model_name, sav
     plt.close(fig2)
 
 
+# Generate videos recodring parameterization layout changes
+# Johnson 2025-11-29 latest version: no need to aligh timing
+def genParamVideos(base_path, model_path, user_model_name, save_directory, 
+                   hessian_option_list, fps=30, speedup=None, sect=None, visInitialUV=0):
+    
+    m = mesh.Mesh(model_path)
 
+    for hessian_ind, hessian_option in enumerate(hessian_option_list):
+        uv = mesh_energy.NodalVars(m, 2)
+        uv_path = os.path.join(base_path, user_model_name, hessian_option, 'UVs')
+        numUVs = getNumUVs(uv_path)
+        uv_data_0 = read_uv_data(uv_path, visInitialUV)
+        uv.setVars(uv_data_0)
+        uv_data_final = read_uv_data(uv_path, numUVs - 1)
+        m_union = mesh_operations.concatenateMeshes([(uv_data_0.reshape(-1, 2), m.elements()), (uv_data_final.reshape(-1, 2), m.elements())])
+        
+        # read timing data
+        time_file_name = 'time_history.npy'
+        time_data = np.load(os.path.join(uv_path, time_file_name))
+        if speedup is not None:  time_data /= speedup
+
+        # create viewer
+        v = viewer.Viewer(m_union, wireframe=True)
+        em = MeshFEM.EmbeddedMesh(m, uv)
+        v.update(mesh=em, preserveExisting=False)
+        v.makeOpaque(color='#48B3FF')
+        
+        spf = 1 / fps
+        total_time = time_data[-1]
+        numFrames = int(math.ceil(total_time / spf)) + 1
+
+        video_fn = user_model_name + '_' + hessian_option + '_symmdsUVopt' + '_thread' + str(16)
+        if sect is not None:  video_fn += '_sect' + str(sect)
+        if speedup is not None:  video_fn += '_speedup' + str(speedup)
+        video_fn += '.mp4'
+        
+        start_record_timer = time.time()
+        v.recordStart(os.path.join(save_directory, video_fn), renderScale=8, outputScale=2, framerate=fps, lineWidthScale=0.11)
+        for f in range(numFrames):
+            frameTime = f * spf
+            iterationForFrame = max(0, bisect.bisect_right(time_data, frameTime) - 1)
+            # if f == numFrames - 1: 
+            #     print(f'Last Loop: frameTime: {frameTime}')
+            #     print(f'Last Loop: IterationForFrame: {iterationForFrame}')
+            #     raise RuntimeWarning('Debuging')
+            uv.setVars(read_uv_data(uv_path, iterationForFrame))
+            v.update()
+        v.recordStop()
+        elapsed_record_time = time.time() - start_record_timer
+        print(f"[Viedo] {video_fn} recorded in {save_directory}. Recording Time: {elapsed_record_time:.4f} seconds.")
 
 
 # Generate videos recording parametrization process of models under 3 different Hessian Options and one thread
@@ -666,6 +858,7 @@ def getBarPlotsYAxisTitle(metric_key : str):
     elif metric_key == 'iter': yAxisTitle = "Iteration"
     elif metric_key == 'linsolve':  yAxisTitle = "Linear Solve Time"
     elif metric_key == 'hessian_eval':  yAxisTitle = "Derivative Evaluation Time"
+    elif metric_key == 'symbol': yAxisTitle = 'Symbolic Fac Time'
     return yAxisTitle
 
 def getMetricTitleFromKey(metric_key : str):
@@ -700,9 +893,10 @@ def saveMetricIterFigure_AdapExpWrapper(adap_exp_data_dict, thread_num, model_na
 
 def addOursinLabel(label_option : str) -> str :
     if label_option in ['TinyAD', 'CompMajor', 'SLIM']:  return label_option
-    else:  
-        label_str = 'Ours, ' + label_option
+    elif 'MeshFEM' in label_option :  
+        label_str = 'Ours'
         return label_str
+    else:  return label_option
 
 
 # Plot metric with numIter - offset size
@@ -924,6 +1118,77 @@ def gen_MetricIter_videos(metric_list, hessian_projected_list, obj_grad_time_lis
         plt.xlim(0, max_num_steps)
         plt.ylim(10**(min_N_obj), 10**(max_N_obj))
 
+        plt.title(f"Model: {user_model_name}", fontsize=16)
+        plt.yscale('log')
+        plt.xlabel("Iteration", fontsize=12)
+        plt.ylabel(yAxisTitle, fontsize=14)
+        plt.legend(loc="upper right")
+        pw.writeFrame(plt.gcf()) 
+        plt.close()
+    pw.finish()
+    elapsed_record_time = time.time() - start_record_timer
+    print(f"[Viedo] {obj_iter_vdname} recorded in {save_directory}. Time: {elapsed_record_time:.4f} seconds.")
+
+
+# Johnson 11-29-25
+# Read timing data directly from UVs folder
+def genMetricIterVideos(metric_list, timing_list, user_model_name, metric_title,
+                        save_directory, hessian_option_list,
+                        fps=30, default_fig_size=(8, 8), speedup=1, sect=None):
+    
+    num_options = len(hessian_option_list)
+    max_num_steps, max_obj, min_obj = getStepsMaxMin_FromMetricList(metric_list)
+    yAxisTitle = getYAxisTitle(metric_title)
+
+    if sect is not None:  obj_iter_vdname = user_model_name + '_' + metric_title +'VSIter' + '_thread' + str(16) + '_speedup' + str(speedup) + '_sect' + str(sect) + '.mp4'
+    else:                 obj_iter_vdname = user_model_name + '_' + metric_title +'VSIter' + '_thread' + str(16) + '_speedup' + str(speedup) + '.mp4'
+    fig = plt.figure(figsize=default_fig_size, dpi=300)
+
+    plt.xlim(0, max_num_steps)
+    if metric_title == 'Grad':  
+        max_N_obj = math.ceil(math.log10(max_obj)) + 1
+        min_N_obj = math.floor(math.log10(min_obj)) - 1
+        plt.ylim(10**(min_N_obj - 1), 10**(max_N_obj + 1))
+    elif metric_title == 'Obj': 
+        max_N_obj = max(math.ceil(math.log10(max_obj)), 1)
+        min_N_obj = math.log10(1.5)
+        plt.ylim(10**(min_N_obj), 10**(max_N_obj))
+
+    plt.title(f"Model: {user_model_name}", fontsize=16)
+    plt.yscale('log')
+    plt.xlabel("Iteration", fontsize=12)
+    plt.ylabel(yAxisTitle, fontsize=14)
+    plt.legend()
+    pw = video_writer.PlotVideoWriter(os.path.join(save_directory, obj_iter_vdname), plt.gcf(), dpi=300, )
+
+    iterations_list = []
+    for i in range(num_options):
+        iterations = np.arange(0, metric_list[i].shape[0])
+        iterations_list.append(iterations)
+    color_list, line_style_list, line_width_list = getColorLineList(num_options)
+    line_width_list[:] = 3
+
+    # apply global speedup
+    for time_arr in timing_list:
+        time_arr /= speedup
+
+    spf = 1 / fps
+    _, totalTime, _ = getStepsMaxMin_FromMetricList(timing_list)
+    numFrames = int(math.ceil(totalTime / spf)) + 1
+
+    start_record_timer = time.time()
+    for f in range(numFrames):
+        frameTime = f * spf
+        fig = plt.figure(figsize=default_fig_size, dpi=300)
+        for i in range(num_options):
+            iterationForFrame = max(0, bisect.bisect_right(timing_list[i], frameTime) - 1)
+            plt.plot(iterations_list[i][:iterationForFrame+1], metric_list[i][:iterationForFrame+1], 
+                    ls=line_style_list[i], lw=line_width_list[i], color=color_list[i], label=addOursinLabel(hessian_option_list[i]))
+        
+        plt.xlim(0, max_num_steps)
+        plt.ylim(10**(min_N_obj), 10**(max_N_obj))
+
+        # plt.title(f"Model: {getModelNameDict()[user_model_name]}", fontsize=16)
         plt.title(f"Model: {user_model_name}", fontsize=16)
         plt.yscale('log')
         plt.xlabel("Iteration", fontsize=12)
