@@ -378,6 +378,8 @@ public:
         return result;
     }
 
+    const std::vector<MNd> getF_ex() const{ return m_F_ex; }
+
 private:
 
     static MXNd scalarGradient(const Mesh &mesh, const VXd &scalarField) {

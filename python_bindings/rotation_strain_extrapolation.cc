@@ -162,5 +162,8 @@ PYBIND11_MODULE(rotation_strain_extrapolation, m) {
                 return std::make_shared<RS>(m, method);
             }),
             py::arg("m"),
-            py::arg("method") = "Eulerian");
+            py::arg("method") = "Eulerian")
+        .def("elementJacobian", &RS::elementJacobian, py::arg("ei"), py::arg("x"))
+        .def_property_readonly("F_ex", &RS::getF_ex)
+        ;
 }
