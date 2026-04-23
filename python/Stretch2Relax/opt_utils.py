@@ -29,8 +29,11 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
     # Newton Optimization Loop
     iter_count = 0
     newton_extra_stop_count = 0
+    firstTime = True
     
     while iter_count < max_iters:
+        if iter_count >= 1:  firstTime = False
+        
         g = prob.gradient()
         if np.linalg.norm(g) < grad_tol:
             break
@@ -39,7 +42,9 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
             if newton_extra_stop_count > max_extraNewton_stop_counter:
                 break
         
-        if pre_step_cb is not None: pre_step_cb(prob, iter_count)
+        if pre_step_cb is not None and not firstTime: 
+            with benchmark.ScopedTimer('Callback'):
+                pre_step_cb(prob, iter_count)
 
         with benchmark.ScopedTimer('compute_d_x_f0_df0'):
             d = opt.newton_step()
@@ -75,7 +80,7 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
         ## Compare ordinary newton and extrapolated newton
         with benchmark.ScopedTimer('compare_ordinary_newton_extra_newton'):
             ord_newton_step = alpha * d + x
-            newton_step_diff_norm = np.linalg.norm(x_extra - x) # np.linalg.norm(x_extra - x - ord_newton_step) # / np.linalg.norm(x_extra - x)
+            newton_step_diff_norm = np.linalg.norm(x_extra - ord_newton_step) # np.linalg.norm(x_extra - x - ord_newton_step) # / np.linalg.norm(x_extra - x)
             if newton_step_diff_norm < newton_step_tol:
                 newton_extra_stop_count += 1
             else:
