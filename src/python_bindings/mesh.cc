@@ -156,6 +156,9 @@ struct MeshBindingsBase {
 
           .def("copy", [](const Mesh &m) { return std::make_shared<Mesh>(m); })
 
+
+          .def("reembedElements", [](Mesh &m, const Eigen::MatrixXd &V) { m.reembedElements(V); }, py::arg("V"), "Re-embed the mesh elements using the corner positions taken from a vertex position table `V`. This differs from `setNodePositions` in that it does not actually update node positions! Instead, it simply updates each element's cached shape function gradients and geometric data. Furthermore, it supports embedding 2D elements according to element shapes taken from a 3D embedding of the mesh; this is to support the use case of implementing a surface parametrization problem as a 2D elasticity problem. In this mode, each 3D triangle of the input mesh is separately rotated into the 2D plane, conceptually yielding a disconnected flat mesh with the same metric as the 3D one.")
+
           .def(py::pickle([](const Mesh &m) { return py::make_tuple(getV(m), getF(m)); },
                           [](const py::tuple &t) {
                               if (t.size() != 2)  throw std::runtime_error("Invalid pickled state!");

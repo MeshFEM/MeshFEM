@@ -15,7 +15,7 @@
 
 template<class Derived>
 void scotch_ordering(const SuiteSparseMatrix &H_sp, Eigen::MatrixBase<Derived> &ordering, Eigen::MatrixBase<Derived> &inv_ordering,
-                     SCOTCH_Num strategyFlag = SCOTCH_STRATDEFAULT, double imbalance_ratio = 0.01) {
+                     SCOTCH_Num strategyFlag = SCOTCH_STRATDEFAULT, double imbalance_ratio = 0.2) {
     BENCHMARK_SCOPED_TIMER_SECTION full_timer("scotch_ordering");
     BENCHMARK_START_TIMER_SECTION("Convert to Scotch");
     auto H_sp_full = H_sp.toSymmetryModeSparsityOnly(SuiteSparseMatrix::SymmetryMode::NONE);
@@ -85,7 +85,8 @@ void scotch_ordering(const SuiteSparseMatrix &H_sp, Eigen::MatrixBase<Derived> &
         // SCOTCH_stratGraphOrderBuild(&strat, SCOTCH_STRATSPEED, 0, imbalance_ratio);
         // SCOTCH_stratGraphOrderBuild(&strat, SCOTCH_STRATBALANCE, 0, imbalance_ratio);
         // SCOTCH_stratGraphOrderBuild(&strat, SCOTCH_STRATQUALITY, 0, imbalance_ratio);
-        SCOTCH_stratGraphOrderBuild(&strat, strategyFlag, 0, imbalance_ratio);
+        if (imbalance_ratio >= 0) // imbalance ratio of -1 selects a fully default strategy (hack)
+            SCOTCH_stratGraphOrderBuild(&strat, strategyFlag, 0, imbalance_ratio);
     }
 
     // Compute ordering

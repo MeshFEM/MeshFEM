@@ -16,7 +16,7 @@ void BlockCSCHessianBase::dumpBinaryToStream(std::ostream &os) const {
     os.write(reinterpret_cast<const char *>(&numBlocks), sizeof(numBlocks));
 
     index_type snz = isSparsityOnly() ? 0 : scalarNNZ();
-    if ((Ap.size() != size_t(n + 1)) || (Ai.size() != size_t(nz)) || (Ax.size() != size_t(snz))) {
+    if ((Ap.size() != size_t(n + 1)) || (size_t(Ai.size()) != size_t(nz)) || (Ax.size() != size_t(snz))) {
         std::cout << "Ap.size() = " << Ap.size() << std::endl;
         std::cout << "Ai.size() = " << Ai.size() << std::endl;
         std::cout << "Ax.size() = " << Ax.size() << std::endl;

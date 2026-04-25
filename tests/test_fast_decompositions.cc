@@ -14,6 +14,7 @@
 *///////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
+#include <MeshFEM/Utilities/fast_3x2_decompositions.hh>
 
 // WARNING: catch2/catch.hpp sets a BENCHMARK macro, so we must include it
 // after MeshFEM.
@@ -45,16 +46,15 @@ void test_cubicroot() {
 template<size_t N>
 void test_polar() {
     using MNd = MatN_T<double, N>;
-    using VNd = VecN_T<double, N>;
     static constexpr size_t numTests = 1000;
     for (size_t i = 0; i < numTests; ++i) {
         MNd A = MNd::Random();
         MNd R, S;
-        VNd s;
-        fast_decompositions::polar(A, R, S, s);
+        fast_decompositions::polar(A, R, S);
 
         REQUIRE((R.transpose() * R - MNd::Identity()).norm() < 1e-10);
         REQUIRE((R * S - A).norm() / A.norm() < 1e-10); // Check backward error.
+        REQUIRE(R.determinant() > 0); // Check that R is a proper rotation (not a reflection).
     }
 }
 
@@ -68,7 +68,7 @@ template<size_t N>
 void test_eigs() {
     using MNd = MatN_T<double, N>;
     using VNd = VecN_T<double, N>;
-    const double tol = (N == 3) ? 0.5e-11 : 1e-8;
+    const double tol = (N == 3) ? 1e-11 : 1e-8;
 
     // // Specifically problematic inputs we've discovered (for debugging).
     // {
@@ -246,6 +246,95 @@ void test_svd() {
     }
 }
 
+template<size_t M, size_t N>
+void test_rectangular_svd() {
+    using Mat = Eigen::Matrix<double, M, N>;
+    using MNd = MatN_T<double, N>;
+    using VNd = VecN_T<double, N>;
+
+    const double tol = 0.5e-9;
+
+    static constexpr size_t numTests = 1e7; // increase this for more exhaustive but slower testing; has been tested at 1e9.
+    // Uniformly random tests
+    for (size_t i = 0; i < numTests; ++i) {
+        Mat A = Mat::Random();
+        Mat U;
+        MNd V;
+        VNd sigma;
+        fast_decompositions::svd(A, U, sigma, V);
+
+        // std::cout.precision(16);
+        // std::cout << "U: " << std::endl << U << std::endl << std::endl;
+        // std::cout << "V: " << std::endl << V << std::endl << std::endl;
+        // std::cout << "sigma: " << sigma.transpose() << std::endl << std::endl;
+
+        // std::cout << "Reconstructed A: " << std::endl << (U * sigma.asDiagonal() * V.transpose()) << std::endl << std::endl;
+        // std::cout << "Original A: " << std::endl << A << std::endl << std::endl;
+        // std::cout << "Absolute backward error: " << (U * sigma.asDiagonal() * V.transpose() - A).norm() << std::endl;
+        REQUIRE((U.transpose() * U - MNd::Identity()).norm() < tol);
+        REQUIRE((V.transpose() * V - MNd::Identity()).norm() < tol);
+        REQUIRE((U * sigma.asDiagonal() * V.transpose() - A).norm() / A.norm() < tol); // Check backward error.
+        REQUIRE(sigma[0] >= sigma[1]);
+    }
+
+#if 1
+    // Test more difficult degenerate and near-degenerate cases.
+    // Using random U and V matrices, try cases where the singular values
+    // cluster close to one another and also around zero.
+    for (size_t i = 0; i < numTests; ++i) {
+        Mat U;
+        MNd V;
+        // Use QR to get random orthogonal matrices
+        U = MatN_T<double, 3>(Mat::Random().householderQr().householderQ()).template leftCols<2>();
+        V = MNd::Random().householderQr().householderQ();
+        VNd sigma;
+        sigma[0] = random_logspaced(1e-16, 1e-8);
+        if (rand() % 1000 == 0) sigma[0] = 0; // Occasionally test exact zero singular value.
+        for (size_t j = 1; j < N; ++j) {
+            sigma[j] = sigma[j - 1] * random_logspaced(1 - 1e-8, 1 - 1e-16); // Each subsequent singular value in [s_{i-1}*1e-10, s_{i-1}]
+            if (rand() % 100 == 0) // Occasionally test repeated singular values.
+                sigma[j] = sigma[j - 1];
+        }
+        Mat A = U * sigma.asDiagonal() * V.transpose();
+
+        Mat U2;
+        MNd V2;
+        VNd sigma2;
+
+        fast_decompositions::svd(A, U2, sigma2, V2);
+
+        Real U_orthogonality_error_near_degenerate_case = (U2.transpose() * U2 - MNd::Identity()).norm();
+        Real V_orthogonality_error_near_degenerate_case = (V2.transpose() * V2 - MNd::Identity()).norm();
+        Real abs_backward_error_near_degenerate_case = (U2 * sigma2.asDiagonal() * V2.transpose() - A).norm();
+
+        if (!(U_orthogonality_error_near_degenerate_case < tol) || // Negation is used to catch `NaN` too...
+            !(V_orthogonality_error_near_degenerate_case < tol) ||
+            !(abs_backward_error_near_degenerate_case <= tol * A.norm())) {
+
+            std::cout.precision(18);
+            std::cout << "Failure case:" << std::endl;
+            std::cout << "Original A: " << std::endl << A << std::endl << std::endl;
+            std::cout << "U: " << std::endl << U << std::endl << std::endl;
+            std::cout << "V: " << std::endl << V << std::endl << std::endl;
+            std::cout << "sigma: " << sigma.transpose() << std::endl << std::endl;
+
+            std::cout << "Computed SVD:" << std::endl;
+            std::cout << "U2: " << std::endl << U2 << std::endl << std::endl;
+            std::cout << "V2: " << std::endl << V2 << std::endl << std::endl;
+            std::cout << "sigma2: " << sigma2.transpose() << std::endl << std::endl;
+            std::cout << "Reconstructed A: " << std::endl << (U2 * sigma2.asDiagonal() * V2.transpose()) << std::endl << std::endl;
+            std::cout << "Absolute backward error: " << (U2 * sigma2.asDiagonal() * V2.transpose() - A).norm() << std::endl;
+            std::cout << "A norm: " << A.norm() << std::endl;
+        }
+
+        REQUIRE(U_orthogonality_error_near_degenerate_case < tol);
+        REQUIRE(V_orthogonality_error_near_degenerate_case < tol);
+        REQUIRE(abs_backward_error_near_degenerate_case <= tol * A.norm());
+        REQUIRE(sigma2[0] >= sigma2[1]);
+    }
+#endif
+
+}
 TEST_CASE("fast 3x3 decompositions", "[fast_3x3_decompositions]" ) {
     test_eigs<3>();
     test_svd<3>();
@@ -316,6 +405,7 @@ TEST_CASE("fast 3x3 decompositions", "[fast_3x3_decompositions]" ) {
 TEST_CASE("fast 2x2 decompositions", "[fast_2x2_decompositions]" ) {
     test_eigs<2>();
     test_svd<2>();
+    test_polar<2>();
 
     {
         // Benchmarking comparison of `fast_decompositions::svd` against Eigen's SVD
@@ -370,8 +460,6 @@ TEST_CASE("fast 2x2 decompositions", "[fast_2x2_decompositions]" ) {
         }
         double duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
         std::cout << "fast_decompositions::sym_eigensolver (2x2) took " << duration << "s for " << runs << " runs." << std::endl;
-        std::cout << "Q_sum: " << Q_sum << std::endl;
-        std::cout << "lambda: " << lambda.transpose() << std::endl;
 
         start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < runs; ++i) {
@@ -380,7 +468,24 @@ TEST_CASE("fast 2x2 decompositions", "[fast_2x2_decompositions]" ) {
         }
         duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
         std::cout << "Eigen's 2x2 eigensolver took " << duration << "s for " << runs << " runs." << std::endl;
+
+        start = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < runs; ++i) {
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> es;
+            es.computeDirect(A_mats[i]);
+            Q_sum += es.eigenvectors();
+            lambda_sum += es.eigenvalues();
+        }
+        duration = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+        std::cout << "Eigen's 2x2 computeDirect eigensolver took " << duration << "s for " << runs << " runs." << std::endl;
+
+        std::cout << "Q_sum: " << Q_sum << std::endl;
+        std::cout << "lambda: " << lambda.transpose() << std::endl;
     }
+}
+
+TEST_CASE("fast 3x2 decompositions", "[fast_3x2_decompositions]" ) {
+    test_rectangular_svd<3, 2>();
 }
 
 TEST_CASE("fast 3x3 decompositions float", "[fast_3x3_decompositions_float]" ) {

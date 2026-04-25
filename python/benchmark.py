@@ -2,15 +2,23 @@ from _benchmark import *
 import functools
 import time
 
+class ScopedTimer:
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        start_timer_section(self.name)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        stop_timer_section(self.name)
+
 def benchmarkit(fn):
     # Ensure that the name and docstring of 'fn' is preserved in 'wrapper'
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
       # the wrapper passes all parameters to the function being decorated
-      start_timer_section(fn.__name__)
-      res = fn(*args, **kwargs)
-      stop_timer_section(fn.__name__)
-      return res
+      with ScopedTimer(fn.__name__):
+        return fn(*args, **kwargs)
     return wrapper
 
 def benchmarkit_customname(name):
@@ -19,10 +27,8 @@ def benchmarkit_customname(name):
       @functools.wraps(fn)
       def wrapper(*args, **kwargs):
         # the wrapper passes all parameters to the function being decorated
-        start_timer_section(name)
-        res = fn(*args, **kwargs)
-        stop_timer_section(name)
-        return res
+        with ScopedTimer(name):
+          return fn(*args, **kwargs)
       return wrapper
   return named_benchmarkit
 
@@ -89,7 +95,7 @@ def format(d, print_string = True):
     """
     s = ''
     fullTime = 0
-    for k in sorted(d.keys()):
+    for k in sorted(d.keys(), key=lambda x: (x.lower(), x)):
         t = d[k]
         if k == '':
             fullTime = t.time
@@ -124,3 +130,49 @@ def sum(dicts):
             accumulated[key].time += record.time
 
     return accumulated
+
+################################################################################
+# Visualizations
+################################################################################
+def pieChart(heading='', d = None, includeOutside = False):
+    """
+    Create a pie chart visualizing the timing breakdown for a specified subtree
+    of the benchmarking data.
+
+    Specifically, given a subtree root, we plot the fraction of the subtree time
+    spent within each of the subtrees rooted at the children.
+
+    If `includeOutside` is true, we also plot the time spent outside the subtree
+    for reference.
+    """
+    import numpy as np
+    from matplotlib import pyplot as plt
+
+    if d is None: d = to_dict()
+    if (heading != ''): total_subtree_time = totalTime(heading + '$', d)
+    else:               total_subtree_time = totalTime('^$', d)
+    labels = []
+    times = []
+    if (heading != ''): subtimes = query(heading + ':[^:]+$', d)
+    else:               subtimes = query('^[^:]+$', d)
+    for k in subtimes:
+        labels.append(k.split(':')[-1])
+        times.append(d[k].time)
+
+    full_time = totalTime('^$', d)
+    unaccounted = total_subtree_time - np.sum(times)
+    labels.append(f'Unaccounted for: {unaccounted / total_subtree_time:0.2%} ({unaccounted / full_time:0.2%} of full)')
+    times.append(unaccounted)
+
+    if includeOutside:
+        labels.append('Outside')
+        times.append(full_time - total_subtree_time)
+
+    plt.title('Timing Breakdown' + (f' for {heading} ({total_subtree_time / full_time:0.2%} of Full)' if heading != '' else ''))
+
+    wedges, _ = plt.pie(times, labels=None)
+
+    # If we're including the "outside" label, we want to color it light gray.
+    if includeOutside: wedges[-1].set_facecolor('lightgray')
+
+    plt.legend(labels, loc="center left", bbox_to_anchor=(1.0, 0.5))

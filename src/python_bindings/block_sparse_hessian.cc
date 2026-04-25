@@ -47,8 +47,8 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
     py::class_<BlockCSCHessianBase, std::shared_ptr<BlockCSCHessianBase>>(m, "BlockCSCHessianBase")
         .def(py::init([](const std::string &path) { return BlockCSCHessianBase::constructFromBinaryFile(path); }), py::arg("path"))
         .def_property("Ap", [](const BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ap.size(), A.Ap.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ap) { A.Ap = Ap; }, "Offsets into Ai/Ax of the entries for each column")
-        .def_property("Ai", [](const BlockCSCHessianBase &A) { return py::array_t<SuiteSparse_long>(A.Ai.size(), A.Ai.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<SuiteSparse_long> Ai) { A.Ai = Ai; }, "Row indices of nonzero entries")
         .def_property("Ax", [](const BlockCSCHessianBase &A) { return py::array_t<            Real>(A.Ax.size(), A.Ax.data(), /* owner = */ py::cast(A)); }, [](BlockCSCHessianBase &A, std::vector<            Real> Ax) { A.Ax = Ax; }, "Values of nonzero entries")
+        .def_readwrite("Ai", &BlockCSCHessianBase::Ai, "Row indices of nonzero entries")
 
         .def("blockVarSizesAndCounts", &BlockCSCHessianBase::blockVarSizesAndCounts)
         .def("numScalarCols", &BlockCSCHessianBase::numScalarCols)
@@ -80,13 +80,6 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("vars",          &BlockCSCHessianBase::vars, py::return_value_policy::reference_internal)
         ;
 
-    auto toScalar = [](const NewtonHessian &H) {
-        if (H.varStructure().numDenseVars() > 0) throw std::runtime_error("Cannot convert BlockCSCHessian with dense variables to scalar CSC format");
-        if (H.low_rank_rank() > 0)               throw std::runtime_error("Cannot convert BlockCSCHessian with low rank update to scalar CSC format");
-        if (!H.H_ss) throw std::runtime_error("No sparse part to convert");
-        return H.H_ss->toScalar();
-    };
-
     using NH = NewtonHessian;
     py::class_<NH>(m, "NewtonHessian")
         .def(py::init([](const std::string &path) { return NH::load(path); }), py::arg("path"))
@@ -106,18 +99,8 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
         .def("validate", &NH::validate)
         .def("isSparsityOnly", &NH::isSparsityOnly)
-        .def("toScalar", [&](const NH &H) { return toScalar(H); })
-        .def("toSciPy", [&](const NH &H) {
-                auto A = toScalar(H);
-                py::object matrix_type = py::module::import("scipy.sparse").attr("csc_matrix");
-                py::array data(A.Ax.size(), A.Ax.data());
-                py::array outerIndices(A.Ap.size(), A.Ap.data());
-                py::array innerIndices(A.Ai.size(), A.Ai.data());
-
-                return matrix_type(
-                    std::make_tuple(data, innerIndices, outerIndices),
-                    std::make_pair(A.m, A.n));
-            })
+        .def("toScalar", &NH::toScalar)
+        .def("toSciPy", &NH::toEigen<int>, py::arg("upperTriangleOnly") = true) // Eigen matrices are automatically converted to SciPy CSC matrices by pybind11
         .def("apply", &NH::apply)
 
         .def("addDiag", &NH::addDiag, py::arg("d"))

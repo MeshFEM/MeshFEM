@@ -33,7 +33,7 @@ namespace catamari {
 
 struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     enum class OrderingMethod {
-        Catamari, CholmodNesdis, Metis, AMD, Adaptive, Scotch
+        Catamari, CholmodNesdis, Metis, AMD, Adaptive, Scotch, AccelerateMetis, PardisoMetis, PardisoParallelMetis
     };
 
     // legacy: whether to use Jack Poulson's original implementation for comparison
@@ -83,7 +83,11 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void solveRawReducedInPlace(Real *bx, CholeskySys sys = CholeskySys::A, bool alreadyPermuted = false) const override;
 
     bool preferInPlaceSolve() const override { return true; }
+#ifdef MESHFEM_USE_LEGACY_CATAMARI
+    bool supportsPrePermutation() const override { return false; }
+#else
     bool supportsPrePermutation() const override { return true; }
+#endif
 
     void        stashFactorization()       override;
     bool   hasStashedFactorization() const override;
@@ -107,6 +111,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         else if (orderingMethod == OrderingMethod::CholmodNesdis) return CholeskyProvider::CatamariNesdis;
         else if (orderingMethod == OrderingMethod::AMD)           return CholeskyProvider::CatamariAMD;
         else if (orderingMethod == OrderingMethod::Adaptive)      return CholeskyProvider::CatamariAdaptive;
+        else if (orderingMethod == OrderingMethod::Metis)         return CholeskyProvider::CatamariMetis;
 
         throw std::runtime_error("Unknown orderingMethod in mapping to `CholeskyProvider`");
     }
@@ -118,8 +123,8 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     struct OrderingChoices {
         static constexpr OrderingMethod   primary_method = OrderingMethod::CholmodNesdis;
         static constexpr OrderingMethod alternate_method = OrderingMethod::AMD;
-        static constexpr double alternate_method_num_time_multiplier_estimate = 1.5; // AMD leads to a typical 1.3-1.5x slowdown on numeric factorization
-        static constexpr double alternate_method_sym_time_multiplier_estimate = 0.1; // but is 10x faster for symbolic factorization.
+        static constexpr double alternate_method_num_time_multiplier_estimate = 1.35; // AMD leads to a typical 1.35x slowdown on numeric factorization
+        static constexpr double alternate_method_sym_time_multiplier_estimate = 0.2; // but is ~5x faster for symbolic factorization (~10x faster for ordering)
     };
 
     mutable AdaptiveOrderingSelection<OrderingChoices> adaptiveOrdering; // mutable so that solve timings can be recorded
@@ -130,12 +135,18 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
 
+    // For benchmarking comparisons: disable the use of block accelerations only for numeric factorization or solves.
+    bool disableBlockNFac  = false; // This is currently broken (due to index skipping in symbolic factorization?)
+    bool disableBlockSolve = false;
+
+    void setCollectIndefinitenessStats(bool collect);
+    void writeSupernodeStats(const std::string &path) const;
     void writeSolveTimers() const override;
 
 #if defined(MESHFEM_WITH_SCOTCH)
     struct ScotchSettings {
         SCOTCH_Num stratFlag = SCOTCH_STRATDEFAULT;
-        double imbalanceRatio = 0.01;
+        double imbalanceRatio = -1; // fully default
 
         // Parse the suffix of the method string passed to, e.g., `benchmark_linear_systems`.
         // This is either empty or of the form `_quality_0.01` or `_speed_0.01`.
@@ -177,6 +188,8 @@ private:
     bool m_legacy = false;
 
     mutable Eigen::VectorXd m_permuted_rhs_scratch;
+
+    Eigen::VectorXd m_valuesDummy; // Needed to run `cholmod_l_nested_dissection` without values in certain cases.
 };
 #endif
 

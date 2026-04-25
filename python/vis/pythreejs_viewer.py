@@ -526,8 +526,15 @@ class PythreejsViewerBase(ViewerBase):
         def writeFrame(self):
             self.videoWriter.writeFrame(np.array(self.renderImage()))
 
-    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, renderScale=2, outputScale=1, lineWidthScale=1, framerate=30):
-        self.recorder = self.VideoRecorder(self, path, codec=codec, streaming=streaming, writeFirstFrame=writeFirstFrame, renderScale=renderScale, outputScale=outputScale, lineWidthScale=lineWidthScale, framerate=framerate)
+    def recordStart(self, path, codec = None, streaming=False, writeFirstFrame=False, renderScale=2, outputScale=1, lineWidthScale=1, framerate=30, transparentBackground=False):
+        """
+        Start recording to an image sequence/video.
+
+        When `path` ends in `.mp4`, the video will be encoded using H.264; otherwise it is output as a sequence of PNGs within the specified directory.
+
+        `transparentBackground` is intended only for image sequences, as MP4 does not support alpha channels.
+        """
+        self.recorder = self.VideoRecorder(self, path, codec=codec, streaming=streaming, writeFirstFrame=writeFirstFrame, renderScale=renderScale, outputScale=outputScale, lineWidthScale=lineWidthScale, framerate=framerate, transparentBackground=transparentBackground)
 
     def isRecording(self): return hasattr(self, 'recorder')
 

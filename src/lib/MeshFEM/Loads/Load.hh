@@ -51,6 +51,8 @@ struct Load : public NewtonObjectiveTerm {
 
     virtual void m_stateUpdated(VM /* vmask */) { /* NOP */ }
 
+    virtual VXd contract_d2E_dXdx(const VXd &dx) const { throw std::runtime_error("Unimplemented"); }
+
     virtual ~Load() { }
 };
 

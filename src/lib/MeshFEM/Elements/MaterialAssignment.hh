@@ -33,6 +33,8 @@ struct MaterialAssignment {
 
         const Material &get() const { return m_materials[m_elementIndex]; }
               Material &get()       { return m_materials[m_elementIndex]; }
+
+        const size_t elementIndex() const { return m_elementIndex; }
     private:
         MaterialAssignment &m_materials;
         size_t m_elementIndex;

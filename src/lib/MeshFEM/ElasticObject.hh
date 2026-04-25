@@ -99,6 +99,11 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual size_t numDefoVars() const = 0;
     virtual size_t numRestVars() const = 0;
 
+    // Elastic objects can have, e.g., angle variables in addition to nodal
+    // variables. We sometimes need to know the number of nodes, which cannot
+    // be inferred from the number of variables alone for these objects.
+    virtual size_t numNodes() const = 0;
+
     virtual VXd getDefoVars() const = 0;
     virtual VXd getRestVars() const = 0;
 
@@ -166,6 +171,11 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     // update notification below.
     Real getMassDensity() const { return m_rho; }
     void setMassDensity(Real rho) { m_rho = rho; m_restConfigUpdated(); }
+
+    // 3D volume attached to a (potentially codimensional) element.
+    // For solid elements this is just the element volume, but for
+    // plates it is area * thickness.
+    virtual Real element3DVolume(size_t ei) const = 0;
 
     //////////////////////////////////////////////////////////////////////////
     // Methods needed for IPCEquilibriumSolver

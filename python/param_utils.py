@@ -133,6 +133,35 @@ def tutteInitialization(m, bdry_uv = None):
     return uv_init
 
 ################################################################################
+# Matrix field operations
+################################################################################
+def polar_decomposition(F, force_rotation=False):
+    """
+    Computes the polar decomposition `F = RS`, where `F` can be a single `n x n`
+    matrix or a collection of matrices (of shape (k, n, n) or even (..., n, n).
+    
+    The unitary part is obtained as `R = U V^T`, using SVD `F = U diag(s) V^T`.
+    
+    When `det(F) > 0`, `R` will automatically be a rotation (det(R) = 1).
+    
+    When `det(F) < 0`, it is instead a reflection. By passing `force_rotation`, we
+    patch the signs of the SVD to obtain a rotation (at the overhead of an
+    additional determinant check for every matrix). The resulting `R` is the
+    closest rotation to `F` in Frobenius norm sense.
+    """
+    U, s, Vt = np.linalg.svd(F)
+    if force_rotation:
+        flipped = np.linalg.det(F) < 0
+        # Obtain the signed SVD by negating the smallest singular value
+        # and flipping an associated singular vector.
+        s[flipped, -1] *= -1
+        U[flipped, :, -1] *= -1
+    R = (U @ Vt)
+    # S = (Vt.transpose(0, 2, 1) * s[..., np.newaxis, :]) @ Vt # Slightly more expensive way of obtaining S
+    S = R.swapaxes(-1, -2) @ F
+    return (R, S)
+
+################################################################################
 # Analysis and visualization
 ################################################################################
 from matplotlib import pyplot as plt

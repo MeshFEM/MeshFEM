@@ -27,6 +27,15 @@ inline double Time(void) {
     return duration<double>(steady_clock::now().time_since_epoch()).count();
 }
 
+// Accumulate timing of code executed within a given scope to an **externally stored** timer.
+struct ScopedExternalTimer {
+    ScopedExternalTimer(double &d) : duration(d), start(Time()) { }
+    ~ScopedExternalTimer() { duration += Time() - start; }
+
+    double &duration;
+    double start;
+};
+
 class Timer
 {
 private:

@@ -11,8 +11,8 @@
 //  This code is roughly 2.5x faster than Eigen::SelfAdjointEigenSolver in
 //  double precision on Apple Silicon and still achieves backwards errors on
 //  the order of 1e-11 for random and near-degenerate matrices in our testing.
-//  It is slightly (~15%) slower than the `computeDirect` method of Eigen's
-//  solver, but gets several more digits of accuracy/factor orthogonality.
+//  It is only slightly (~20-25%) faster than Eigen's `computeDirect` method,
+//  but it gets several more digits of accuracy/factor orthogonality.
 //
 //  The polar decomposition code is the one from
 //      https://theorangeduck.com/page/closed-form-matrix-decompositions
@@ -48,7 +48,7 @@
 //  (tuned to permit errors on the order of 1e-3 in single precision, though
 //  this number was based on testing only ~17 million uniform random matrices).
 //
-//  This SVD routine achieves a roughly 4-5x speedup over Eigen's JacobiSVD
+//  This SVD routine achieves a roughly 6x speedup over Eigen's JacobiSVD
 //  implementation in our experiments (despite not being amenable to
 //  SIMD-accelerated batch processing as in [McAdams et al. 2011]).
 //
@@ -61,7 +61,6 @@
 
 #include <cmath>
 #include <MeshFEM/Types.hh>
-#include <iostream>
 
 namespace fast_decompositions {
 
@@ -195,17 +194,21 @@ void sym_evecs_from_evals(const Mat3_T<Real> &M, const Vec3_T<Real> &evals, Mat3
 }
 
 #if 1
+#include "fast_acos.hh"
 // Solve a symmetric 3x3 eigenvalue problem, sorting the eigenvalues in ascending order.
 // Setting `FullyRobust` disables some fairly expensive operations that are needed only in highly degenerate cases
 // (e.g., where matrix entries are all on the order of machine epsilon and columns are nearly parallel).
-template<bool FullyRobust = true, typename Real>
-void sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda, Mat3_T<Real> &Q) {
+// Returns `false` if the algorithm was short-circuited due to the matrix being numerically diagonal.
+//
+// If `Descending` is `true`, sorts the eigenvalues in descending order instead (helpful for SVD)
+template<bool FullyRobust = true, bool Descending = false, typename Real>
+bool sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda, Mat3_T<Real> &Q) {
     Real max_mag;
     if constexpr (FullyRobust) {
         Real odiag_max_mag = std::max(std::max(std::abs(A(1, 0)), std::abs(A(2, 0))), std::abs(A(2, 1)));
         Real  diag_max_mag = std::max(std::max(std::abs(A(0, 0)), std::abs(A(1, 1))), std::abs(A(2, 2)));
         const bool is_numerically_diagonal = (odiag_max_mag <= std::numeric_limits<Real>::epsilon() * diag_max_mag); // also catches the zero matrix!
-        if (is_numerically_diagonal) { lambda = A.diagonal(); Q.setIdentity(); return; } // Short-circuit in the diagonal case.
+        if (is_numerically_diagonal) { lambda = A.diagonal(); Q.setIdentity(); return false; } // Short-circuit in the diagonal case.
 
         max_mag = std::max(odiag_max_mag, diag_max_mag);
         A *= 1.0 / max_mag; // scale to mitigate underflow/overflow
@@ -213,7 +216,7 @@ void sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda
     else {
         UNUSED(max_mag);
         // Short-circuit in the diagonal case.
-        if ((A(1, 0) == 0) && (A(2, 0) == 0) && (A(2, 1) == 0)) { lambda = A.diagonal(); Q.setIdentity(); return; }
+        if ((A(1, 0) == 0) && (A(2, 0) == 0) && (A(2, 1) == 0)) { lambda = A.diagonal(); Q.setIdentity(); return false; }
     }
 
     // Shift the matrix to have trace 0 (so one eigenvalue is guaranteed to be of a different sign from the other two).
@@ -224,11 +227,26 @@ void sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda
     Real cos_3_theta = 0.5 * A.determinant() / (p * p * p);
     cos_3_theta = std::min<Real>(std::max<Real>(cos_3_theta, -1), 1);
 
-    Real angle = std::acos(cos_3_theta) / 3;
-    constexpr Real twoThirdsPi = 2.09439510239319549;
     Vec3_T<Real> beta;
-    beta[2] = std::cos(angle) * 2;
-    beta[0] = std::cos(angle + twoThirdsPi) * 2;
+    // Real angle;
+    // if constexpr (AccurateACos) {
+    //     angle = std::acos(cos_3_theta) / 3;
+    // }
+    // else {
+    //     angle = fast_acos(cos_3_theta) / 3;
+    // }
+
+    // constexpr Real twoThirdsPi = 2.09439510239319549;
+    // beta[2] = std::cos(angle) * 2;
+    // beta[0] = std::cos(angle + twoThirdsPi) * 2;
+    if constexpr (Descending) {
+        beta[0] =  fast_cos_acos_div_3( cos_3_theta) * 2;
+        beta[2] = -fast_cos_acos_div_3(-cos_3_theta) * 2;
+    }
+    else {
+        beta[2] =  fast_cos_acos_div_3( cos_3_theta) * 2;
+        beta[0] = -fast_cos_acos_div_3(-cos_3_theta) * 2;
+    }
     beta[1] = -(beta[0] + beta[2]);
 
     // The eigenvalues of A are ordered as
@@ -240,6 +258,7 @@ void sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda
     if constexpr (FullyRobust) {
         lambda *= max_mag; // undo scaling
     }
+    return true;
 }
 #else // Test Eigen's computeDirect.
 // Solve a symmetric 3x3 eigenvalue problem, sorting the eigenvalues in ascending order.
@@ -384,6 +403,18 @@ void polar(const Mat3_T<Real> &M, Mat3_T<Real> &R, Mat3_T<Real> &S, Vec3_T<Real>
     S = R.transpose() * M;
 }
 
+template<typename Real>
+void polar(const Mat3_T<Real> &M, Mat3_T<Real> &R, Mat3_T<Real> &S) {
+    Vec3_T<Real> s;
+    polar(M, R, S, s);
+}
+
+template<typename Real>
+Mat3_T<Real> closest_rotation(const Mat3_T<Real> &M) {
+    Mat3_T<Real> R, S;
+    polar(M, R, S);
+    return R;
+}
 
 // Compute SVD using polar decomposition and symmetric eigenvector computation
 template<typename Real>
@@ -402,13 +433,17 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
     using V3d = Vec3_T<Real>;
     // A = U Sigma V^T
     // M = A^T A = V Sigma^2 V^T
-    Mat3_T<Real> M = A.transpose() * A;
     {
+        Mat3_T<Real> M = A.transpose() * A;
+#if 1
         V3d s_sq;
-        sym_eigensolver<FullyRobust>(M, s_sq, V); // s_sq holds eigenvalues of A^T A in ascending order
+        sym_eigensolver<FullyRobust, /* Descending = */ true>(M, s_sq, V); // s_sq holds eigenvalues of A^T A in descending order
+#else
+        Eigen::SelfAdjointEigenSolver<Mat3_T<Real>> es;
+        es.computeDirect(M);
+        V = es.eigenvectors();
+#endif
     }
-
-    V.col(0).swap(V.col(2)); // sort the singular vectors so that singular values are in descending order
 
     // Recover left singular vectors (with consistent signs)
     //  U Sigma = A V
@@ -416,7 +451,7 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
     // We recover the singular values using the diagonal entries of R,
     // which slightly reduces the backward error compared to using sqrt(s_sq).
     Mat3_T<Real> USigma = A * V;
-    Real norm_0 = USigma.col(0).norm(); // should equal s[0], but recompute for safety.
+    Real norm_0 = USigma.col(0).norm(); // should equal sqrt(s_sq[0]), but recompute for safety.
     if (norm_0 == 0) { U.setIdentity(); s.setZero(); return; }
     V3d u0 = USigma.col(0) / norm_0;
     U.col(0) = u0;
@@ -448,7 +483,7 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
     else                       U.col(2) = u2 / norm_2;
     s[2] = norm_2;
 
-    // Since we recomputed the singular values from `R` they may fail to be sorted.
+    // Since we recomputed the singular values from `R`, they may fail to be sorted.
     if (s[1] > s[0]) {
         std::swap(s[0], s[1]);
         U.col(0).swap(U.col(1));

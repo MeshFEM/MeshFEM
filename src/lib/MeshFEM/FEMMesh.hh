@@ -289,6 +289,49 @@ public:
         setNodePositions(convertedVertices);
     }
 
+    // Re-embed the mesh elements using the corner positions taken from a vertex
+    // position table `V`. This differs from `setNodePositions` in that it does
+    // not actually update node positions! Instead, it simply updates each
+    // element's cached shape function gradients and geometric data.
+    // Furthermore, it supports embedding 2D elements according to element shapes
+    // taken from a 3D embedding of the mesh; this is to support the use case
+    // of implementing a surface parametrization problem as a 2D elasticity
+    // problem. In this mode, each 3D triangle of the input mesh is separately
+    // rotated into the 2D plane, conceptually yielding a disconnected flat
+    // mesh with the same metric as the 3D one.
+    void reembedElements(const Eigen::MatrixXd &V) {
+        if (V.rows() != BaseMesh::numVertices()) throw std::runtime_error("FEMMesh.reembedElements: wrong number of vertices");
+        static constexpr bool is2DMesh = (K == 2) && (EmbeddingSpace::RowsAtCompileTime == 2);
+        bool parametrization = is2DMesh && (V.cols() == 3); // Support the parametrization of 2D meshes in 3D space by allowing 3D "rest" vertex positions when `Dim == 2`.
+        if ((V.cols() != K) && !parametrization) throw std::runtime_error("FEMMesh.reembedElements: wrong vertex position dimension");
+
+        if (!parametrization) {
+            auto F = getF(*this);
+            for (size_t ei = 0; ei < numElements(); ++ei) {
+                element(ei)->embed(V, F, ei);
+            }
+        }
+        else {
+            if constexpr (is2DMesh) {
+                // Emulate a parametrization element: express the triangle rest
+                // positions in 2D using an orthonormal basis for the tangent plane.
+                parallel_for_range(numElements(), [this, &V](size_t ei) {
+                    auto evi = elementVertexIndices(ei);
+
+                    Eigen::Matrix<double, 3, 3> P;
+                    P.col(0) = V.row(evi[0]).transpose();
+                    P.col(1) = V.row(evi[1]).transpose();
+                    P.col(2) = V.row(evi[2]).transpose();
+                    Eigen::Matrix<double, 3, 2> U;
+                    U.col(0) = (P.col(1) - P.col(0)).normalized();
+                    Eigen::Vector3d n = U.col(0).cross(P.col(2) - P.col(0));
+                    U.col(1) = n.cross(U.col(0)).normalized();
+                    element(ei)->embed(P.transpose() * U);
+                });
+            }
+        }
+    }
+
     const BBox<EmbeddingSpace> &boundingBox() const {
         return m_bbox;
     }

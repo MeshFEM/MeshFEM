@@ -13,14 +13,14 @@
 #ifndef MESHENERGY_HH
 #define MESHENERGY_HH
 #include <MeshFEM/FEMMesh.hh>
-#include <MeshFEM/newton_optimizer/newton_optimizer.hh>
-#include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
+
 #include <MeshFEM/SystemAssembler.hh>
 #include <MeshFEM/ParallelAssembly.hh>
 #include "MeshFEM/Parallelism.hh"
 #include "Stencils.hh"
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include "Elements/MaterialAssignment.hh"
+#include "MeshEnergyBase.hh"
 
 enum class MeshVarType { PER_NODE, PER_EDGE, PER_CELL };
 template<MeshVarType MVT, size_t N> struct MeshVarSpecification {
@@ -91,25 +91,6 @@ struct NameMangler<MeshEnergyVars<MVSpec...>> {
 template<size_t N>
 using NodalVars = MeshEnergyVars<MeshVarSpecification<MeshVarType::PER_NODE, N>>;
 
-struct MeshEnergyBase : public NewtonObjectiveTerm { 
-    MeshEnergyBase(std::shared_ptr<NewtonVarsBase> vars)
-        : NewtonObjectiveTerm(vars) { }
-
-    MaterialBase &materialForElement(size_t ei) {
-        if (ei >= numElements()) throw std::runtime_error("Element index out of bounds");
-        auto &mat = m_getMaterial(ei);
-        return mat;
-    }
-
-    virtual size_t numElements() const = 0;
-
-    virtual ~MeshEnergyBase() { }
-
-    bool useXBasedProjection = false;
-private:
-    virtual MaterialBase &m_getMaterial(size_t ei) = 0;
-};
-
 // The instantiation of a stencil-based energy term for a given mesh
 // and variable definition.
 template<class Mesh_, class MEVars_, class Stencil_, class Element_>
@@ -154,11 +135,11 @@ struct MeshEnergy : public MeshEnergyBase {
         return stencils[si].template extract<LocalVars>(m_vars.globalVars(), m_vars.varStructure());
     }
 
-    auto extractLocalVars(size_t si, const VXd &x) const {
+    auto extractLocalVars(size_t si, const Eigen::Ref<const VXd> &x) const {
         return stencils[si].template extract<LocalVars>(x, m_vars.varStructure());
     }
 
-    auto extractLocalVars(size_t si, const VXd &x, const typename Assembler::VarStructure &vs) const {
+    auto extractLocalVars(size_t si, const Eigen::Ref<const VXd> &x, const typename Assembler::VarStructure &vs) const {
         return stencils[si].template extract<LocalVars>(x, vs);
     }
 
@@ -172,9 +153,23 @@ struct MeshEnergy : public MeshEnergyBase {
     }
 
     Real objective() const override {
-        return summation_parallel([&](size_t ei) {
+        return summation_parallel([this](size_t ei) {
                 return elementEnergy(ei);
             }, elements.size());
+    }
+
+    Real objectiveAtVars(const Eigen::Ref<const VXd> &x) const override {
+        if (x.size() != m_vars.globalVars().size()) throw std::runtime_error("Invalid variable vector size");
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".objectiveAtVars");
+        if constexpr (Element::CachesDeformedQuantities) {
+            throw std::runtime_error("objectiveAtVars not supported for energies with cached deformed quantities");
+        }
+        else {
+            auto &vs = m_vars.varStructure();
+            return summation_parallel([&](size_t ei) {
+                    return elements[ei].energy(extractLocalVars(ei, x));
+                }, elements.size());
+        }
     }
 
     const auto &assembler() const { return m_vars.assembler(); }
@@ -194,32 +189,59 @@ struct MeshEnergy : public MeshEnergyBase {
         }
     }
 
-    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
-        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
-        if (!useXBasedProjection || !projectionMask) {
-            // Use projection implemented by the element itself (e.g., F-based projection)
+    using ElementHessian = typename Element::Hessian;
+    ElementHessian elementHessian(size_t ei, Real weight, bool projectionMask) const {
+        if constexpr (Element::CachesDeformedQuantities)
+            return elements[ei].hessian(weight, projectionMask);
+        else
+            return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+    }
+
+    template<class ShouldProject>
+    void accumulateHessianImpl(Real weight, NewtonHessian &H, const ShouldProject &shouldProjectHE) const {
+        if (elementHessianShift != 0.0) {
+            // This mode is intended only for apples-to-apples comparison
+            // against the Composite Majorization codebase, which addresses
+            // Hessian rank deficiency by adding a small, fixed multiple of the identity to
+            // each element Hessian.
+            if (useXBasedProjection) throw std::runtime_error("Combining x-based projection with elementHessianShift not supported");
+
             assembler().assembleHessian(H, elements.size(), [&](size_t ei) {
-                if constexpr (Element::CachesDeformedQuantities)
-                    return elements[ei].hessian(weight, projectionMask);
-                else
-                    return elements[ei].hessian(weight, projectionMask, extractLocalVars(ei));
+                ElementHessian H_e = elementHessian(ei, weight, shouldProjectHE(ei));
+                H_e.diagonal().array() += weight * elementHessianShift;
+                return H_e;
             }, [this](size_t ei) { return stencils[ei].blockVars; });
+            return;
+        }
+
+        if (!useXBasedProjection) {
+            // Use projection implemented by the element itself (e.g., F-based projection)
+            assembler().assembleHessian(H, elements.size(),
+                    [&](size_t ei) { return elementHessian(ei, weight, shouldProjectHE(ei)); },
+                    [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
             // Use a brute-force x-based projection
-            using ElementHessian = typename Element::Hessian;
             auto getProjectedHessian = [&](size_t ei) -> ElementHessian {
-                ElementHessian H_e;
-                if constexpr (Element::CachesDeformedQuantities)
-                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false);
-                else
-                    H_e = elements[ei].hessian(weight, /* projectionMask = */ false, extractLocalVars(ei));
+                ElementHessian H_e = elementHessian(ei, weight, false);
+                if (!shouldProjectHE(ei)) return H_e;
                 Eigen::SelfAdjointEigenSolver<ElementHessian> Hes(H_e.transpose()); // WARNING: uses *lower* triangle, while we compute upper triangle!
-                if (Hes.eigenvalues()[0] >= 0.0) return H_e; // sorted increasing
-                return Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(0.0).asDiagonal() * Hes.eigenvectors().transpose();
+                if (Hes.eigenvalues()[0] >= xBasedProjectionClampEps) return H_e; // sorted increasing
+                return (Hes.eigenvectors() * Hes.eigenvalues().cwiseMax(xBasedProjectionClampEps).asDiagonal() * Hes.eigenvectors().transpose()).eval();
             };
 
             assembler().assembleHessian(H, elements.size(), getProjectedHessian, [this](size_t ei) { return stencils[ei].blockVars; });
+        }
+    }
+
+    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
+        if (!projectionMask || !hasPerElementHessianProjectionMasks()) {
+            // No per-element projection mask customization.
+            accumulateHessianImpl(weight, H, [projectionMask](size_t ei) { return projectionMask; });
+        }
+        else {
+            accumulateHessianImpl(weight, H, [this](size_t ei) { return elementHessianProjectionMasks[ei]; });
         }
     }
 
@@ -227,6 +249,18 @@ struct MeshEnergy : public MeshEnergyBase {
         return assembler().sparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
+    }
+
+    using MeshEnergyBase::elementGradientNorms; // don't hide overloads.
+    VXd elementGradientNorms(const VXd &g) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("MeshEnergy.elementGradientNorms");
+        const size_t ne = numElements();
+        VXd result(ne);
+        parallel_for_range(ne, [this, &result, &g](size_t ei) {
+            auto g_e = extractLocalVars(ei, g);
+            result[ei] = g_e.norm();
+        });
+        return result;
     }
 
     void varsUpdated() override {
@@ -256,6 +290,11 @@ struct MeshEnergy : public MeshEnergyBase {
     StencilCollection<Stencil> stencils;
     std::vector<Element> elements;
     MA materials; // must come after stencils so stencil count is initialized first.
+
+    const auto &mesh() const { return *m_mesh; }
+
+    const auto &mesh_ptr() const { return m_mesh; }
+    const auto &vars_ptr() const { return m_vars_ptr; }
 
 private:
     Material &m_getMaterial(size_t ei) override { return materials[ei]; }

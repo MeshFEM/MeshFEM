@@ -73,7 +73,7 @@ struct ElementHessianContribAssembler<true> {
             }
 
             // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
+            auto loc = colScanner.diagBlockScalarLoc();
             auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
@@ -112,7 +112,7 @@ struct ElementHessianContribAssembler<false> {
             }
 
             // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
+            auto loc = colScanner.diagBlockScalarLoc();
             auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
             for (size_t c = 0; c < bs_j; ++c) {
                 Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
@@ -207,53 +207,19 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     template<class ElemBlockVarsForElement>
     std::unique_ptr<BCSCMat> blockSparsityPattern(size_t numElems, const ElemBlockVarsForElement &blockVarsForElement) const {
         BENCHMARK_SCOPED_TIMER_SECTION timer("blockSparsityPattern");
-
         const bool parallel = (get_max_num_tbb_threads() > 1) && (numElems >= 1024);
 
-        if (parallel) m_varLocks.init(numBlockVars());
-
         const size_t numBlockVars = m_vars.numBlocks();
-#if 0
-        struct SparsityTriplet { size_t i, j; };
-        std::vector<SparsityTriplet> nz;
-
-        size_t numEntriesPerElement;
-        {
-            size_t numVarsPerElement = blockVarsForElement(0).size();
-            numEntriesPerElement = ((numVarsPerElement + 1) * numVarsPerElement) / 2;
-        }
-        nz.resize(numElems * numEntriesPerElement);
-
-        // for (size_t ei = 0; ei < numElems; ++ei) {
-        parallel_for_range(numElems, [&](size_t ei) {
-            const auto &bvars = blockVarsForElement(ei);
-            size_t back = ei * numEntriesPerElement;
-            for (size_t v_b : bvars) {
-                for (size_t v_a : bvars) {
-                    if (v_a > v_b) continue;
-                    nz[back++] = SparsityTriplet{v_a, v_b};
-                }
-            }
-        });
-
-        // TODO: generating the binned columns directly in a
-        // std::vector<std::vector<int>> adjacency list?
-        // (Possibly do a counting pass first)
-
-        CSCMat result(numBlockVars, numBlockVars);
-        result.symmetry_mode = CSCMat::SymmetryMode::UPPER_TRIANGLE;
-        BENCHMARK_SCOPED_TIMER_SECTION timer2("ToCSC");
-        sparsityPatternToCSC(numBlockVars, nz, result.Ap, result.Ai);
-#else
         auto result = emptyBlockSparsityPattern();
         auto &Ap = result->Ap;
         auto &Ai = result->Ai;
         const size_t n = numBlockVars;
 
-        std::vector<size_t> bucketStart(n + 1);
+        std::vector<size_t> bucketStart;
         {
-            size_t *sizes = bucketStart.data() + 1;
             // BENCHMARK_SCOPED_TIMER_SECTION timer1("calc size");
+            bucketStart.resize(n + 1);
+            size_t *sizes = bucketStart.data() + 1;
             for (size_t ei = 0; ei < numElems; ++ei) {
                 auto bvars = blockVarsForElement(ei);
 #if 1
@@ -272,6 +238,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
         size_t origNNZ = 0;
         {
+            // BENCHMARK_SCOPED_TIMER_SECTION timer1("cumsum");
             // Next, compute bucketStart[2:] = cumsum(bucketStart[1:])
             for (size_t j = 1; j <= n; ++j) {
                 size_t colsize_j = bucketStart[j];
@@ -280,31 +247,58 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
             }
         }
 
-        Eigen::Matrix<size_t, Eigen::Dynamic, 1> columnBuckets(origNNZ);
+        using RowIndex = uint32_t; // Using a narrower integer type substantially reduces memory i/o
+        Eigen::Matrix<RowIndex, Eigen::Dynamic, 1> columnBuckets;
         {
             // BENCHMARK_SCOPED_TIMER_SECTION timer1("fill adjacency");
+
+            columnBuckets.resize(origNNZ);
             // Fill the index buckets; note incrementing the offsets in
             // bucketStart[1:] by the size of each bucket converts these into the
             // end offsets.
             size_t *bucketBack = bucketStart.data() + 1;
 
+#define VARLOCK_PARALLELIZATION 0 // Whether to use simple column-lock based parallelism or atomically resized buckets.
+
             if (parallel) {
-                std::vector<std::atomic<int>> bucketSizeAtomic(n);
+#if VARLOCK_PARALLELIZATION
+                m_varLocks.init(n);
+                parallel_for_range(numElems, [&](size_t ei) {
+                    const auto &bvars = blockVarsForElement(ei);
+                    for (decltype(bvars.size()) v_b_i = 0; v_b_i < bvars.size(); ++v_b_i) {
+                        auto v_b = bvars[v_b_i];
+                        m_varLocks.lock(v_b);
+                        size_t back = bucketBack[v_b];
+                        for (decltype(bvars.size()) v_a_i = 0; v_a_i < bvars.size(); ++v_a_i) {
+                            auto v_a = bvars[v_a_i];
+                            if (v_a <= v_b) columnBuckets[back++] = v_a;
+                        }
+                        bucketBack[v_b] = back;
+                        m_varLocks.unlock(v_b);
+                    }
+                });
+#else
+                // std::vector<std::atomic<int>> bucketSizeAtomic(n);
                 parallel_for_range(numElems, [&](size_t ei) {
                     auto bvars = blockVarsForElement(ei);
                     static_sort_with_fallback(bvars);
                     for (decltype(bvars.size()) v_b_i = 0; v_b_i < bvars.size(); ++v_b_i) {
                         auto v_b = bvars[v_b_i];
-                        size_t back = bucketBack[v_b] + bucketSizeAtomic[v_b].fetch_add(v_b_i + 1, std::memory_order_relaxed);
+                        // The standards-compliant way of doing the following would be std::atomic_ref, which requires C++20.
+                        // size_t back = __atomic_add_fetch(bucketBack + v_b, v_b_i + 1, __ATOMIC_RELAXED); // Works on Clang/GCC, no UB (assuming proper alignment)
+                        size_t back = reinterpret_cast<std::atomic<size_t> *>(bucketBack + v_b)->fetch_add(v_b_i + 1, std::memory_order_relaxed); // Technically UB but works
+                        // size_t back = bucketBack[v_b] + bucketSizeAtomic[v_b].fetch_add(v_b_i + 1, std::memory_order_relaxed);
                         for (decltype(bvars.size()) v_a_i = 0; v_a_i <= v_b_i; ++v_a_i)
                             columnBuckets[back++] = bvars[v_a_i];
                     }
                 });
-                for (size_t j = 0; j < n; ++j)
-                    bucketBack[j] += bucketSizeAtomic[j].load(std::memory_order_relaxed);
+                // for (size_t j = 0; j < n; ++j)
+                //     bucketBack[j] += bucketSizeAtomic[j].load(std::memory_order_relaxed);
+#endif
             }
             else {
                 for (size_t ei = 0; ei < numElems; ++ei) {
+#if 0
                     const auto &bvars = blockVarsForElement(ei);
                     for (decltype(bvars.size()) v_b_i = 0; v_b_i < bvars.size(); ++v_b_i) {
                         auto v_b = bvars[v_b_i];
@@ -315,42 +309,57 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
                         }
                         bucketBack[v_b] = back;
                     }
+#else
+                    auto bvars = blockVarsForElement(ei);
+                    static_sort_with_fallback(bvars);
+                    for (decltype(bvars.size()) v_b_i = 0; v_b_i < bvars.size(); ++v_b_i) {
+                        auto v_b = bvars[v_b_i];
+                        size_t back = bucketBack[v_b];
+                        for (decltype(bvars.size()) v_a_i = 0; v_a_i <= v_b_i; ++v_a_i)
+                            columnBuckets[back++] = bvars[v_a_i];
+                        bucketBack[v_b] = back;
+                    }
+#endif
                 }
             }
         }
 
         // BENCHMARK_SCOPED_TIMER_SECTION timer1("Generate CSCMat");
 
+        // BENCHMARK_START_TIMER_SECTION("Ap resize");
         Ap.resize(n + 1);
+        // BENCHMARK_STOP_TIMER_SECTION("Ap resize");
 
         // BENCHMARK_START_TIMER_SECTION("Sort and deduplicate");
 #if 1
-        // Deduplicate **first** and then sort; this is faster than sorting
-        // the much larger duplicate-filled lists.
-        // We use a thread-local "patternFlags" array to mark which row
-        // indices have already been seen in the current column.
-        tbb::enumerable_thread_specific<Eigen::Matrix<size_t, Eigen::Dynamic, 1>> threadPatternFlags;
+        {
+            // Deduplicate **first** and then sort; this is faster than sorting
+            // the much larger duplicate-filled lists.
+            // We use a thread-local "patternFlags" array to mark which row
+            // indices have already been seen in the current column.
+            tbb::enumerable_thread_specific<Eigen::Matrix<size_t, Eigen::Dynamic, 1>> threadPatternFlags;
 
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, n), [&](const tbb::blocked_range<size_t> &r) {
-            auto &patternFlags = threadPatternFlags.local();
-            if (size_t(patternFlags.size()) != n)
-                patternFlags.setConstant(n, -1);
-            for (size_t j = r.begin(); j != r.end(); ++j) {
-                size_t *start = columnBuckets.data() + bucketStart[j];
-                size_t *end   = columnBuckets.data() + bucketStart[j + 1];
-                size_t *back = start;
-                for (auto curr = start; curr < end; ++curr) {
-                    size_t i = *curr;
-                    if (patternFlags[i] != j) {
-                        patternFlags[i] = j;
-                        *back = i;
-                        ++back;
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, n), [&](const tbb::blocked_range<size_t> &r) {
+                auto &patternFlags = threadPatternFlags.local();
+                if (size_t(patternFlags.size()) != n)
+                    patternFlags.setConstant(n, -1);
+                for (size_t j = r.begin(); j != r.end(); ++j) {
+                    RowIndex *start = columnBuckets.data() + bucketStart[j];
+                    RowIndex *end   = columnBuckets.data() + bucketStart[j + 1];
+                    RowIndex *back = start;
+                    for (auto curr = start; curr < end; ++curr) {
+                        size_t i = *curr;
+                        if (patternFlags[i] != j) {
+                            patternFlags[i] = j;
+                            *back = i;
+                            ++back;
+                        }
                     }
+                    std::sort(start, back); // Sort the deduplicated row indices.
+                    Ap[j] = std::distance(start, back); // Write the deduplicated bucket size.
                 }
-                std::sort(start, back); // Sort the deduplicated row indices.
-                Ap[j] = std::distance(start, back); // Write the deduplicated bucket size.
-            }
-        });
+            });
+        }
 #else
         // Sort each bucket in parallel and deduplicate.
         parallel_for_range(n, [&](size_t j) {
@@ -364,6 +373,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
 
         // BENCHMARK_STOP_TIMER_SECTION("Sort and deduplicate");
 
+        // BENCHMARK_START_TIMER_SECTION("cumsum");
         // Calculate column pointer array using cumulative sum.
         size_t newNNZ = 0;
         for (size_t j = 0; j < n; ++j) {
@@ -372,17 +382,30 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
             newNNZ += colsize_j;
         }
         Ap[n] = newNNZ;
+        // BENCHMARK_STOP_TIMER_SECTION("cumsum");
 
         // Fill row index array `Ai`
+        // BENCHMARK_START_TIMER_SECTION("Ai resize");
         Ai.resize(newNNZ);
-        // for (size_t j = 0; j < n; ++j) { // could be parallelized
+        // BENCHMARK_STOP_TIMER_SECTION("Ai resize");
+
+        // BENCHMARK_START_TIMER_SECTION("Ai fill");
+        // Parallelizing this loop is especially important
+        // when `Ai.resize` does not zero-initialize (i.e., when `Ai` is not a
+        // std::vector). In that case, the loop's writes will incur first-touch
+        // page faults on unmapped memory, and parallelization helps spread
+        // this overhead across threads.
         parallel_for_range(n, [&](size_t j) {
+            // Note that the following can't be a std::memcpy
+            // unless `RowIndex` is the same as `decltype(Ai[0])`...
             size_t offset = bucketStart[j];
             for (index_type ii = Ap[j]; ii < Ap[j + 1]; ++ii)
                 Ai[ii] = columnBuckets[offset++];
         });
-#endif
+        // BENCHMARK_STOP_TIMER_SECTION("Ai fill");
 
+        // BENCHMARK_SCOPED_TIMER_SECTION timer2("finalize");
+        columnBuckets.resize(0); // this deallocation takes significant time!
         result->nz = newNNZ;
         // result->Ax.resize(newNNZ); // <--- Intentionally leave empty since we generally don't need to store data in the block pattern.
 
@@ -634,11 +657,11 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         }, 32, 100);
 
         if (size_t(g.size()) != N * m.numNodes()) throw std::runtime_error("Unexpected g size");
-        SuiteSparse_long *Ai = m_localNodesForNode->Ai.data();
-        SuiteSparse_long *Ap = m_localNodesForNode->Ap.data();
+        auto *Ai = m_localNodesForNode->Ai.data();
+        auto *Ap = m_localNodesForNode->Ap.data();
         parallel_for_range(m.numNodes(), [&g, Ai, Ap, this](size_t ni) {
-                SuiteSparse_long *idxPtr = Ai + Ap[ni];
-                SuiteSparse_long *colEnd = Ai + Ap[ni + 1];
+                auto *idxPtr = Ai + Ap[ni];
+                auto *colEnd = Ai + Ap[ni + 1];
                 VecN_T<Real, N> g_n = m_pregatherGradient.template segment<N>(*idxPtr);
                 for (++idxPtr; idxPtr < colEnd; ++idxPtr)
                     g_n += m_pregatherGradient.template segment<N>(*idxPtr);
@@ -657,8 +680,8 @@ private:
 
         auto order = argsort(blockVars);
 
-        SuiteSparse_long *Ap = H.Ap.data();
-        SuiteSparse_long *Ai = H.Ai.data();
+        auto *Ap = H.Ap.data();
+        auto *Ai = H.Ai.data();
 
         for (size_t lbj_i = 0; lbj_i < nbv; ++lbj_i) {
             size_t lbj = order[lbj_i];
@@ -740,87 +763,6 @@ private:
         }
     }
 
-#if USE_BLOCK_MERGE_ASSEMBLY
-    // Assemble into a scalar-valued `Ax` array but use the block sparsity
-    // pattern in `H` for acceleration. This is the correct assembly routine
-    // to use for the `BlockCSCHessian` format.
-    // We use a new algorithm here of sorting the element's block variables
-    // by their global indices and then linearly merging them into the
-    // global Hessian without a per-block binary search.
-    template<bool InParallel = true, class Real_, class SPMatBlock, class HeBlock, class ElemBlockVars>
-    void m_assembleHessianContribBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, const HeBlock &He_block, const ElemBlockVars &blockVars) const {
-        PerElementBlockOffsetCalculation<VarStructure, ElemBlockVars> blockOffsetCalc(m_vars, blockVars);
-
-        auto order = argsort(blockVars);
-
-        for (size_t lbj_i = 0; lbj_i < blockVars.size(); ++lbj_i) {
-            size_t lbj = order[lbj_i];
-            auto bj = blockVars[lbj];
-            const size_t lbo_j = blockOffsetCalc.offset(lbj);
-
-            auto colScanner = blockH.columnScanner(bj);
-            const size_t bs_j = colScanner.colBlockSize();
-            if constexpr (InParallel) m_varLocks.lock(bj);
-
-            for (size_t lbi_i = 0; lbi_i < lbj_i; ++lbi_i) {
-                size_t lbi = order[lbi_i];
-                auto bi = blockVars[lbi];
-                const size_t lbo_i = blockOffsetCalc.offset(lbi);
-                const size_t bs_i = blockOffsetCalc.blockSize(lbi);
-
-                if (lbi < lbj) colScanner.advanceToAndAddBlock(Ax, bi, He_block(lbo_i, lbo_j, bs_i, bs_j));
-                else           colScanner.advanceToAndAddBlock(Ax, bi, He_block(lbo_j, lbo_i, bs_i, bs_j).transpose());
-            }
-
-            // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
-            auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
-            for (size_t c = 0; c < bs_j; ++c) {
-                Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
-                loc += colScanner.diagBlockColStride(c);
-            }
-
-            if constexpr (InParallel) m_varLocks.unlock(bj);
-        }
-    }
-#else
-    // Like above, but using a traditional algorithm based on a binary search
-    // to locate each destination block within the global Hessian.
-    template<bool InParallel = true, class Real_, class SPMatBlock, class HeBlock, class ElemBlockVars>
-    void m_assembleHessianContribBlockAccelerated(Real_ *Ax, const SPMatBlock &blockH, const HeBlock &He_block, const ElemBlockVars &blockVars) const {
-        PerElementBlockOffsetCalculation<VarStructure, ElemBlockVars> blockOffsetCalc(m_vars, blockVars);
-
-        for (size_t lbj = 0; lbj < blockVars.size(); ++lbj) {
-            auto bj = blockVars[lbj];
-            const size_t lbo_j = blockOffsetCalc.offset(lbj);
-
-            auto colScanner = blockH.columnScanner(bj);
-            const size_t bs_j = colScanner.colBlockSize();
-            if constexpr (InParallel) m_varLocks.lock(bj);
-
-            for (size_t lbi = 0; lbi < blockVars.size(); ++lbi) {
-                auto bi = blockVars[lbi];
-                if (bi >= bj) continue; // Skip lower triangle
-
-                const size_t lbo_i = blockOffsetCalc.offset(lbi);
-                const size_t bs_i  = blockOffsetCalc.blockSize(lbi);
-
-                if (lbi < lbj) colScanner.addBlock(Ax, bi, He_block(lbo_i, lbo_j, bs_i, bs_j));
-                else           colScanner.addBlock(Ax, bi, He_block(lbo_j, lbo_i, bs_i, bs_j).transpose());
-            }
-
-            // Add (upper triangle of) diagonal block
-            SuiteSparse_long loc = colScanner.diagBlockScalarLoc();
-            auto block = He_block(lbo_j, lbo_j, bs_j, bs_j);
-            for (size_t c = 0; c < bs_j; ++c) {
-                Eigen::Map<Eigen::Matrix<Real_, Eigen::Dynamic, 1>>(Ax + loc, c + 1) += block.col(c).topRows(c + 1);
-                loc += colScanner.diagBlockColStride(c);
-            }
-
-            if constexpr (InParallel) m_varLocks.unlock(bj);
-        }
-    }
-#endif
     // Implementation of the dynamic SystemAssemblerBase::blockSparsityPattern method.
     using DynamicElementGetter = SystemAssemblerBase::DynamicElementGetter;
     virtual std::unique_ptr<BlockCSCHessianBase> m_blockSparsityPatternDynamicImpl(size_t numElements, size_t blockSize, const DynamicElementGetter &elementGetter) const override {

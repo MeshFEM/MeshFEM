@@ -43,11 +43,13 @@ target_link_libraries(benchmark_sparsity_lru MeshFEM)
 add_executable(benchmark_solves benchmark_solves.cc)
 target_link_libraries(benchmark_solves MeshFEM)
 
-add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
-target_link_libraries(benchmark_dense_linalg MeshFEM)
+if (NOT MESHFEM_USE_LEGACY_CATAMARI)
+    add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
+    target_link_libraries(benchmark_dense_linalg MeshFEM)
 
-add_executable(benchmark_dense_psd_detect benchmark_dense_psd_detect.cc)
-target_link_libraries(benchmark_dense_psd_detect MeshFEM)
+    add_executable(benchmark_dense_psd_detect benchmark_dense_psd_detect.cc)
+    target_link_libraries(benchmark_dense_psd_detect MeshFEM)
+endif()
 
 if (MESHFEM_WITH_IPC_TOOLKIT)
 add_executable(benchmark_ipc_toolkit benchmark_ipc_toolkit.cc)
@@ -59,6 +61,19 @@ target_link_libraries(benchmark_sorts MeshFEM)
 
 add_executable(benchmark_assembly benchmark_assembly.cc)
 target_link_libraries(benchmark_assembly MeshFEM)
+
+add_executable(benchmark_assembly_exhaustive benchmark_assembly_exhaustive.cc)
+target_link_libraries(benchmark_assembly_exhaustive MeshFEM)
+
+add_executable(test_product_based_assembly test_product_based_assembly.cc)
+target_link_libraries(test_product_based_assembly MeshFEM)
+
+if (MESHFEM_WITH_MKL_PARDISO)
+    # When linking against MKL, the product-based assembly codes use
+    # `omp_set_num_threads` to control parallelism.
+    find_package(OpenMP REQUIRED)
+    target_link_libraries(test_product_based_assembly OpenMP::OpenMP_CXX)
+endif()
 
 if (MESHFEM_WITH_SCOTCH)
     add_executable(benchmark_scotch benchmark_scotch.cc)

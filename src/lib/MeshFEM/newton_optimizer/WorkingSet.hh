@@ -101,7 +101,7 @@ inline void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatri
 
     BENCHMARK_START_TIMER("fixVariablesInWorkingSet");
     // Zero out the rows corresponding to all variables in the working set
-    for (size_t elem = 0; elem < H.Ai.size(); ++elem)
+    for (decltype(H.Ai.size()) elem = 0; elem < H.Ai.size(); ++elem)
         if (ws.fixesVariable(H.Ai[elem])) H.Ax[elem] = 0.0;
 
     // Zero out working set vars' columns/gradient components, placing a 1 on the diagonal

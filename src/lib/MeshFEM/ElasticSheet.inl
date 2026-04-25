@@ -188,7 +188,25 @@ void ElasticSheet<Psi_2x2>::initializeMidedgeNormals(bool inferCreaseAngles, boo
         V3d t  = (deformedEdgeVector(he)).normalized().transpose();
         V3d d1 = deformedTriNormal(he.tri().index());
         if (!he.isBoundary()) d1 += deformedTriNormal(he.opposite().tri().index());
-        d1 = d1.normalized();
+        {
+            Real d1_norm = d1.norm();
+            if (d1_norm < 1e-8) {
+                // Approximate the dihedral angle bisector in a different way
+                // that's more stable when the triangle flap is nearly closed.
+                V3d n1 = deformedTriNormal(he.tri().index());
+                d1 = t.cross(n1 - deformedTriNormal(he.opposite().tri().index()));
+                d1.normalize();
+                if (d1.dot(n1) < 0)
+                    d1 = -d1;
+            }
+        }
+
+        // Cancellation error can pollute orthogonality of `d1` when the
+        // triangle flap for this edge is nearly closed (i.e., if the adjacent face
+        // normals nearly oppose each other). We therefore re-orthogonalize against
+        // the tangent vector.
+        d1 -= t.dot(d1) * t;
+        d1.normalize();
 
         if (std::abs(t.dot(d1)) > 1e-14) {
             std::cout << "Perpendicularity error for edge " << edgeIndex << std::endl;

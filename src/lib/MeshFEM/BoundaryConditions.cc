@@ -11,7 +11,7 @@
 #include <MeshFEM/Types.hh>
 #include <MeshFEM/BoundaryConditions.hh>
 #include <MeshFEM/Future.hh>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 #include <fstream>
 #include <stdexcept>

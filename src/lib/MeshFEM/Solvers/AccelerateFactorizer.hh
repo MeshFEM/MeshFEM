@@ -2,6 +2,7 @@
 #define ACCELERATEFACTORIZER_HH
 
 #ifdef __APPLE__
+#include <CoreFoundation/CFAttributedString.h> // Apparently needed to build on non-Xcode compilers
 #include <Accelerate/Accelerate.h>
 #endif
 
@@ -9,7 +10,15 @@
 #include <stdexcept>
 #include <vector>
 
+extern "C" {
+#include <cholmod.h>
+}
+
 struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase {
+    enum class OrderingMethod {
+        Metis, AMD, Nesdis, CholmodAMD
+    };
+
     AccelerateFactorizer();
 
     // *Scalar* size of the reduced system
@@ -75,12 +84,31 @@ struct MESHFEM_EXPORT AccelerateFactorizer final : public CholeskyFactorizerBase
 #endif
     }
 
-    CholeskyProvider provider() const override { return CholeskyProvider::Accelerate; }
+    CholeskyProvider provider() const override { return CholeskyProvider::Accelerate; } // TODO: extend to set ordering.
 
     bool checkPosDef() const override { return m_factorizationType == FactorizationType::Numeric; }
 
     void setUseBlockAccel(bool u) { m_useBlockAccel = u; }
     bool getUseBlockAccel() const { return m_useBlockAccel; }
+
+    OrderingMethod orderingMethod = OrderingMethod::Metis;
+
+    bool storeOrdering = false;
+    const VecX_T<int> getPermutation() const {
+        ensureApple();
+#if __APPLE__
+        return m_customOrder;
+#else
+        return VecX_T<int>();
+#endif
+    }
+
+#ifdef __APPLE__
+    virtual ~AccelerateFactorizer() {
+        if (m_c) cholmod_l_finish(m_c.get());
+        if (m_c_int) cholmod_finish(m_c_int.get());
+    }
+#endif
 
 private:
     // The row/col-removed matrix that is actually factorized.
@@ -104,10 +132,14 @@ private:
     template<class FType>
     struct FactorizationWrapper {
         template<typename... Args>
-        FactorizationWrapper(Args&&... args) : factor(SparseFactor(std::forward<Args>(args)...)) {
+        FactorizationWrapper(Args&&... args) {
+            {
+                // BENCHMARK_SCOPED_TIMER_SECTION timer("SparseFactor Call");
+                factor = SparseFactor(std::forward<Args>(args)...);
+            }
             auto status = factor.status;
             if (status != SparseStatusOK) SparseCleanup(factor);
-            statusCheck(factor.status);
+            statusCheck(factor.status); // throws on failure, meaning destructor is not called
         }
         FType factor;
 
@@ -131,11 +163,7 @@ private:
 
         void statusCheck() const { statusCheck(factor.status); }
 
-        ~FactorizationWrapper() {
-            // Note: this is skipped if the factor was not successfully created.
-            // Is this really what we want?
-            SparseCleanup(factor);
-        }
+        ~FactorizationWrapper() { SparseCleanup(factor); }
     };
 
     using SFWrap = FactorizationWrapper<SparseOpaqueSymbolicFactorization>;
@@ -147,6 +175,10 @@ private:
 
     // Control options
     SparseSymbolicFactorOptions m_opts;
+
+    std::unique_ptr<cholmod_common> m_c, m_c_int; // Used for Cholmod's ordering routines
+    VecX_T<double> m_valuesDummy; // Needed to run `cholmod_l_nested_dissection` without values in certain cases.
+    VecX_T<int> m_customOrder;
 #endif
 
     void m_setUpperTriangleCSC(const SuiteSparseMatrix &A_reduced);

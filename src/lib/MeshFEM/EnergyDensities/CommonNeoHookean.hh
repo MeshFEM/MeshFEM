@@ -36,7 +36,6 @@ struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
     static constexpr const char *name() { return "CommonNeoHookean"; }
 
     CommonNeoHookeanEnergy(const CommonNeoHookeanEnergy &/* other */) = default;
-    CommonNeoHookeanEnergy() { setDeformationGradient(Matrix::Identity()); }
     CommonNeoHookeanEnergy &operator=(const CommonNeoHookeanEnergy &/* other */) = default;
 
     CommonNeoHookeanEnergy(const CommonNeoHookeanEnergy &other, UninitializedDeformationTag &&)

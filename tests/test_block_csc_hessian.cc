@@ -40,9 +40,8 @@ auto assembleTestMatrices() {
         }
     }
 
-
-    auto blockHsp        = assembler.template blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
-    auto blockHsp_subset = assembler.template blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp        = assembler.blockSparsityPattern(                  numElements, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
+    auto blockHsp_subset = assembler.blockSparsityPattern(numElements - numElements / 2, [&elements](size_t ei) { return elements.row(ei).eval(); }) ->template cloneWithLayout</* ContiguousBlocks = */ false>();
 
     return std::make_pair(std::move(blockHsp), std::move(blockHsp_subset));
 }
@@ -65,14 +64,14 @@ void runTest() {
     // std::cout << "blockHsp.data(): " << blockHsp.data().transpose() << std::endl;
     // std::cout << "blockHsp.Ap(): " << Eigen::Map<VecX_T<SuiteSparse_long>>(blockHsp.Ap.data(), blockHsp.Ap.size()).transpose() << std::endl;
     // std::cout << "blockHsp.Ai(): " << Eigen::Map<VecX_T<SuiteSparse_long>>(blockHsp.Ai.data(), blockHsp.Ai.size()).transpose() << std::endl;
-    REQUIRE(scalarHsp.trace() == blockHsp.trace());
+    REQUIRE_THAT(scalarHsp.trace(), Catch::Matchers::WithinRel(blockHsp.trace(), 1e-10)); // Equality won't be exact with MESHFEM_VECTORIZE enabled...
 
     blockHsp.zeroOutLowerTriangleOfDiagonalBlocks();
 
     // Test conversions between alternate storage layouts.
     auto shuffled = blockHsp.template cloneWithLayout<!ContiguousBlocks>();
     if (ContiguousBlocks) {
-        REQUIRE(scalarHsp.trace() == shuffled->trace());
+        REQUIRE_THAT(scalarHsp.trace(), Catch::Matchers::WithinRel(shuffled->trace(), 1e-10)); // Equality won't be exact with MESHFEM_VECTORIZE enabled...
         REQUIRE((scalarHsp.data() - shuffled->data()).norm() == 0.0);
         REQUIRE((testMatrices.first->data() - shuffled->data()).norm() == 0.0);
     }
@@ -130,13 +129,13 @@ void runTest() {
         blockH->addNZScalar(t.i, t.j, t.value());
 
     REQUIRE((scalarH.data() - blockH->toScalar().data()).norm() == 0.0);
-    REQUIRE(scalarH.trace() == blockH->trace());
+    REQUIRE_THAT(scalarH.trace(), Catch::Matchers::WithinRel(blockH->trace(), 1e-10)); // Equality won't be exact with MESHFEM_VECTORIZE enabled...
 
     {
         Eigen::VectorXd d = Eigen::VectorXd::Random(scalarH.n);
         scalarH.addDiag(d);
         blockH->addDiag(d);
-        REQUIRE(scalarH.trace() == blockH->trace());
+        REQUIRE_THAT(scalarH.trace(), Catch::Matchers::WithinRel(blockH->trace(), 1e-10)); // Equality won't be exact with MESHFEM_VECTORIZE enabled...
     }
 
     // Validate `addWithSubSparsityFast`

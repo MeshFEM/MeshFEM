@@ -1,10 +1,11 @@
 #include "AccelerateFactorizer.hh"
+#include "CholmodFactorizer.hh"
 
 AccelerateFactorizer::AccelerateFactorizer() {
     ensureApple();
 #ifdef __APPLE__
     m_opts.control = SparseDefaultControl;
-    m_opts.orderMethod = SparseOrderMetis; // TODO: support different orderings (e.g., SparseOrderMetis)
+    m_opts.orderMethod = SparseOrderMetis;
     m_opts.order                = nullptr;
     m_opts.ignoreRowsAndColumns = nullptr;
     m_opts.reportError          = nullptr;
@@ -26,11 +27,11 @@ void AccelerateFactorizer::m_setUpperTriangleCSC(const SuiteSparseMatrix &A_redu
 #ifdef __APPLE__
     const auto &Lsp = A_reduced;
 
-    using VXiSS = Eigen::Matrix<SuiteSparse_long, Eigen::Dynamic, 1>;
 
     m_A_csc.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
     m_A_csc.Ap = Lsp.Ap; // std::move(Lsp.Ap);
     // Accelerate uses int32_t row indices...
+    using VXiSS = Eigen::Matrix<std::decay_t<decltype(Lsp.Ai[0])>, Eigen::Dynamic, 1>;
     m_rowIndices_i32 = Eigen::Map<const VXiSS>(Lsp.Ai.data(), Lsp.Ai.size()).template cast<int32_t>();
 
     m_A_csc.m = Lsp.m;
@@ -58,7 +59,7 @@ void AccelerateFactorizer::factorizeSymbolic(const BlockCSCHessianBase &mat, con
     g_matrixRecorder.recordSymbolic(mat, pinnedVars);
 
     const bool blockFactorizationSupported = m_useBlockAccel && mat.uniformBlockSize();
-    if (blockFactorizationSupported) {
+    if (blockFactorizationSupported || mat.isScalar()) {
         m_blockSize = mat.maxBlockSize();
         m_symbolicFactorizationImpl((const SuiteSparseMatrix &) mat, pinnedVars);
     }
@@ -80,8 +81,8 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
     BENCHMARK_SCOPED_TIMER_SECTION timer("AccelerateFactorizer.m_symbolicFactorizationImpl<" + std::to_string(m_blockSize) + ">");
     ensureApple();
 
+#ifdef __APPLE__
     const SuiteSparseMatrix *A_reduced;
-    std::vector<SuiteSparse_long> reducedRowForRow_block;
 
     if (m_blockSize > 1 && pinnedVars.size() > 0) {
         BENCHMARK_SCOPED_TIMER_SECTION bptimer("BlockCSC Pin Handling");
@@ -118,6 +119,8 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
         }
         A_reduced = m_initRowColRemoval(mat, pinnedBlockVars);
         m_blockEntryForReducedBlockEntry.swap(m_entryForReducedEntry);
+        m_entryForReducedEntry.clear();
+        std::vector<SuiteSparse_long> reducedRowForRow_block;
         reducedRowForRow_block.swap(m_reducedRowForRow);
 
         // `m_initRowColRemoval` has now stored the pinned **block** variable
@@ -141,16 +144,91 @@ void AccelerateFactorizer::m_symbolicFactorizationImpl(const SuiteSparseMatrix &
             }
         }
     }
+    else A_reduced = m_initRowColRemoval(mat, pinnedVars);
+
+    if (storeOrdering) {
+        m_customOrder.resize(A_reduced->m);
+        m_opts.order = m_customOrder.data();
+    }
     else {
-        A_reduced = m_initRowColRemoval(mat, pinnedVars);
-        reducedRowForRow_block = m_reducedRowForRow;
+        m_customOrder.resize(0);
+        m_opts.order = nullptr;
+    }
+
+    if (orderingMethod == OrderingMethod::AMD) {
+        m_opts.orderMethod = SparseOrderAMD;
+    }
+    else if (orderingMethod == OrderingMethod::Metis) {
+        m_opts.orderMethod = SparseOrderMetis;
+    }
+    else if (orderingMethod == OrderingMethod::CholmodAMD) {
+        if (!m_c) {
+            m_c = std::make_unique<cholmod_common>();
+            cholmod_l_start(m_c.get());
+        }
+
+        BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_amd");
+
+        auto cholmat = cholmod_sparse_view(*A_reduced);
+        // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
+        // (even though the Nested dissection algorithm should not be
+        // looking at its entries...)
+        // Presumably this is because the first step of cholmod_l_nested_dissection
+        // is to convert the matrix from upper-triangular to full format.
+        // In the future, we should bypass this step since we already do the
+        // conversion ourselves for Catamari.
+        cholmat.x = dummy_values_ptr(A_reduced->Ai.data(), A_reduced->Ai.size(), m_valuesDummy);
+        VecX_T<SuiteSparse_long> iperm(A_reduced->m);
+        cholmod_l_amd(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
+                      (SuiteSparse_long *) iperm.data(), m_c.get());
+        m_customOrder.resize(iperm.size());
+        for (int i = 0; i < iperm.size(); ++i)
+            m_customOrder[iperm[i]] = i;
+
+        m_opts.orderMethod = SparseOrderUser;
+        m_opts.order = m_customOrder.data();
+    }
+    else if (orderingMethod == OrderingMethod::Nesdis) {
+        if (!m_c) {
+            m_c = std::make_unique<cholmod_common>();
+            cholmod_l_start(m_c.get());
+        }
+
+        {
+            auto cholmat = cholmod_sparse_view(*A_reduced);
+            // Note: the array `cholmat.x` apparently must be valid or cholmod_l_nested_dissection fails
+            // (even though the Nested dissection algorithm should not be
+            // looking at its entries...)
+            // Presumably this is because the first step of cholmod_l_nested_dissection
+            // is to convert the matrix from upper-triangular to full format.
+            // In the future, we should bypass this step since we already do the
+            // conversion ourselves for Catamari.
+            cholmat.x = dummy_values_ptr(A_reduced->Ai.data(), A_reduced->Ai.size(), m_valuesDummy);
+
+            VecX_T<SuiteSparse_long> iperm(A_reduced->m);
+            VecX_T<SuiteSparse_long> CParent(A_reduced->m), CMember(A_reduced->m);
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION t("cholmod_l_nested_dissection");
+                cholmod_l_nested_dissection(&cholmat, /* fset = */ nullptr, /* fsize = */ 0,
+                                            (SuiteSparse_long *) iperm.data(),
+                                            CParent.data(), CMember.data(), m_c.get());
+            }
+            m_customOrder.resize(iperm.size());
+            for (int i = 0; i < iperm.size(); ++i)
+                m_customOrder[iperm[i]] = i;
+            m_valuesDummy.resize(0);
+            m_opts.orderMethod = SparseOrderUser;
+            m_opts.order = m_customOrder.data();
+        }
+    }
+    else {
+        throw std::runtime_error("Unexpected ordering method");
     }
 
     m_setUpperTriangleCSC(*A_reduced);
     m_reducedSizeScalar = static_cast<int>(m_A_csc.n * m_blockSize);
 
-#ifdef __APPLE__
-    BENCHMARK_SCOPED_TIMER_SECTION sftimer("SparseFactor call");
+    BENCHMARK_SCOPED_TIMER_SECTION sftimer("SparseFactor Call");
 
     m_numfactor.reset();
     m_symfactor.reset();

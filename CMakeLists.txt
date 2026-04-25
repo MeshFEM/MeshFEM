@@ -86,6 +86,7 @@ option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TO
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
 option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   ON)
+option(MESHFEM_USE_LEGACY_CATAMARI   "Use Jack Poulson's original Catamari code for comparisons instead of our accelerated BlockCatamari"  OFF)
 option(MESHFEM_WITH_SCOTCH           "Compile MeshFEM with support for Scotch reordering, if possible" OFF)
 option(MESHFEM_WITH_MKL_PARDISO      "Compile MeshFEM with MKL Pardiso"   OFF)
 option(MESHFEM_WITH_PARDISO          "Compile MeshFEM with Pardiso"   OFF)
@@ -95,7 +96,11 @@ option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLE
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
 option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
 option(MESHFEM_ADDRESS_SANITIZER     "Whether to use address sanitizer in Debug mode" OFF)
-option(MESHFEM_WITH_IPC_TOOLKIT       "Compile MeshFEM with Ipc_toolkit" ON)
+option(MESHFEM_WITH_IPC_TOOLKIT      "Compile MeshFEM with Ipc_toolkit" ON)
+option(MESHFEM_WITH_TINYAD           "Whether to use the TinyAD `Scalar` type as the autodiff backend intead of (nested) Eigen" OFF)
+
+option(MESHFEM_FORCE_TINYAD_DOWNLOAD "Whether to force the download of TinyAD (on behalf of the parent project) even when not using TinyAD for MeshFEM's autodiff" OFF)
+mark_as_advanced(MESHFEM_FORCE_TINYAD_DOWNLOAD)
 
 if (MESHFEM_WITH_PARDISO AND MESHFEM_WITH_MKL_PARDISO)
     message( FATAL_ERROR "MESHFEM_WITH_PARDISO and MESHFEM_WITH_MKL_PARDISO are mutually exclusive.")
@@ -129,7 +134,11 @@ endif()
 # TODO: change back from a Git submodule to a CMake project download when
 # BlockCatamari is released.
 if (MESHFEM_WITH_CATAMARI)
-    add_subdirectory(3rdparty/catamari)
+    if (MESHFEM_USE_LEGACY_CATAMARI)
+        # catamari_legacy is already added by MeshFEMDependencies.cmake
+    else()
+        add_subdirectory(3rdparty/catamari)
+    endif()
 endif()
 
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python

@@ -13,7 +13,9 @@ struct SolidElement;
 template<class Psi_in>
 struct SolidMaterial : public MaterialBase {
     using Psi_F = std::conditional_t<Psi_in::EDType == EDensityType::FBased, Psi_in, EnergyDensityFBasedFromCBased<Psi_in, Psi_in::N>>;
-    using Psi = AutoHessianProjection<Psi_F>;
+    using Psi = Psi_F; // AutoHessianProjection<Psi_F>; // TODO: re-enable once
+                       // AutoHessianProjection implements a check for
+                       // already-implemented analytical Hessian projection.
 
     SolidMaterial() { }
     SolidMaterial(const Psi_in &psi) : psi(psi) { }
@@ -51,12 +53,36 @@ struct SolidElement : public ElementBase<SolidElement<Deg, Psi, EData>> {
         : Base(ei, materials), m_edata(*(m.element(ei))) {
     }
 
+    // Construct without a FEMMesh, using an indexed element set mesh
+    // representation of the rest state (i.e., an igl-style (V, F) array pair).
+    template<class VDerived, class FDerived, class E = EData, typename = std::enable_if_t<!std::is_reference_v<E>>> // Hack to hide this when EData is a reference type that must be bound.
+    SolidElement(size_t ei, const Eigen::MatrixBase<VDerived> &V, const Eigen::MatrixBase<FDerived> &F, MaterialAssignment<Material> &materials)
+        : Base(ei, materials) {
+        embed(V, F);
+    }
+
+    // For future shape optimization support:
     // void setRestConfiguration(const LocalVars &X) {
     // }
 
     Real       energy(                                  const LocalVars &x) const { const auto &m = Base::material(); return HLE::  energy(m.psi, x, m_edata); }
     Gradient gradient(Real weight,                      const LocalVars &x) const { const auto &m = Base::material(); return HLE::gradient(m.psi, x, m_edata, weight); }
     Hessian   hessian(Real weight, bool projectionMask, const LocalVars &x) const { const auto &m = Base::material(); return HLE:: hessian(m.psi, x, m_edata, /* projectionDisabled  = */ !projectionMask, weight); }
+
+    typename HLE::MNKd deformationGradient(const LocalVars &x, const EvalPt<K> &bc) const { return typename HLE::ElasticFGetter(x)(m_edata.gradPhis(bc)); }
+
+    template<class VDerived, class FDerived>
+    void embed(const Eigen::MatrixBase<VDerived> &V, const Eigen::MatrixBase<FDerived> &F) {
+        m_edata.embed(V, F, Base::elementIndex());
+    }
+
+    template<class VDerived>
+    void embed(const Eigen::MatrixBase<VDerived> &cornerPositions) {
+        static_assert(VDerived::RowsAtCompileTime == K + 1, "embed: cornerPositions should have K+1 rows");
+        m_edata.embed(cornerPositions);
+    }
+
+    const EData &elementData() const { return m_edata; }
 
 private:
     EData m_edata;
@@ -68,5 +94,12 @@ template<size_t Deg, class Psi>
 using SolidMeshEnergy = MeshEnergy<FEMMesh<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>,
                                    NodalVars<Psi::N>,
                                    ElementStencil<Psi::N, Deg, Psi::N>, SolidElement<Deg, Psi>>;
+
+// A SolidMeshEnergy where element rest shapes can be altered by changing their embeddings
+template<size_t Deg, class Psi>
+using SolidMeshEnergyReembeddable = MeshEnergy<FEMMesh<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>,
+                                   NodalVars<Psi::N>,
+                                   ElementStencil<Psi::N, Deg, Psi::N>,
+                                   SolidElement<Deg, Psi, LinearlyEmbeddedElement<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>>>;
 
 #endif /* end of include guard: SOLIDELEMENT_HH */

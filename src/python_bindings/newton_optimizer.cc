@@ -7,8 +7,9 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include <MeshFEM/newton_optimizer/newton_optimizer.hh>
 #include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
-#include "BindingUtils.hh"
+#include <MeshFEM/newton_optimizer/MaskedHessianProjectionController.hh>
 
+#include "BindingUtils.hh"
 #include "CallbackWrapper.hh"
 
 template<class DerivedController, class BaseController>
@@ -36,6 +37,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
          .def("notifyStep",          &HessianProjectionController::notifyStep,          py::arg("step"))
          .def("notifyDirectionalDerivative", &HessianProjectionController::notifyDirectionalDerivative, py::arg("directionalDerivative"))
          .def("reset", &HessianProjectionController::reset, "Reset the controller to its initial state (e.g., automatically called at the start of each Newton optimization).")
+         .def("prepareForInitialFactorizationAttempt", &HessianProjectionController::prepareForInitialFactorizationAttempt)
         ;
 
     bindController<HessianProjectionNever,    HessianProjectionController>(m, "HessianProjectionNever"   );
@@ -60,6 +62,30 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
     bindController<HessianUpdateAlways,   HessianUpdateController>(m, "HessianUpdateAlways"  );
     bindController<HessianUpdatePeriodic, HessianUpdateController>(m, "HessianUpdatePeriodic")
         .def_readwrite("period", &HessianUpdatePeriodic::period, "Number of times to reuse a Hessian factorization before computing a new one.")
+        ;
+
+    using MHPCGN = MaskedHessianProjectionControllerGradNorm;
+    py::class_<MHPCGN, HessianProjectionController, std::shared_ptr<MHPCGN>>(m, "MaskedHessianProjectionControllerGradNorm")
+        .def(py::init<MeshEnergyBase &>(), py::arg("meshEnergy"))
+        .def("currentThreshold", &MHPCGN::currentThreshold, "Get the current absolute gradient norm threshold for masking element Hessian projections.")
+        .def_readwrite("relativeThreshold", &MHPCGN::relativeThreshold, "Current relative gradient norm threshold for masking element Hessian projections.")
+        .def_readwrite("maxFailuresBeforeShifting", &MHPCGN::maxFailuresBeforeShifting, "Maximum number of consecutive failures of the projected Hessian due to indefiniteness before giving up and switching to Hessian shifts (instead of further projection).")
+        .def_readwrite("percentileControl", &MHPCGN::percentileControl, "If true, adjust the threshold to target a certain percentile of projected elements instead of halving/doubling.")
+        .def_readwrite("verbose", &MHPCGN::verbose)
+        .def_property_readonly("lastPDRelThreshold", &MHPCGN::getLastPDRelThreshold)
+        .def_property_readonly("lastPDThreshold", &MHPCGN::getLastPDThreshold)
+        ;
+
+    using MHPCME = MaskedHessianProjectionControllerMinEigenvalue;
+    py::class_<MHPCME, HessianProjectionController, std::shared_ptr<MHPCME>>(m, "MaskedHessianProjectionControllerMinEigenvalue")
+        .def(py::init<MeshEnergyBase &>(), py::arg("meshEnergy"))
+        .def("currentThreshold", &MHPCME::currentThreshold, "Get the current absolute minimum eigenvalue threshold for masking element Hessian projections.")
+        .def_readwrite("relativeThreshold", &MHPCME::relativeThreshold, "Current relative minimum eigenvalue threshold for masking element Hessian projections.")
+        .def_readwrite("defaultRelativeThreshold", &MHPCME::defaultRelativeThreshold, "Default value to which the relative threshold is reset.")
+        .def_readwrite("maxFailuresBeforeShifting", &MHPCME::maxFailuresBeforeShifting, "Maximum number of consecutive failures of the projected Hessian due to indefiniteness before giving up and switching to Hessian shifts (instead of further projection).")
+        .def_readwrite("percentileControl", &MHPCME::percentileControl, "If true, adjust the threshold to target a certain percentile of projected elements instead of halving/doubling.")
+        .def_readwrite("verbose", &MHPCME::verbose)
+        .def_readwrite("clampEigenvaluesToThreshold", &MHPCME::clampEigenvaluesToThreshold, "If true, also set the `eigenvalueClampTarget` to coincide with the projection threshold (for comparison against TinyAD's approach of clamping negative eigenvalues to a small positive value)")
         ;
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -197,6 +223,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("suppressSparsity", &NOT::suppressSparsity, "Suppress sparsity pattern contributions from this term")
         .def_property_readonly("sparsityUpdateFrequency", &NOT::sparsityUpdateFrequency)
         .def_readonly("increaseLimiter", &NOT::increaseLimiter, py::return_value_policy::reference_internal)
+
+        .def("objectiveAtVars", &NOT::objectiveAtVars, py::arg("x"))
         ;
 
     py::class_<FeasibleStepLengthComputer, std::shared_ptr<FeasibleStepLengthComputer>>(m, "FeasibleStepLengthComputer")
@@ -225,6 +253,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
 
         .def("termObjectives", &NewtonMultiobjectiveProblem::termObjectives)
         .def("termGradients",  &NewtonMultiobjectiveProblem::termGradients)
+
+        .def("objectiveAtVars", &NewtonMultiobjectiveProblem::objectiveAtVars, py::arg("x"))
 
         .def_readwrite("initialFeasibleStepLengthComputer",
                 &NewtonMultiobjectiveProblem::initialFeasibleStepLengthComputer,

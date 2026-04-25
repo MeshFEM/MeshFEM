@@ -35,7 +35,7 @@ set(MY_FLAGS
         -Werror=sequence-point
         -Werror=return-type
         -Werror=trigraphs
-        -Werror=array-bounds
+        # -Werror=array-bounds
         -Werror=write-strings
         -Werror=address
         -Werror=int-to-pointer-cast

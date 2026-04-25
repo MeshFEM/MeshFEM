@@ -101,9 +101,16 @@ endfunction()
 # DISABLED until BlockCatamari is released.
 # function(meshfem_download_catamari)
 #     meshfem_download_project(catamari
-#         GIT_REPOSITORY https://github.com/jpanetta/catamari.git
+#         GIT_REPOSITORY https://github.com/MeshFEM/catamari.git
 #         GIT_TAG        23b858e18f639261bae4a2fe15d00a286cda963d)
 # endfunction()
+
+## catamari_legacy
+function(meshfem_download_catamari_legacy)
+    meshfem_download_project(catamari_legacy
+        GIT_REPOSITORY https://github.com/MeshFEM/catamari.git
+        GIT_TAG        2f427c264cc42bf31b1cc23fc7f34d904f130384)
+endfunction()
 
 ## IPC-Toolkit
 function(meshfem_download_ipc_toolkit)
@@ -113,3 +120,11 @@ function(meshfem_download_ipc_toolkit)
 
     )
 endfunction()
+
+if ((MESHFEM_WITH_TINYAD OR MESHFEM_FORCE_TINYAD_DOWNLOAD) AND (NOT TARGET TinyAD))
+    meshfem_download_project(TinyAD
+        GIT_REPOSITORY https://github.com/jpanetta/TinyAD
+        GIT_TAG edeb8cd5a978413ce10ad42092a666ca43aec663
+    )
+    add_subdirectory(${MESHFEM_EXTERNAL}/TinyAD)
+endif()

@@ -126,7 +126,7 @@ struct EnergyDensityCBasedFromFBased : public Psi_F {
 
     EnergyDensityCBasedFromFBased(const EnergyDensityCBasedFromFBased &) = default;
     EnergyDensityCBasedFromFBased(const EnergyDensityCBasedFromFBased &other, UninitializedDeformationTag &&)
-        : Base(other, UninitializedDeformationTag()), m_Finv(other.m_Finv) { }
+        : Base(static_cast<const Base &>(other), UninitializedDeformationTag()), m_Finv(other.m_Finv) { }
 
     // d psi / d E,     E := 0.5 (C - I)
     Matrix PK2Stress() const { return m_Finv * Base::denergy(); }
@@ -186,7 +186,7 @@ struct EnergyDensityFBasedMembraneFromFBased : public Psi_F {
     EnergyDensityFBasedMembraneFromFBased &operator=(const EnergyDensityFBasedMembraneFromFBased &) = default;
 
     EnergyDensityFBasedMembraneFromFBased(const EnergyDensityFBasedMembraneFromFBased &other, UninitializedDeformationTag &&)
-        : Base(other, UninitializedDeformationTag()), m_B(other.m_B) { }
+        : Base(static_cast<const Base &>(other), UninitializedDeformationTag()), m_B(other.m_B) { }
 
     static std::string name() { return Base::name() + std::string("Membrane"); }
 
@@ -381,20 +381,21 @@ auto evaluate_d2energy_dF2_impl(/* hack */ char, const Psi_F &psi) {
     static_assert(Psi_F::EDType == EDensityType::FBased
                || Psi_F::EDType == EDensityType::Membrane, "Psi_F must be F-based or Membrane");
     using Matrix  = typename Psi_F::Matrix;
+    using Scalar    = typename Psi_F::Real;
     static constexpr size_t N = Matrix::ColsAtCompileTime;
     static constexpr size_t M = Matrix::RowsAtCompileTime; // Embedding dimension (may differ from N)
-    using Hessian  = Eigen::Matrix<Real, M * N, M * N>;
+    using Hessian  = Eigen::Matrix<Scalar, M * N, M * N>;
 
     // Evaluate the full Hessian by probing it on a basis with delta_denergy.
     Hessian H;
-    CanonicalBasisMatrix<M, N, Real> probe(0, 0);
+    CanonicalBasisMatrix<M, N, Scalar> probe(0, 0);
     for (size_t j = 0; j < N; ++j) {
         probe.j = j;
         for (size_t i = 0; i < M; ++i) {
             probe.i = i;
             auto delta_de = psi.delta_denergy(probe);
             // Column major flattening order to match `Matrix`!
-            H.col(i + j * M) = Eigen::Map<const Eigen::Matrix<double, M * N, 1>>(delta_de.data());
+            H.col(i + j * M) = Eigen::Map<const Eigen::Matrix<Scalar, M * N, 1>>(delta_de.data());
         }
     }
 
@@ -435,7 +436,7 @@ struct AutoHessianProjection : Psi_F {
     AutoHessianProjection(const Base &b) : Base(b) { }
 
     AutoHessianProjection(const AutoHessianProjection &b, UninitializedDeformationTag &&)
-        : Base(b, UninitializedDeformationTag()), projectionEnabled(b.projectionEnabled) { }
+        : Base(static_cast<const Base &>(b), UninitializedDeformationTag()), projectionEnabled(b.projectionEnabled) { }
 
     using Base::energy;
     using Base::denergy;

@@ -33,13 +33,13 @@
 
 #include <cmath>
 #include <MeshFEM/Types.hh>
-#include <iostream>
 
 namespace fast_decompositions {
 
 // Simple closed-form eigendecomposition of a 2x2 symmetric matrix A = Q Lambda Q^T
+// Returns `false` if the algorithm was short-circuited due to the matrix being numerically diagonal.
 template<bool FullyRobust = true, typename Real> // FullyRobust is for compatibility with the 3x3 SVD code.
-void sym_eigensolver(Mat2_T<Real> A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
+bool sym_eigensolver(const Mat2_T<Real> &A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
     const Real a_minus_c = A(0, 0) - A(1, 1);
     const Real b = A(0, 1);
 
@@ -51,12 +51,12 @@ void sym_eigensolver(Mat2_T<Real> A, Vec2_T<Real> &lambda, Mat2_T<Real> &Q) {
 
     Vec2_T<Real> q0(-2 * b, a_minus_c + sqrt_d);
     Real q0_norm = q0.norm();
-    if (q0_norm == 0) { Q.setIdentity(); return; } // A is the zero matrix...
+    if ((b == 0) || (q0_norm == 0)) { Q.setIdentity(); return false; } // A is diagonal or the zero matrix...
     q0 /= q0_norm;
     Q.col(0) = q0;
     Q.col(1) << -q0[1], q0[0];
+    return true;
 }
-
 
 template<typename T>
 T sign(T val) { return (val >= T(0)) ? T(1) : T(-1); }
@@ -81,19 +81,19 @@ void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
         // Warning: the "singular values" summed and subtracted here
         // are the signed versions w1 and w2 from Blinn's paper.
         // So `sigma_sum == 0` does *not* imply that `A == 0`.
-        sigma_sum  = std::hypot(F2, G2); // w1 + w2
-        sigma_diff = std::hypot(E2, H2); // w1 - w2
+        sigma_sum  = hypot(F2, G2); // w1 + w2
+        sigma_diff = hypot(E2, H2); // w1 - w2
 
         // Avoid NaNs in the case of the zero matrix.
-        if (sigma_sum + sigma_diff == 0) { U.setIdentity(); V.setIdentity(); sigma.setZero(); return; }
+        if (sigma_sum + sigma_diff == 0.0) { U.setIdentity(); V.setIdentity(); sigma.setZero(); return; }
 
         // Avoid NaNs in the case of repeated sigular values.
         // Here `A` is a scalar multiple of a rotation/reflection matrix; we
         // can arbitrarily set `U` as this element of O(2) and pick `V = I`.
-        if ((sigma_diff == 0) || (sigma_sum == 0)) {
+        if ((sigma_diff == 0.0) || (sigma_sum == 0.0)) {
             V.setIdentity();
             // Note that due to signs, the actual sum of singular values can be either w1 + w2 or w1 - w2...
-            T s = std::max(sigma_diff, sigma_sum) / 2;
+            T s = std::max(sigma_diff, sigma_sum) / 2.0;
             sigma.setConstant(s);
             U = A / s;
             return;
@@ -108,18 +108,19 @@ void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
         s_p = H2 / sigma_diff; // sin(alpha_2 + alpha_1)
     }
 
-    T c1 = std::sqrt((c_m + c_p) * (c_m + c_p) + (s_p + s_m) * (s_p + s_m)) / 2; // cos(alpha_1)
-    T s1 = std::sqrt((c_m - c_p) * (c_m - c_p) + (s_p - s_m) * (s_p - s_m)) / 2; // sin(alpha_1)
+    T c1 = sqrt((c_m + c_p) * (c_m + c_p) + (s_p + s_m) * (s_p + s_m)) / 2.0; // cos(alpha_1)
+    T s1 = sqrt((c_m - c_p) * (c_m - c_p) + (s_p - s_m) * (s_p - s_m)) / 2.0; // sin(alpha_1)
 
     // Sign recovery: the sign of the first left singular vector is arbitrary,
     // so we need only ensure that s1 has the correct sign relative to c1.
     // Note the trig identity: s_p c_m - c_p s_m = ... = 2 s1 c1
-    s1 = std::copysign(s1, s_p * c_m - c_p * s_m);
+    // (We could use `std::copysign`, but that isn't autodiff-friendly.)
+    if (s_p * c_m - c_p * s_m < 0.0) s1 = -s1;
 
     U << c1, s1,
         -s1, c1;
 
-    sigma << (sigma_sum + sigma_diff) / 2, std::abs(sigma_sum - sigma_diff) / 2; // guaranteed positive and sorted descending...
+    sigma << (sigma_sum + sigma_diff) / 2.0, fabs(sigma_sum - sigma_diff) / 2.0; // guaranteed positive and sorted descending...
 
     // Recover a consistent first right singular vector from U^T A = Sigma V^T ==> V Sigma = A^T U.
     // We could alternatively get this by computing `c2, s2`, but then sign recovery looks more tricky.
@@ -129,9 +130,14 @@ void svd(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &sigma, Mat2_T<T> &V) {
 
     // Since det(U) = 1 and det(sigma) >= 0 by construction,
     // we must ensure det(V) = sign(det(A));
-    T sgn = sign(A.determinant());
-    V(0, 1) = -sgn * V(1, 0);
-    V(1, 1) =  sgn * V(0, 0);
+    if (A.determinant() >= 0) {
+        V(0, 1) = -V(1, 0);
+        V(1, 1) =  V(0, 0);
+    }
+    else {
+        V(0, 1) =  V(1, 0);
+        V(1, 1) = -V(0, 0);
+    }
 }
 
 // The following more complicated code is adapted from https://scicomp.stackexchange.com/a/28506.
@@ -233,6 +239,35 @@ void svd_petiaccja(const Mat2_T<T> &A, Mat2_T<T> &U, Vec2_T<T> &s, Mat2_T<T> &V)
     V(1, 1) =  V(0, 0);
 }
 
+// Computes the closest rotation matrix to A in Frobenius norm, i.e., the R
+// factor of the polar decomposition without resorting to the SVD.
+// Note that:
+//  min_θ ||A - R(θ)||_F^2  <==> max_θ R(θ) : A = max_θ cos(θ) (A(0, 0) + A(1, 1)) + sin(θ) (A(1, 0) - A(0, 1)) = max_θ [cos(θ), sin(θ)] . [a, b],
+//  which is clearly solved by setting [cos(θ), sin(θ)] = normalize([a, b])
+template<typename Real>
+Mat2_T<Real> closest_rotation(const Mat2_T<Real> &A) {
+    Real a = A(0, 0) + A(1, 1);
+    Real b = A(1, 0) - A(0, 1);
+    Real den = sqrt(a * a + b * b);
+
+    // The singular case `den = 0` corresponds to a matrix of the form [a b; b -a].
+    // In this case, any rotation is equally good. We arbitrarily break symmetry
+    // by returning the identity matrix.
+    if (den == 0) return Mat2_T<Real>::Identity();
+    Real scale = 1 / den;
+    a *= scale;
+    b *= scale;
+    Mat2_T<Real> R;
+    R << a, -b, b,  a;
+    return R;
 }
+
+template<typename Real>
+void polar(const Mat2_T<Real> &A, Mat2_T<Real> &R, Mat2_T<Real> &S) {
+    R = closest_rotation(A);
+    S = R.transpose() * A;
+}
+
+} // namespace fast_decompositions
 
 #endif /* end of include guard: FAST_2X2_DECOMPOSITIONS_HH */

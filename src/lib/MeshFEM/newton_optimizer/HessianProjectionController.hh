@@ -26,6 +26,9 @@ struct HessianProjectionController {
     virtual void notifyGradient(const Eigen::VectorXd & /* g */) { } // For heuristics that can depend on gradient
     virtual void notifyDirectionalDerivative(double /* directionalDerivative */) { } // For heuristics that can depend on directional derivative
 
+    // Called before the first factorization attempt of the Hessian at a fresh Newton iteration.
+    virtual void prepareForInitialFactorizationAttempt() { }
+
     virtual void reset() { }
 
     virtual ~HessianProjectionController() { }

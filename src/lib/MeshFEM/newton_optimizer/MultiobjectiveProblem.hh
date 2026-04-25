@@ -59,6 +59,8 @@ struct MESHFEM_EXPORT NewtonVarsBase {
         if (size_t(vars.size()) != numVars()) throw std::runtime_error("Variable size mismatch");
         m_setVarsImpl(vars);
         m_issueNotifications(VarType::Variable);
+        // Warning: does not invalidate the cached problem Hessian! For this,
+        // one must call the problem's `setVars`.
     }
 
     // Set x to a trivial starting point for solving the optimization problem.
@@ -196,6 +198,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     enum class SparsityUpdateFrequency { NEVER, ALWAYS, SOMETIMES };
 
     virtual Real objective() const = 0;
+    virtual Real objectiveAtVars(const Eigen::Ref<const VXd> &x) const { throw std::runtime_error("objectiveAtVars not implemented by" + std::string(typeid(*this).name())); }
     virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const = 0;
     virtual void accumulateHessian(Real weight, NewtonHessian &result, bool projectionMask = false) const = 0;
 
@@ -405,6 +408,25 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
         return result;
     }
 
+    // Evaluate the objective away from the currently set variables
+    // for accelerated line search (only works if supported by all terms).
+    Real objectiveAtVars(const Eigen::Ref<const VXd> &x) const {
+        Real result = 0;
+        for (size_t ti = 0; ti < numTerms(); ++ti) {
+            const auto &t = term(ti);
+            Real w = weight(ti);
+            if (w == 0) continue;
+            Real o = t.objectiveAtVars(x);
+
+            // Bail early if any term exceeds its increase limit
+            if (t.increaseLimiter.valueExceedsLimit(o))
+                return ObjectiveIncreaseLimiter::INFTY;
+
+            result += w * o;
+        }
+        return result;
+    }
+
     VXd gradient(bool freshIterate = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("NewtonMultiobjectiveProblem.gradient");
         VXd g = VXd::Zero(numVars());
@@ -419,6 +441,7 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
     void   setVars(const VXd &vars) override {
         if (size_t(vars.size()) != numVars()) throw std::runtime_error("Incorrect variable vector size");
         m_vars->setVars(vars);
+        invalidateCachedHessian();
     }
 
     void applyTrivialInitialGuess() { m_vars->applyTrivialInitialGuess(); }
@@ -531,7 +554,7 @@ private:
             if (t.suppressSparsity) continue;
             if (t.sparsityUpdateFrequency() == SUF::NEVER) {
                 // Only rebuild the "static" part when the terms might have been invalidated.
-                if (force) { m_hessianSparsityStaticPart.mergeSparsityPattern(t.hessianSparsityPattern()); std::cout << "Building static term sparsity pattern" << std::endl; }
+                if (force) { m_hessianSparsityStaticPart.mergeSparsityPattern(t.hessianSparsityPattern()); /* std::cout << "Building static term sparsity pattern" << std::endl; */ }
                 else if (t.sparsityPatternChanged) throw std::logic_error("Term with a sparsity pattern update frequency of NEVER reported a change.");
             }
             else if (t.sparsityUpdateFrequency() == SUF::SOMETIMES) {

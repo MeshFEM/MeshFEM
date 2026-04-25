@@ -2,8 +2,17 @@
 // Gravity.hh
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  Implements a gravitational potential energy that can be applied to a
-//  volumetric ElasticObject or an ElasticSheet.
+//  Implements a gravitational potential energy that can be applied to an
+//  elastic object.
+//
+//  This is a simple wrapper around `BodyForce` since a gravity acceleration
+//  vector `g` simply induces a body force density `f = rho * g`, where `rho` is
+//  the mass density of the object.
+//
+//  Currently the mass density is assumed to be constant throughout any design
+//  optimization; otherwise it must be defined as a *nodal* field
+//  (since `BodyForce` works with nodal force densities) and accounted
+//  for during sensitivity analysis.
 */
 //  Author:  Julian Panetta (jpanetta), julian.panetta@gmail.com
 //  Created:  08/05/2020 10:23:12
@@ -11,38 +20,17 @@
 #ifndef GRAVITY_HH
 #define GRAVITY_HH
 
-#include "Load.hh"
-#include <MeshFEM/GaussQuadrature.hh>
+#include "BodyForce.hh"
 
 namespace Loads {
     template<class Object>
-    struct Gravity;
-
-    namespace detail {
-        template<class Object>
-        struct GravityLoadVector {
-            using VXd  = typename Object::VXd;
-            static constexpr size_t N   = Object::N;
-            static constexpr size_t K   = Object::K;
-            static constexpr size_t Deg = Object::Deg;
-            static VXd compute(const Gravity<Object> &g) {
-                const auto &o = g.getObj();
-                auto M = o.massMatrix(/* updatedParametrization */ false);
-                VXd neg_g_rep = (-g.get_g()).replicate(M.numSparseVars() / N, 1); // Assumes all variables are nodal displacements... (like ElasticSolid)
-                return M.apply(neg_g_rep);
-            }
-        };
-    }
-
-    template<class Object>
-    struct Gravity : public ObjectSpecificLoad<Object> {
+    struct Gravity : public BodyForce<Object> {
         using Real = typename Object::Real;
-        using Base = ObjectSpecificLoad<Object>;
+        using Base = BodyForce<Object>;
         using ST   = typename Base::EOStorageType;
         static constexpr size_t N = Object::N;
         using VXd  = typename Object::VXd;
         using VNd  = Eigen::Matrix<Real, N, 1>; // ElasticSolid has the information of N
-        using Base::getObj;
 
         static constexpr VNd default_gravity() {
             VNd result = VNd::Zero();
@@ -51,36 +39,31 @@ namespace Loads {
             return result;
         }
 
-        Gravity(const ST &obj, const VNd &g = default_gravity())
-            : Base(obj), m_g(g) { m_updateCache(); }
+        Gravity(const ST &obj, const VNd &g = default_gravity()) : Base(obj) { set_g(g); }
 
-        void set_g(VNd g)      { m_g = g; m_updateCache(); }
-        VNd  get_g()     const { return m_g; }
+        void set_g(const VNd &g) {
+            m_g = g;
+            m_updateCache();
+        }
 
-        virtual Real energy() const override { return m_grad.dot(Base::getObj().getVars()); }
-
-        // Gradient with respect to the deformed state
-        virtual VXd grad_x() const override { return m_grad; }
-
-        // Gradient with respect to the rest state
-        virtual VXd grad_X() const override { throw std::runtime_error("TODO"); }
-
-        // Gravity is linear ==> Hessian is zero.
-        virtual void accumulateHessian(Real /* weight */, NewtonHessian &/* H */, bool /* projectionMask */ = true) const override { }
-        virtual NewtonHessian hessianSparsityPattern() const override { return NewtonHessian(); }
+        const VNd &get_g() const { return m_g; }
 
     private:
+        VNd  m_g; // Gravitational acceleration vector
+
+        // Note: we must respond to the `m_stateUpdated` callback
+        // (even though changes to rest shape are automatically
+        // handled by `BodyForce`) to account for changes in mass density
+        // (which also trigger a rest-state update notification).
         virtual void m_stateUpdated(typename Base::VM vmask) override {
             if (vmask == Base::VM::Rest) m_updateCache();
         }
 
-        VNd  m_g; // Gravitational acceleration vector
-
         void m_updateCache() {
-            m_grad = detail::GravityLoadVector<Object>::compute(*this);
+            const auto &o = this->getObj();
+            VXd f = o.getMassDensity() * (m_g).replicate(o.numNodes(), 1);
+            Base::setNodalForceDensity(f);
         }
-
-        VXd m_grad;
     };
 
 } // namespace Loads

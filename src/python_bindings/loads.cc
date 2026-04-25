@@ -1,15 +1,9 @@
 #include <MeshFEM/Utilities/NameMangling.hh>
 
 #include <MeshFEM/Loads/Load.hh>
-#include <MeshFEM/Loads/Gravity.hh>
-#include <MeshFEM/Loads/Spreaders.hh>
 #include <MeshFEM/Loads/Springs.hh>
 #include <MeshFEM/Loads/ProjectedAttachmentPoint.hh>
-#include <MeshFEM/Loads/SphereFitter.hh>
-#include <MeshFEM/Loads/CircumcenterBarrier.hh>
-#include <MeshFEM/Loads/Traction.hh>
 #include <MeshFEM/Loads/BodyForce.hh>
-#include <MeshFEM/Loads/Inflation.hh>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
@@ -19,113 +13,6 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include "LoadBinding.hh"
 #include "BindingInstantiations.hh"
-
-struct LoadBinder {
-    // Bind loads for a particular elastic structure type `Object`
-    template<class Object>
-    static void bind_generic(py::module &m, py::module &detail_module) {
-        using Real = typename Object::Real;
-        using Load = Loads::Load<Real>;
-
-        bindGravity<Object>(m, detail_module);
-        bindInertia<Object>(m, detail_module);
-
-        ////////////////////////////////////////////////////////////////////////
-        // Traction
-        ////////////////////////////////////////////////////////////////////////
-        using TLoad = Loads::Traction<Object>;
-        py::class_<TLoad, Load, std::shared_ptr<TLoad>>(detail_module, ("Traction" + NameMangler<Object>::name()).c_str())
-           .def_property("boundaryTractions", &TLoad::getBoundaryTractions, &TLoad::setBoundaryTractions)
-           ;
-
-        m.def("Traction", [&](const std::shared_ptr<Object> &obj) {
-                    return std::make_shared<TLoad>(obj);
-                }, py::arg("obj"))
-             ;
-
-        ////////////////////////////////////////////////////////////////////////
-        // Spreaders
-        ////////////////////////////////////////////////////////////////////////
-        using SLoad = Loads::Spreaders<Object>;
-        using MX2i = Eigen::MatrixX2i;
-        using VXi  = Eigen::VectorXi;
-        py::class_<SLoad, Load, std::shared_ptr<SLoad>>(detail_module, ("Spreaders" + NameMangler<Object>::name()).c_str())
-             .def_property("magnitude", &SLoad::getMagnitude, &SLoad::setMagnitude)
-             ;
-        m.def("Spreaders", [&](const std::shared_ptr<Object> &obj, const std::vector<VXi> &clusterVtxs,
-                                   const MX2i &connectivity, Real force, bool disableHessian) {
-                    return std::make_shared<SLoad>(obj, clusterVtxs, connectivity, force, disableHessian);
-                }, py::arg("obj"), py::arg("clusterVtxs"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
-         .def("Spreaders", [&](const std::shared_ptr<Object> &obj, const SuiteSparseMatrix &S,
-                              const MX2i &connectivity, Real force, bool disableHessian) {
-               return std::make_shared<SLoad>(obj, S, connectivity, force, disableHessian);
-           }, py::arg("obj"), py::arg("deformationSamplerMatrix"), py::arg("connectivity"), py::arg("force"), py::arg("disableHessian") = false)
-         ;
-    }
-
-    template<class Object>
-    static std::enable_if_t<(Object::N == 3) && (Object::K == 3)> bind(py::module &m, py::module &detail_module) {
-        bind_generic<Object>(m, detail_module);
-
-        ////////////////////////////////////////////////////////////////////////
-        // Solid-specific load: SphereFitter, CircumcenterBarrier
-        ////////////////////////////////////////////////////////////////////////
-        using Real = typename Object::Real;
-        using Load = Loads::Load<Real>;
-        using SphereFitter = Loads::SphereFitter<Object>;
-        py::class_<SphereFitter, Load, std::shared_ptr<SphereFitter>>(detail_module, ("SphereFitter" + NameMangler<Object>::name()).c_str())
-            .def_readwrite("stiffness", &SphereFitter::stiffness)
-            .def_readwrite("r_tgt",     &SphereFitter::r_tgt)
-            ;
-        m.def("SphereFitter", [&](const std::shared_ptr<Object> &obj, Real r_tgt, Real stiffness) {
-                return std::make_shared<SphereFitter>(obj, r_tgt, stiffness);
-            }, py::arg("obj"), py::arg("r_tgt") = 1.0, py::arg("r_tgt") = 1.0)
-        ;
-
-        if constexpr (Object::Deg == 1) {
-            using CB = Loads::CircumcenterBarrier<Object>;
-            py::class_<CB, Load, std::shared_ptr<CB>>(detail_module, ("CircumcenterBarrier" + NameMangler<Object>::name()).c_str())
-                .def("subtets", &CB::subtets, py::arg("ei"), "for debugging")
-                .def_property("activationThreshold", [](const CB &cb) { return cb.barrier.activationThreshold; },
-                                                     [](CB &cb, Real v) { cb.barrier.activationThreshold = v; }, "value at which the barrier term kicks in")
-                .def_property("barrierThreshold", [](const CB &cb) { return cb.barrier.barrierThreshold; },
-                                                  [](CB &cb, Real v) { cb.barrier.barrierThreshold = v; }, "value at which the barrier term becomes infinite")
-                .def("minCircumcenterBC", &CB::minCircumcenterBC, "Get the smallest barycentric coordinate of any of the elements (or any of the sub-elements if `m_subdivisionBarrier` is `true`).")
-                .def_readwrite("bc_min", &CB::bc_min)
-                ;
-            m.def("CircumcenterBarrier", [&](const std::shared_ptr<Object> &obj, Real bc_min, bool subdivisionBarrier) {
-                    return std::make_shared<CB>(obj, bc_min, subdivisionBarrier);
-                }, py::arg("obj"), py::arg("bc_min") = 0.0, py::arg("subdivisionBarrier") = false)
-            ;
-        }
-    }
-
-    template<class Object>
-    static std::enable_if_t<(Object::N == 3) && (Object::K == 2)> bind(py::module &module, py::module &detail_module) {
-        bind_generic<Object>(module, detail_module);
-
-        ////////////////////////////////////////////////////////////////////////
-        // Sheet-specific load: Inflation
-        ////////////////////////////////////////////////////////////////////////
-        using Real = typename Object::Real;
-        using Load = Loads::Load<Real>;
-        using Inflation = Loads::Inflation<Object>;
-        py::class_<Inflation, Load, std::shared_ptr<Inflation>>(detail_module, ("Inflation" + NameMangler<Object>::name()).c_str())
-            .def("volume", &Inflation::volume)
-            .def_readwrite("pressure", &Inflation::pressure)
-            ;
-
-        module.def("Inflation", [&](const std::shared_ptr<Object> &obj, Real pressure) {
-                    return std::make_shared<Inflation>(obj, pressure);
-                }, py::arg("sheet"), py::arg("pressure") = 1.0);
-
-    }
-
-    template<class Object>
-    static std::enable_if_t<Object::N == 2> bind(py::module &m, py::module &detail_module) {
-        bind_generic<Object>(m, detail_module);
-    }
-};
 
 using APC = Loads::AttachmentPointCoordinate<double>;
 template<class Springs>
@@ -210,21 +97,11 @@ PYBIND11_MODULE(loads, m)
 
     using Load = Loads::Load<double>;
     py::class_<Load, NewtonObjectiveTermBase, std::shared_ptr<Load>>(m, "Load")
-        .def("energy",               &Load::energy)
-        .def("grad_x",               &Load::grad_x)
-        .def("grad_X",               &Load::grad_X)
+        .def("energy",            &Load::energy)
+        .def("grad_x",            &Load::grad_x)
+        .def("grad_X",            &Load::grad_X)
+        .def("contract_d2E_dXdx", &Load::contract_d2E_dXdx, py::arg("dx"))
         ;
-
-    using BFLoad = Loads::BodyForce<double>;
-    py::class_<BFLoad, Load, std::shared_ptr<BFLoad>>(m, "BodyForce")
-       .def(py::init<std::shared_ptr<BFLoad::EO>>(), py::arg("obj"))
-       .def(py::init([](const std::shared_ptr<BFLoad::EO> &obj, const Eigen::Ref<const BFLoad::MXd> &f) {
-                auto bf = std::make_shared<BFLoad>(obj);
-                bf->setNodalForceDensity(f);
-                return bf;
-            }), py::arg("obj"), py::arg("f"))
-       .def_property("nodalForceDensity", &BFLoad::getNodalForceDensity, &BFLoad::setNodalForceDensity)
-       ;
 
     py::module detail_module = m.def_submodule("detail");
     generateElasticObjectBindings(m, detail_module, LoadBinder());
