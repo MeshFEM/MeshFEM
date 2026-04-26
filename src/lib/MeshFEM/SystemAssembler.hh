@@ -585,7 +585,7 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
     }
 
     // Assemble NewtonHessian using block acceleration.
-    template<bool UseBlockMergeAlgorithm = false, typename... Args>
+    template<bool UseBlockMergeAlgorithm = UseBlockMergeAlgorithmDefault, typename... Args>
     void assembleHessian(NewtonHessian &NH, Args&&... args) const {
         if (NH.isSparsityOnly()) NH.setZero(); // Allocate Ax array if necessary
                                                // (and accumulate to existing Ax array otherwise)
