@@ -265,6 +265,8 @@ struct DynamicSimulator {
         return m_crs;
     }
 
+    std::vector<ConvergenceReport> getConvergenceReport() const { return m_crs; }
+
     std::shared_ptr<NewtonMultiobjectiveProblem> getProblem() const { return m_prob; }
 
     double dt = 0.1;  // Time step size

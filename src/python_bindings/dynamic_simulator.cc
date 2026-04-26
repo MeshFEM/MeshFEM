@@ -44,6 +44,7 @@ void bind(py::module &m, py::module &detail_module) {
         .def("setInitVelocity", &DS::setInitVelocity)
         .def("setXhat", &DS::setXhat)
         .def("getXhat", &DS::getXhat)
+        .def("getConvergenceReport", &DS::getConvergenceReport)
 
         .def("setPostTimestepCallback", [](DS &ds, const PyCallbackFunction<           DS> &pcb) { ds.setPostTimestepCallback(callbackWrapper<           DS>(pcb)); }, py::arg("cb"))
         .def("setPreTimestepCallback",  [](DS &ds, const PyCallbackFunction<           DS> &pcb) { ds. setPreTimestepCallback(callbackWrapper<           DS>(pcb)); }, py::arg("cb"))
