@@ -1,8 +1,8 @@
 #include <iostream>
 
-// Whether to truly build the Hessian rather than using a dummy per-element
-// matrix; the dummy version is used to time the pure assembly routine,
-// though the F-based comparison makes less sense in this setting.
+// Whether to build the true Hessian rather than assembling a dummy per-element
+// matrix; the dummy version is used to time the pure assembly routine, though
+// the F-based comparison makes less sense in this setting.
 #define BUILD_TRUE_HESSIAN 1
 
 #if BUILD_TRUE_HESSIAN
@@ -136,7 +136,6 @@ void execute(const std::vector<MeshIO::IOVertex> &vertices,
     asm_bsr.setElementsFBased(m);
     Eigen::SparseMatrix<double> H_product_based_F_bsr;
 
-    // TODO: verify value update methodology (sync to MKL)
     asm_bsr.assembleHessianFBased(H_product_based_F_bsr, m, d2psi_getter);
 
     // Run a second time to get just the `FINALIZE_MULT` timings.
@@ -195,7 +194,12 @@ int main(int argc, const char *argv[]) {
     // Infer dimension from mesh type.
     size_t dim;
     if      (type == MeshIO::MESH_TET) dim = 3;
-    else if (type == MeshIO::MESH_TRI) dim = 2;
+    else if (type == MeshIO::MESH_TRI) {
+        dim = 2;
+        // Hack: project into 2D by brute force.
+        for (auto &v : vertices)
+            v[2] = 0;
+    }
     else    throw std::runtime_error("Mesh must be pure triangle or tet.");
 
     auto exec = (dim == 3) ? ((deg == 2) ? execute<3, 2> : execute<3, 1>)

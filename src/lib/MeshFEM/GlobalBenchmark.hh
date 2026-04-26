@@ -44,10 +44,12 @@ inline void BENCHMARK_REPORT() {
 #endif
     std::cout << "Peak memory (MB):\t" << memoryBytes << std::endl;
 #endif
+    std::cout << std::flush;
 }
 
 inline void BENCHMARK_REPORT_NO_MESSAGES() {
     g_timer.report(std::cout);
+    std::cout << std::flush;
 }
 #else
 inline void BENCHMARK_START_TIMER_SECTION(const std::string &/* name */) { }

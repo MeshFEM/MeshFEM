@@ -182,19 +182,17 @@ struct ProductBasedAssembly {
 
     template<class OutSPMat, class PEHEval>
     void assembleHessian(OutSPMat &H, size_t ne, const PEHEval &eval_He) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ProductBasedAssembly.assembleHessian");
-
         // Evaluate the per-element Hessians and fill in the values of D_values.
         auto D_values = Eigen::Map<VXd>(D.valuePtr(), D.nonZeros());
         {
-            BENCHMARK_SCOPED_TIMER_SECTION t_eval("eval");
+            BENCHMARK_SCOPED_TIMER_SECTION t_eval("ProductBasedAssembly.assembleHessian.eval");
             parallel_for_range(ne, [&](size_t ei) {
                 auto H_e = eval_He(ei);
                 D_values.segment(D_values_offset[ei], D_values_offset[ei + 1] - D_values_offset[ei]) = Eigen::Map<const VXd>(H_e.data(), H_e.size());
             });
         }
 
-        BENCHMARK_SCOPED_TIMER_SECTION t_prod("product");
+        BENCHMARK_SCOPED_TIMER_SECTION t_prod("ProductBasedAssembly.assembleHessian.product");
         H = S.transpose() * D.selfadjointView<Eigen::Lower>() * S; // Note: filled upper triangle of H_e corresponds to lower triangle in D due to CSR format.
     }
 
@@ -203,8 +201,6 @@ struct ProductBasedAssembly {
     // point) via calls to `eval_He(ei, evalPt)` then form `H = B^T D_F B`.
     template<class OutSPMat, class Mesh, class PEHEval>
     void assembleHessianFBased(OutSPMat &H, const Mesh &m, const PEHEval &eval_He) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ProductBasedAssembly.assembleHessianFBased");
-
         static constexpr size_t K   = Mesh::K;
         static constexpr size_t N   = Mesh::EmbeddingDimension;
         static constexpr size_t Deg = Mesh::Deg;
@@ -218,7 +214,7 @@ struct ProductBasedAssembly {
         // Evaluate the per-quadrature-point energy density Hessians and fill in the values of D_values.
         auto D_values = Eigen::Map<VXd>(D_F.valuePtr(), D_F.nonZeros());
         {
-            BENCHMARK_SCOPED_TIMER_SECTION t_eval("eval");
+            BENCHMARK_SCOPED_TIMER_SECTION t_eval("ProductBasedAssembly.assembleHessianFBased.eval");
             parallel_for_range(m.numElements(), [&](size_t ei) {
                 for (size_t qpi = 0; qpi < NQP; ++qpi) {
                     D2Psi H_e_qp = eval_He(ei, QR::points[qpi]);
@@ -229,19 +225,20 @@ struct ProductBasedAssembly {
             });
         }
 
-        BENCHMARK_SCOPED_TIMER_SECTION t_prod("product");
+        BENCHMARK_SCOPED_TIMER_SECTION t_prod("ProductBasedAssembly.assembleHessianFBased.product");
         H = B.transpose() * D_F.selfadjointView<Eigen::Upper>() * B;
     }
 
 #if MESHFEM_WITH_MKL_PARDISO
     template<class OutSPMat, class PEHEval>
     void assembleHessianMKL(OutSPMat &H, size_t ne, const PEHEval &eval_He, bool blockD = false) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer(std::string("ProductBasedAssembly.assembleHessianMKL") + (blockD ? " Block" : ""));
+        std::string name("ProductBasedAssembly.assembleHessianMKL");
+        if (blockD) name += "block";
         Real *value_ptr = blockD ? m_mkl_D.valuePtr() : D.valuePtr();
         auto D_values = Eigen::Map<VXd>(value_ptr, blockD ? m_mkl_D.nonZeros() : D.nonZeros());
 
         {
-            BENCHMARK_SCOPED_TIMER_SECTION t_eval("eval");
+            BENCHMARK_SCOPED_TIMER_SECTION t_eval(name + ".eval");
             parallel_for_range(ne, [&](size_t ei) {
                 auto H_e = eval_He(ei);
                 D_values.segment(D_values_offset[ei], D_values_offset[ei + 1] - D_values_offset[ei]) =
@@ -253,13 +250,13 @@ struct ProductBasedAssembly {
             if (blockD) m_mkl_x.emplace(S, &m_mkl_D);
             else        m_mkl_x.emplace(S, D, SPARSE_FILL_MODE_LOWER);
         }
-        m_mkl_x->compute(H);
+        m_mkl_x->compute(H, name);
     }
 
     template<class OutSPMat, class Mesh, class PEHEval>
     void assembleHessianFBasedMKL(OutSPMat &H, const Mesh &m, const PEHEval &eval_He, bool blockD = false) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer(std::string("ProductBasedAssembly.assembleHessianFBasedMKL") + (blockD ? " Block" : ""));
-
+        std::string name("ProductBasedAssembly.assembleHessianFBasedMKL");
+        if (blockD) name += "block";
         static constexpr size_t K   = Mesh::K;
         static constexpr size_t N   = Mesh::EmbeddingDimension;
         static constexpr size_t Deg = Mesh::Deg;
@@ -274,7 +271,7 @@ struct ProductBasedAssembly {
         auto D_values = Eigen::Map<VXd>(value_ptr, blockD ? m_mkl_D_F.nonZeros() : D_F.nonZeros());
 
         {
-            BENCHMARK_SCOPED_TIMER_SECTION t_eval("eval");
+            BENCHMARK_SCOPED_TIMER_SECTION t_eval(name + ".eval");
             parallel_for_range(m.numElements(), [&](size_t ei) {
                 for (size_t qpi = 0; qpi < NQP; ++qpi) {
                     D2Psi H_e_qp = eval_He(ei, QR::points[qpi]);
@@ -289,7 +286,7 @@ struct ProductBasedAssembly {
             if (blockD) m_mkl_f.emplace(B, &m_mkl_D_F);
             else        m_mkl_f.emplace(B, D_F, SPARSE_FILL_MODE_UPPER);;
         }
-        m_mkl_f->compute(H);
+        m_mkl_f->compute(H, name);
     }
 
 private:
@@ -420,14 +417,16 @@ private:
         const bool usingBlockDiag() const { return B_BSR != nullptr; }
 
         template<class OutSPMat>
-        void compute(OutSPMat &H_out) {
+        void compute(OutSPMat &H_out, const std::string &name = "") {
+            std::string prefix;
+            if (!name.empty()) prefix = name + ".";
             if (B_BSR) {
-                BENCHMARK_SCOPED_TIMER_SECTION timer("syncValuesIntoMKL");
+                BENCHMARK_SCOPED_TIMER_SECTION timer(prefix + "syncValuesIntoMKL");
                 B_BSR->syncValuesIntoMKL();
             }
             if (!initialized) {
                 {
-                    BENCHMARK_SCOPED_TIMER_SECTION timer("mkl_sparse_sypr(FULL_MULT)");
+                    BENCHMARK_SCOPED_TIMER_SECTION timer(prefix + "mkl_sparse_sypr(FULL_MULT)");
                     check(mkl_sparse_sypr(SPARSE_OPERATION_TRANSPOSE, A, B, descrB, &C, SPARSE_STAGE_FULL_MULT),
                           "mkl_sparse_sypr(FULL_MULT)");
                 }
@@ -435,7 +434,7 @@ private:
                 initialized = true;
             }
             else {
-                BENCHMARK_SCOPED_TIMER_SECTION timer("mkl_sparse_sypr(FINALIZE_MULT)");
+                BENCHMARK_SCOPED_TIMER_SECTION timer(prefix + "mkl_sparse_sypr(FINALIZE_MULT)");
                 check(mkl_sparse_sypr(SPARSE_OPERATION_TRANSPOSE, A, B, descrB, &C, SPARSE_STAGE_FINALIZE_MULT),
                       "mkl_sparse_sypr(FINALIZE_MULT)");
             }
@@ -574,9 +573,9 @@ struct ProductBasedAssemblyBSR {
 
     template<class OutSpMat, class PEHEval>
     void assembleHessian(OutSpMat &H, const PEHEval &eval_He) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ProductBasedAssemblyBSR.assembleHessian");
+        std::string name("ProductBasedAssemblyBSR.assembleHessian");
         {
-            BENCHMARK_SCOPED_TIMER_SECTION t_eval("eval");
+            BENCHMARK_SCOPED_TIMER_SECTION t_eval(name + ".eval");
             parallel_for_range(ne, [&](size_t ei) {
                 auto He = eval_He(ei);
 
@@ -604,7 +603,7 @@ struct ProductBasedAssemblyBSR {
         if (!cache_x)
             cache_x.emplace(S, D, SPARSE_FILL_MODE_UPPER);
 
-        cache_x->compute(H);
+        cache_x->compute(H, name);
     }
 
     template<class Mesh>
@@ -625,7 +624,7 @@ struct ProductBasedAssemblyBSR {
 
     template<class OutSpMat, class Mesh, class PEHEval>
     void assembleHessianFBased(OutSpMat &H, const Mesh &m, const PEHEval &eval_d2psi) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ProductBasedAssemblyBSR.assembleHessianFBased");
+        std::string name("ProductBasedAssemblyBSR.assembleHessianFBased");
         static constexpr size_t K = Mesh::K;
         static constexpr size_t NN = Mesh::EmbeddingDimension;
         static constexpr size_t Deg = Mesh::Deg;
@@ -636,7 +635,7 @@ struct ProductBasedAssemblyBSR {
         using D2Psi = Eigen::Matrix<Real, F_size, F_size>;
 
         {
-            BENCHMARK_SCOPED_TIMER_SECTION t_eval("eval");
+            BENCHMARK_SCOPED_TIMER_SECTION t_eval(name + ".eval");
             parallel_for_range(m.numElements(), [&](size_t ei) {
                 for (size_t qpi = 0; qpi < NQP; ++qpi) {
                     D2Psi d2psi = eval_d2psi(ei, QR::points[qpi]);
@@ -660,7 +659,7 @@ struct ProductBasedAssemblyBSR {
         if (!cache_f)
             cache_f.emplace(B, D_F, SPARSE_FILL_MODE_UPPER);
 
-        cache_f->compute(H);
+        cache_f->compute(H, name);
     }
 private:
     struct MKLBSRMatrix {
@@ -776,10 +775,12 @@ private:
         }
 
         template<class OutSpMat>
-        void compute(OutSpMat &H) {
+        void compute(OutSpMat &H, const std::string &name = "") {
+            std::string prefix;
+            if (!name.empty()) prefix = name + ".";
             if (!initialized) {
                 {
-                    BENCHMARK_SCOPED_TIMER_SECTION timer("mkl_sparse_sypr(FULL_MULT)");
+                    BENCHMARK_SCOPED_TIMER_SECTION timer(prefix + "mkl_sparse_sypr(FULL_MULT)");
                     check(mkl_sparse_sypr(SPARSE_OPERATION_TRANSPOSE, A->handle, D->handle, descrD, &C, SPARSE_STAGE_FULL_MULT), "mkl_sparse_sypr(FULL_MULT)");
                 }
                 buildFullPattern();
@@ -787,7 +788,7 @@ private:
             }
             else {
                 {
-                    BENCHMARK_SCOPED_TIMER_SECTION timer("mkl_sparse_sypr(FINALIZE_MULT)");
+                    BENCHMARK_SCOPED_TIMER_SECTION timer(prefix + "mkl_sparse_sypr(FINALIZE_MULT)");
                     check(mkl_sparse_sypr(SPARSE_OPERATION_TRANSPOSE, A->handle, D->handle, descrD, &C, SPARSE_STAGE_FINALIZE_MULT), "mkl_sparse_sypr(FINALIZE_MULT)");
                 }
             }

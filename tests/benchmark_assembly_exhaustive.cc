@@ -2,7 +2,7 @@
 // benchmark_assembly_exhaustive.cc
 ////////////////////////////////////////////////////////////////////////////////
 /*! @file
-//  More exhaustive benchmarking of the the `SystemAssembler` Hessian assembly
+//  More exhaustive benchmarking of the `SystemAssembler` Hessian assembly
 //  routine (and comparison against Eigen::setFromTriplets).
 //
 //  In contrast to to `benchmark_assembly`, this version decouples the block

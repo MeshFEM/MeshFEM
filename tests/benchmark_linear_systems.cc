@@ -24,6 +24,7 @@
 #endif
 
 #include <glob.h>
+#include <filesystem>
 #include <cstdlib>
 
 // A reimplementation of `std::isnan` that works under `-ffast-math`.
@@ -34,6 +35,11 @@ inline bool isnan_bits(double x) {
     uint64_t frac = bits & ((1ULL << 52) - 1);
     return (exp == 0x7FF) && (frac != 0);
 }
+
+// Hack: whether to run in "memtest mode" where only the largest matrix will be
+// factorized (without repeats) using dummy numerical values (the identity matrix)
+// to estimate peak numerical factorization memory usage.
+bool g_memtest_mode = false;
 
 // Record total amount of time spent in numeric factorization in a conveniently
 // accessible way to support the adaptive-repeats mode.
@@ -167,7 +173,46 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
 
     Eigen::VectorXd x_gt, b;
 
+    if (g_memtest_mode) {
+        std::string symPathPattern = directory + "/symbolic_mat_*.bin";
+
+        glob_t results{};
+        if (glob(symPathPattern.c_str(), 0, nullptr, &results) != 0)
+            throw std::runtime_error("No files found matching pattern " + symPathPattern);
+
+        std::filesystem::path largestFile;
+        int64_t largestSize = -1;
+        bool found = false;
+
+        for (size_t i = 0; i < results.gl_pathc; ++i) {
+            std::filesystem::path p(results.gl_pathv[i]);
+            if (!std::filesystem::is_regular_file(p)) continue;
+            int64_t sz = (int64_t) std::filesystem::file_size(p);
+            if (sz > largestSize) {
+                largestFile = p;
+                largestSize = sz;
+            }
+        }
+
+        globfree(&results);
+
+        if (largestSize < 0) throw std::runtime_error("No files found matching pattern " + symPathPattern);
+
+        std::ifstream symFile(largestFile);
+        auto H = BlockCSCHessianBase::constructFromBinaryStream(symFile);
+        std::vector<size_t> pinnedVars;
+        factorizer->factorizeSymbolic(*H, pinnedVars);
+        H->setIdentity(/* preserveSparsity = */ true);
+        factorizer->factorizeNumeric(*H);
+        b = Eigen::VectorXd::Random(H->numScalarRows());
+        auto x = factorizer->solve(b);
+        std::cout << "solution norm: " << x.norm() << std::endl;
+
+        return;
+    }
+
     for (int counter = 0; ; counter++) {
+        // if (counter > 10) break;
         std::string symPathPattern = directory + "/" + MatrixRecorder::symbolicMatrixFileName(counter);
         symPathPattern = symPathPattern.substr(0, symPathPattern.size() - 4); // Remove ".bin"
         symPathPattern += "_from_update_*.bin";
@@ -276,7 +321,7 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
                     if ((relerror_backward > 5e-5) || isnan_bits(relerror_backward)) // The special second check is to get around broken `std::isnan` under `-ffast-math`; even !(relerror_backward < 5e-5) isn't working...
                         std::cerr << "Large backward relative error for system " << counter << ": " << relerror_backward << std::endl;
 
-                    // for (size_t r_solve = 0; r_solve < 20; r_solve++)
+                    // for (size_t r_solve = 0; r_solve < 10; r_solve++)
                     //     x = factorizer->solve(x);
                     factorizer->writeSolveTimers();
                 }
@@ -297,13 +342,17 @@ void benchmark_method(std::string method, const std::string &directory, size_t n
 
 int main(int argc, const char *argv[]) {
     if (argc < 4 || argc > 6) {
-        std::cout << "Usage: " << argv[0] << " method num_threads matrix_directory [numeric_repeats] [use_shift]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " method num_threads matrix_directory [numeric_repeats|memtest] [use_shift]" << std::endl;
         std::cout << "where method is in {cholmod, catamari, catamari_nesdis, catamari_metis, catamari_left[_noblock], catamari_right[_noblock], pardiso, accelerate[_noblock]}" << std::endl;
         exit(-1);
     }
 
     int repeats = 1;
-    if (argc >= 5) repeats = std::stoi(argv[4]);
+    if (argc >= 5) {
+        if (std::string("memtest") == argv[4])
+            g_memtest_mode = true;
+        else repeats = std::stoi(argv[4]);
+    }
     bool use_shift = true;
     if (argc == 6) use_shift = std::stoi(argv[5]);
 

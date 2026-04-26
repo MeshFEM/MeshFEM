@@ -68,11 +68,15 @@ target_link_libraries(benchmark_assembly_exhaustive MeshFEM)
 add_executable(test_product_based_assembly test_product_based_assembly.cc)
 target_link_libraries(test_product_based_assembly MeshFEM)
 
+add_executable(benchmark_product_based_assembly benchmark_product_based_assembly.cc)
+target_link_libraries(benchmark_product_based_assembly MeshFEM)
+
 if (MESHFEM_WITH_MKL_PARDISO)
     # When linking against MKL, the product-based assembly codes use
     # `omp_set_num_threads` to control parallelism.
     find_package(OpenMP REQUIRED)
     target_link_libraries(test_product_based_assembly OpenMP::OpenMP_CXX)
+    target_link_libraries(benchmark_product_based_assembly OpenMP::OpenMP_CXX)
 endif()
 
 if (MESHFEM_WITH_SCOTCH)
