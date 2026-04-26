@@ -144,7 +144,6 @@ void execute(const std::vector<MeshIO::IOVertex> &vertices,
 
     std::cout << "Relative error (MKL X-based BSR): " << (H_gt_eigen - H_product_based_bsr  ).norm() / H_gt_eigen.norm() << std::endl;
     std::cout << "Relative error (MKL F-based BSR): " << (H_gt_eigen - H_product_based_F_bsr).norm() / H_gt_eigen.norm() << std::endl;
-#endif
 
 #if BUILD_TRUE_HESSIAN
     // Verify sync requirements by re-evaluating the Hessian in a different config.
@@ -164,7 +163,9 @@ void execute(const std::vector<MeshIO::IOVertex> &vertices,
         std::cout << "Post-perturb error (MKL X-based BSR): " << (H_gt_eigen - H_product_based_bsr_post_perturb).norm() / H_gt_eigen.norm() << std::endl;
         std::cout << "MKL perturbation: " << (H_product_based_bsr_post_perturb - H_product_based_bsr).norm() << std::endl;
     }
-#endif
+#endif // BUILD_TRUE_HESSIAN
+
+#endif // MESHFEM_WITH_MKL_PARDISO
 
     // std::cout << Eigen::MatrixXd(H_gt_eigen) << std::endl;
     // std::cout << std::endl;
