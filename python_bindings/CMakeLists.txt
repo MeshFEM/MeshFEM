@@ -50,6 +50,11 @@ set_target_properties(newton_flow PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJ
 target_link_libraries(newton_flow PUBLIC MeshFEM)
 target_compile_options(newton_flow PRIVATE -ftemplate-backtrace-limit=0)
 
+pybind11_add_module(fast_newton_flow fast_newton_flow.cc)
+set_target_properties(fast_newton_flow PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(fast_newton_flow PUBLIC MeshFEM)
+target_compile_options(fast_newton_flow PRIVATE -ftemplate-backtrace-limit=0)
+
 pybind11_add_module(simple_elastic_solid simple_elastic_solid.cc)
 set_target_properties(simple_elastic_solid PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(simple_elastic_solid PUBLIC MeshFEM)
