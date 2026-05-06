@@ -37,7 +37,7 @@ class VisualizationField:
     # The "mesh" (or rod linkage, or ...) object is used to decode a per-entity field on the original object into a
     # field on the visualization mesh via the visualizationField call.
     # It is also used to validate the sizes of the data field.
-    def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet, vmin=None, vmax=None):
+    def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.turbo, vmin=None, vmax=None):
         self.mesh = mesh
         # TODO: instead of the class-name-based hack used here, implement an
         # interface for registering combinatorics update callbacks (and make
@@ -86,7 +86,7 @@ class ScalarField(VisualizationField):
         return self.colormap(self.rescaledData(vmin, vmax).ravel())[:, 0:3] # strip alpha
 
 class VectorField(VisualizationField):
-    def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.jet,
+    def __init__(self, mesh, data, domainType = DomainType.GUESS, colormap = matplotlib.cm.turbo,
                  vmin=None, vmax=None,
                  align=VectorAlignment.TAIL, glyph=VectorGlyph.ARROW):
         self.align = align

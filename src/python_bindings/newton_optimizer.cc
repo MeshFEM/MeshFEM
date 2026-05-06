@@ -190,7 +190,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         ;
 
     using NVB = NewtonVarsBase;
-    py::class_<NVB, std::shared_ptr<NVB>>(m, "NewonVars")
+    py::class_<NVB, std::shared_ptr<NVB>>(m, "NewtonVars")
         .def("getVars", &NVB::getVars)
         .def("setVars", &NVB::setVars)
         .def("numVars", &NVB::numVars)
