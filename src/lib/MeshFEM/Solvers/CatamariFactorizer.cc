@@ -453,8 +453,10 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
 
         double sym_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - sym_fact_start).count();
+        m_factorizationType = FactorizationType::Symbolic; // Note: this is needed here for the paranoid assertions in `getFlopEstimate()` and `getFactorNNZ()`
         if (orderingMethod == OrderingMethod::Adaptive)
-            adaptiveOrdering.recordSymbolic(sym_fact_duration);
+            adaptiveOrdering.recordSymbolic(sym_fact_duration, getFactorNNZ());
+        // std::cout << "sym_fact_duration: " << sym_fact_duration << " seconds" << "\tH nnz: " << A_reduced->nz << "\tL nnz: " << getFactorNNZ() << "\tflop count: " << getFlopEstimate() << std::endl;
     }
     else if (orderingMethod == OrderingMethod::AccelerateMetis) {
         auto perm = compute_accelerate_ordering(*A_reduced);
@@ -478,6 +480,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
     }
     else if (orderingMethod == OrderingMethod::Scotch) {
 #if MESHFEM_WITH_SCOTCH
+        auto sym_fact_start = std::chrono::steady_clock::now();
+
         catamari::SymmetricOrdering ordering;
         ordering.permutation        .Resize(A_reduced->m);
         ordering.inverse_permutation.Resize(A_reduced->m);
@@ -488,6 +492,8 @@ void CatamariFactorizer::m_factorizeSymbolic(const SuiteSparseMatrix &mat, const
         scotch_ordering(*A_reduced, perm, iperm, scotchSettings.stratFlag, scotchSettings.imbalanceRatio);
 
         m_ldl->Factor(m_catamariConverter->get(), ordering, *m_ldlControl, /* symbolic_only = */ true);
+        double sym_fact_duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - sym_fact_start).count();
+        // std::cout << "sym_fact_duration: " << sym_fact_duration << " seconds" << "\tH nnz: " << A_reduced->nz << "\tL nnz: " << getFactorNNZ() << "\tflop count: " << getFlopEstimate() << std::endl;
 #else
         throw std::runtime_error("Scotch support not compiled in");
 #endif
@@ -618,6 +624,7 @@ void CatamariFactorizer::m_numericFactorizationImpl(const SuiteSparseMatrix &A, 
     // throw off averaging/bias the ordering selection heuristic)
     if (orderingMethod == OrderingMethod::Adaptive)
         adaptiveOrdering.recordNumeric(num_fact_duration);
+    // std::cout << "num_fact_duration: " << num_fact_duration << std::endl;
 }
 
 size_t CatamariFactorizer::getFactorNNZ() const {

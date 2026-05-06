@@ -111,6 +111,7 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
         else if (orderingMethod == OrderingMethod::CholmodNesdis) return CholeskyProvider::CatamariNesdis;
         else if (orderingMethod == OrderingMethod::AMD)           return CholeskyProvider::CatamariAMD;
         else if (orderingMethod == OrderingMethod::Adaptive)      return CholeskyProvider::CatamariAdaptive;
+        else if (orderingMethod == OrderingMethod::Scotch)        return CholeskyProvider::CatamariScotch;
         else if (orderingMethod == OrderingMethod::Metis)         return CholeskyProvider::CatamariMetis;
 
         throw std::runtime_error("Unknown orderingMethod in mapping to `CholeskyProvider`");
@@ -123,8 +124,14 @@ struct MESHFEM_EXPORT CatamariFactorizer final : public CholeskyFactorizerBase {
     struct OrderingChoices {
         static constexpr OrderingMethod   primary_method = OrderingMethod::CholmodNesdis;
         static constexpr OrderingMethod alternate_method = OrderingMethod::AMD;
-        static constexpr double alternate_method_num_time_multiplier_estimate = 1.35; // AMD leads to a typical 1.35x slowdown on numeric factorization
-        static constexpr double alternate_method_sym_time_multiplier_estimate = 0.2; // but is ~5x faster for symbolic factorization (~10x faster for ordering)
+
+        // Default multipliers for the factorization time of one method relative to the other (used when reliable data is not available).
+        // We want these to be optimistic to encourage switching to and actually benchmarking the inactive method when it could possibly be beneficial.
+        // Across our benchmark, AMD yields a typical 1.35x slowdown for numeric factorization but a 5x speedup for symbolic factorization compared to CholmodNesdis.
+        // Since AMD's symbolic factorization speedup sometimes exceeds even 10x, we use 0.1 as its "optimistic" symbolic time multiplier.
+        // On the other hand, on challenging high-resolution problems, nnested dissection somtimes yields a numeric factorization that is twice as fast (or even more),
+        inline static constexpr std::array<double, 2> optimistic_num_time_multiplier_estimates {{0.5, 1.35}};
+        inline static constexpr std::array<double, 2> optimistic_sym_time_multiplier_estimates {{5.0, 0.10}};
     };
 
     mutable AdaptiveOrderingSelection<OrderingChoices> adaptiveOrdering; // mutable so that solve timings can be recorded
