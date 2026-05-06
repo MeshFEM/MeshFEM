@@ -21,11 +21,17 @@
 #ifndef ADAPTIVEORDERINGSELECTION_HH
 #define ADAPTIVEORDERINGSELECTION_HH
 
+#include <iostream>
 #include <deque>
+#include <numeric>
+#include <stdexcept>
+#include <array>
+#include <sstream>
 
 template<class OrderingChoices>
 struct AdaptiveOrderingSelection {
     using OrderingMethod = decltype(OrderingChoices::primary_method);
+    bool verbose = false;
 
     bool shouldTriggerSymbolicFactorizationRecompute() const {
         const auto &nt_curr  = factorization_times_for_method[    current_method].numeric;
@@ -48,6 +54,7 @@ struct AdaptiveOrderingSelection {
             std::cout << "Switching from ordering " << current_method << " to " << 1 - current_method
                       << "  " << factorizationTimingDescription() << std::endl;
             current_method = 1 - current_method;
+            factor_nnz_at_last_switch = 0;
         }
         return currentOrderingMethod();
     }
@@ -63,6 +70,7 @@ struct AdaptiveOrderingSelection {
 
         factorization_times_for_method[current_method].numeric.add(time);
         numeric_facts_per_symbolic_fact_in_window.back()++;
+        if (verbose) std::cout << "Recorded method " << current_method << " numeric time: " << time << ";    " << factorizationTimingDescription() << std::endl;
     }
 
     void recordSolve(double time) {
@@ -73,7 +81,7 @@ struct AdaptiveOrderingSelection {
         solves_per_symbolic_fact_in_window.back()++;
     }
 
-    void recordSymbolic(double time) {
+    void recordSymbolic(double time, size_t factor_nnz = 0) {
         factorization_times_for_method[current_method].symbolic.add(time);
 
         numeric_facts_per_symbolic_fact_in_window.push_back(0);
@@ -83,6 +91,17 @@ struct AdaptiveOrderingSelection {
         solves_per_symbolic_fact_in_window.push_back(0);
         if (solves_per_symbolic_fact_in_window.size() > window_size)
             solves_per_symbolic_fact_in_window.pop_front();
+
+        if (verbose) std::cout << "Recorded method " << current_method << " symbolic time: " << time << "\t factor nnz: " << factor_nnz << ";    " << factorizationTimingDescription() << std::endl;
+
+        if (factor_nnz_at_last_switch == 0) {
+            if (verbose) std::cout << "First symbolic factorization since last switch. Setting factor_nnz_at_last_switch to " << factor_nnz << std::endl;
+            factor_nnz_at_last_switch = factor_nnz;
+        }
+        if (factor_nnz < factor_nnz_at_last_switch * (1.0 - factor_nnz_reduction_threshold_for_reset)) {
+            if (verbose) std::cout << "Significant factor nnz reduction since last switch (" << factor_nnz_at_last_switch << " -> " << factor_nnz << "). Resetting timing history for inactive method." << std::endl;
+            factorization_times_for_method[1 - current_method].reset();
+        }
     }
 
     size_t symbolicFactorizationsInWindow() const {
@@ -105,18 +124,20 @@ struct AdaptiveOrderingSelection {
     double timeEstimateForMethod(size_t method) const {
         if (numericFactorizationsInWindow() == 0) throw std::runtime_error("No numeric factorizations yet!");
         if (method > 1) throw std::runtime_error("Invalid method index");
-        double avg_sym = factorization_times_for_method[0].symbolic.average(); // primary
-        double avg_num = factorization_times_for_method[0]. numeric.average(); // primary
-        double avg_sol = factorization_times_for_method[0].   solve.average(); // primary
 
-        if (method == 1) {
-            // The alternate method may not have timings recorded yet.
-            // In this case, we apply the speedup/slowdown multiplier estimates
-            // to the primary method timings.
-            avg_sym = factorization_times_for_method[1].symbolic.average(/* default = */ OrderingChoices::alternate_method_sym_time_multiplier_estimate * avg_sym); // alternate
-            avg_num = factorization_times_for_method[1]. numeric.average(/* default = */ OrderingChoices::alternate_method_num_time_multiplier_estimate * avg_num); // alternate
-            avg_sol = factorization_times_for_method[1].   solve.average(/* default = */ OrderingChoices::alternate_method_num_time_multiplier_estimate * avg_num); // alternate -- TODO: determine separate solve time multiplier estimate?
+        if ((factorization_times_for_method[current_method].symbolic.count == 0) ||
+            (factorization_times_for_method[current_method]. numeric.count == 0) ||
+            (factorization_times_for_method[current_method].   solve.count == 0)) {
+            throw std::runtime_error("No times recorded for current method!");
         }
+
+        // Get average timing statistics for `method`, potentially using an
+        // estimate based on the currently active method's timings if
+        // representative data is not yet available for it.
+        // TODO: update to support more than two methods; requires change to multiplier representation in `OrderingChoices`.
+        double avg_sym = factorization_times_for_method[method].symbolic.average(/* default = */ OrderingChoices::optimistic_sym_time_multiplier_estimates[method] * factorization_times_for_method[current_method].symbolic.average());
+        double avg_num = factorization_times_for_method[method]. numeric.average(/* default = */ OrderingChoices::optimistic_num_time_multiplier_estimates[method] * factorization_times_for_method[current_method]. numeric.average());
+        double avg_sol = factorization_times_for_method[method].   solve.average(/* default = */ OrderingChoices::optimistic_num_time_multiplier_estimates[method] * factorization_times_for_method[current_method].   solve.average());
 
         return avg_sym * symbolicFactorizationsInWindow()
              + avg_num *  numericFactorizationsInWindow()
@@ -126,10 +147,16 @@ struct AdaptiveOrderingSelection {
     std::string factorizationTimingDescription() const {
         std::ostringstream oss;
         if (numericFactorizationsInWindow() > 0) {
-            std::cout << "time estimate method Nesdis: " << timeEstimateForMethod(0)
-                      << "  time estimate method AMD: " << timeEstimateForMethod(1)
-                      << "  "
-                      ;
+            try {
+                double est_0 = timeEstimateForMethod(0), est_1 = timeEstimateForMethod(1);
+                oss << "time estimate method Nesdis: " << est_0
+                          << "  time estimate method AMD: " << est_1
+                          << "  "
+                          ;
+            }
+            catch (const std::runtime_error &e) {
+                oss << "time estimates unavailable: " << e.what() << "  ";
+            }
         }
         oss <<    "numericFactorizationsInWindow: " << numericFactorizationsInWindow()
             << "  symbolicFactorizationsInWindow: " << symbolicFactorizationsInWindow()
@@ -161,6 +188,9 @@ struct AdaptiveOrderingSelection {
     size_t current_method = 0; // 0: primary, 1: alternate
     std::array<OrderingMethod, 2> ordering_methods = {{ OrderingChoices::primary_method, OrderingChoices::alternate_method }};
 
+    size_t factor_nnz_at_last_switch = 0; // This is used to detect when the symbolic factorization has changed significantly since the last switch, indicating that the inactive method's performance estimates are no longer reliable.
+    double factor_nnz_reduction_threshold_for_reset = 0.15; // If the symbolic factorization's nnz has decreased by this fraction since the last switch, we reset the performance history for the inactive method.
+
     // Over the last `window_size` symbolic factorizations,
     // how many numeric factorizations were done using them?
     std::deque<size_t> numeric_facts_per_symbolic_fact_in_window, solves_per_symbolic_fact_in_window;
@@ -189,6 +219,12 @@ struct AdaptiveOrderingSelection {
         FactorizationTime symbolic;
         FactorizationTime numeric;
         FactorizationTime solve;
+
+        void reset() {
+            symbolic = FactorizationTime();
+            numeric  = FactorizationTime();
+            solve    = FactorizationTime();
+        }
     };
 
     // 0: primary method, 1: alternate method
