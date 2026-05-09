@@ -1,5 +1,6 @@
-MeshFEM
+MeshFEM (LEGACY VERSION; MAJOR UPDATE COMING SOON)
 =======
+(Note: this repository does *not* yet contain the code for our 2026 SIGGRAPH paper. Our new solver and finite element framework will be released this summer, replacing this legacy repository.)
 
 [![](https://github.com/MeshFEM/MeshFEM/workflows/Build/badge.svg?event=push)](https://github.com/MeshFEM/MeshFEM/actions?query=workflow%3ABuild+branch%3Amaster+event%3Apush)
 
