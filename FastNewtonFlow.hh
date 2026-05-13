@@ -125,9 +125,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
                 perturbations.setPreappliedCoefficient(*F, F->coefficientPtr(d - 1));
             }
-            if (arclen) {
-                (*m_lambda)->emplace_back((d == 1) ? 1.0 : 0.0); // Note: lambda_d does not affect x_d
-            }
+            if (arclen) (*m_lambda)->emplace_back((d == 1) ? 1.0 : 0.0); // Note: lambda_d does not affect x_d
 
             {
                 BENCHMARK_SCOPED_TIMER_SECTION t("P upgrades");
@@ -164,21 +162,31 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
             if (arclen && (d > 1)) {
                 auto &x_tilde = x.back();
                 auto &lambda = *(*m_lambda);
-                // Compute -0.5 T_{d - 1}[||x_{d - 1}(s) + s^n x_tilde||^2]
-                Real lambda_d = -0.5 * x[0].dot(x_tilde);
-                // TODO (potential accelerations):
-                // - Exploit symmetry to compute only half of the dot products here.
+                // Compute -T_{d - 1}[||xbar_{d - 1}'(s) + s^{d - 1} x_tilde||^2] // (2 ||x_1||^2)
+                // TODO (potential acceleration):
                 // - Parallelize over chunks, computing partial sums that are then reduced.
-                for (int j = 1; j < d - 1; ++j) {
+                Real lambda_d = -2 * x[0].dot(x_tilde);
+
+                // Note: the following loop leverages symmetry to compute only
+                // half of the dot products.
+                const int j_max = (d - 1) / 2;
+                for (int j = 1; j <= j_max; ++j) {
                     int idx_other = (d - 1) - j;
-                    lambda_d -= 0.5 * j * idx_other * lambda[j] * (x[idx_other].dot(x[j]));
+                    const Real contrib = (j + 1) * (idx_other + 1) * x[idx_other].dot(x[j]);
+                    lambda_d -= (j == idx_other) ? contrib : 2 * contrib;
                 }
 
+                lambda_d /= 2 * x[0].squaredNorm();
+
                 lambda.back() = lambda_d;
-                x_tilde += (lambda_d / lambda.front()) * x[0];
+                x_tilde += lambda_d * x[0];
 
                 m_lambdaCoeffPerturb->setPreappliedCoefficient(lambda, lambda.coefficientPtr(d - 1)); // but the coefficient computed in the previous iteration needs to be accounted for...
                 cs_lambdaP.perturbHighestDegreeCoefficient(*m_lambdaCoeffPerturb, d - 1);
+
+                // auto lambdaP_recompute = (*m_lambda) * (*m_P);
+                // for (int d2 = 0; d2 < d; ++d2)
+                //     std::cout << "norm of lambdaP[" << d2 << "]: " << lambdaP_recompute[d2][0].norm() << " vs " << (*m_lambda_P)[d2][0].norm() << std::endl;
             }
 
             // We just computed coefficient `d - 1` of  x'  which is
