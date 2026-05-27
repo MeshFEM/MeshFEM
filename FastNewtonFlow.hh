@@ -16,6 +16,10 @@
 #include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
 #include "3rdparty/TaylorAutodiff/TaylorAutodiffFields.hh"
+#include "3rdparty/TaylorAutodiff/TaylorAutodiffStaticSize.hh"
+
+#include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
+#include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
 
 struct SymmetricDirichletTADField {
     template<class MatTCField>
@@ -48,8 +52,6 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
     using LambdaPType = decltype(std::declval<ScalarType>() * std::declval<PType>());
 
     void upgradeTaylorCoefficients(const NewtonHessianFactorization &Hf, int degree, std::vector<VXd> &x, bool arclen = false, bool projectHessian = false) const {
-        if (projectHessian) throw std::runtime_error("Hessian projection not currently supported in FastNewtonFlow");
-
         const auto &m = Base::mesh();
         const size_t ne = m.numElements();
         const auto &vs = Base::assembler().varStructure();
@@ -59,8 +61,15 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         if (!m_coeffPerturb) m_coeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
         if (!m_lambdaCoeffPerturb) m_lambdaCoeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
 
+
         auto &F = *m_F;
         auto &P = *m_P;
+
+        // auto F_det    = det(*m_F);
+        // auto F_normsq = frobeniusNormSq(*m_F);
+        // auto cs_det    = F_det->computeSequence();
+        // auto cs_normsq = F_normsq->computeSequence();
+
         TaylorADFields::ComputeSequence cs_P = P->computeSequence();
         cs_P.reset(); // Note: this reset must happen before building m_lambda_P!
         auto &perturbations = *m_coeffPerturb;
@@ -137,11 +146,16 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
             if (arclen) cs_lambdaP.upgrade(d - 1, /* ignoreHigherDegrees = */ true); // Use heterogeneous degrees: the `lambda * P` term is only needed to degree `d - 1` while the `P` term (originating from Hessian) is needed to degree `d`
 
+            auto I2 = frobeniusNormSq(*m_F);
+            auto I3 = det(*m_F);
+            auto lambda_4_TAD = (I3 - I2) / pow(I3, 3);
+            auto T_TAD = twist_eigenmatrix(*m_F);
+
             // TODO: replace with gather approach for better parallel scaling?
             BENCHMARK_START_TIMER_SECTION("Assembly");
             VXd neg_delta_g = VXd::Zero(Base::numVars());
             const auto &vs = Base::assembler().varStructure();
-            Base::assembler().assembleGradient(neg_delta_g, ne, [this, &x, &vs, &P, d, arclen](size_t ei) -> ElementLocalVars {
+            Base::assembler().assembleGradient(neg_delta_g, ne, [this, &x, &vs, &P, d, arclen, projectHessian, &lambda_4_TAD, &T_TAD](size_t ei) -> ElementLocalVars {
                     const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric(); // TODO: higher-degree elements.
                     // P : (e_i otimes grad phi_j) = e_i . [P grad phi_j]
                     MNd P_e = arclen ? (*m_lambda_P)[d - 1][ei] : P[d - 1][ei];
@@ -149,6 +163,33 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                     // Contribution from `H x'`
                     if (P->degree() == d) // Note: when the `F` field is constant, P(F) is degree 0 even after "upgrading" to degree 1...
                         P_e += d * P[d][ei];
+
+                    // Basic correctness test using first-order autodiff.
+                    if (projectHessian && d == 2) {
+                        using TAD = TaylorAutodiff<double, 1>;
+                        Eigen::Matrix<TAD, Dim, Dim> F_tad;
+                        const auto &F_prime = (*m_F)[1][ei];
+                        setTaylorCoefficient(F_tad, 0, (*m_F)[0][ei]);
+                        setTaylorCoefficient(F_tad, 1, F_prime);
+                        TAD lambda_4;
+                        lambda_4[0] = lambda_4_TAD[0][ei];
+                        lambda_4[1] = lambda_4_TAD[1][ei];
+
+                        double lambda_4_proj = std::max(lambda_4[0], 1.0 + eigenvalueClampTarget);
+                        TAD proj_dist = lambda_4_proj - lambda_4;
+
+                        if (proj_dist > 0.0) {
+                            auto R = fast_decompositions::closest_rotation(F_tad);
+                            Eigen::Matrix<TAD, Dim, Dim> T;
+                            T << R.col(1), -R.col(0);
+
+                            setTaylorCoefficient(T, 0, T_TAD[0][ei]);
+                            setTaylorCoefficient(T, 1, T_TAD[1][ei]);
+
+                            P_e += extractTaylorCoefficient((0.5 * proj_dist * (T.transpose() * F_prime).trace()) * T, d - 1);
+                        }
+                    }
+
                     ElementLocalVars contrib;
                     Eigen::Map<Eigen::Matrix<double, Dim, Dim + 1>>(contrib.data()) = (-Base::elements[ei].elementData().volume()) * P_e * grad_bary;
                     return contrib;
@@ -210,6 +251,7 @@ private:
     mutable std::unique_ptr<LambdaPType> m_lambda_P; // Scaled version of `P` used for arclength variant.
     mutable std::unique_ptr<ScalarType> m_lambda; // Normalization factor for arclength variant.
     mutable std::unique_ptr<TaylorADFields::CoefficientPerturbations> m_coeffPerturb, m_lambdaCoeffPerturb;
+    double eigenvalueClampTarget = 0;
 };
 
 #endif /* end of include guard: FASTNEWTONFLOW_HH */
