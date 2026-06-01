@@ -75,16 +75,12 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         auto &perturbations = *m_coeffPerturb;
 
         TaylorADFields::ComputeSequence cs_lambdaP;
-        TaylorADFields::ComputeSequence *cs_ptr = &cs_P;
         if (arclen) {
             if (!m_lambda)   m_lambda = std::make_unique<ScalarType>(TaylorADFields::make_scalar<double>());
             if (!m_lambda_P) m_lambda_P = std::make_unique<LambdaPType>((*m_lambda) * (*m_P));
             cs_lambdaP = (*m_lambda_P)->computeSequence();
             cs_lambdaP.reset();
-            cs_ptr = &cs_lambdaP;
         }
-
-        auto &cs = *cs_ptr;
 
         // Whether to use the less efficient approach of
         // downgrading and then upgrading the expansion graph
@@ -96,7 +92,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         for (int d = 1; d <= degree; ++d) {
             if (downgrade_upgrade_approach && (d > 1)) {
                 // Force degree `d - 1` coefficient to be recomputed using the newly computed degree `d - 1` coefficient of `F`.
-                cs.downgrade(d - 2); 
+                cs_P.downgrade(d - 2);
             }
 
             const bool needs_perturbation = !(downgrade_upgrade_approach || (d <= 2));
@@ -140,55 +136,40 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 BENCHMARK_SCOPED_TIMER_SECTION t("P upgrades");
                 BENCHMARK_SCOPED_TIMER_SECTION t2("P upgrade " + std::to_string(d));
                 if (needs_perturbation)
-                    cs.perturb_and_upgrade(perturbations);
-                else cs.upgrade(d);
+                    cs_P.perturb_and_upgrade(perturbations);
+                else cs_P.upgrade(d);
             }
 
             if (arclen) cs_lambdaP.upgrade(d - 1, /* ignoreHigherDegrees = */ true); // Use heterogeneous degrees: the `lambda * P` term is only needed to degree `d - 1` while the `P` term (originating from Hessian) is needed to degree `d`
 
+            // Note: the following projection formulas should be expanded only to degree `d - 1`.
+            // They depend on F', which is known only to degree `d - 2`.
             auto I2 = frobeniusNormSq(*m_F);
             auto I3 = det(*m_F);
             auto lambda_4_TAD = (I3 - I2) / pow(I3, 3);
             auto T_TAD = twist_eigenmatrix(*m_F);
+            auto F_prime = derivative(*m_F);
+            auto proj_coeff = doubleContract(T_TAD, F_prime);
+            auto proj_dist = (1 + eigenvalueClampTarget) - makeFusable(lambda_4_TAD); // WARNING: makeFusable invalidates/subjects to modification the original `lambda_4_TAD` node.
+            auto mod = (proj_dist * proj_coeff) * T_TAD;
+            auto projMask = (proj_dist[0].array() > 0);
 
             // TODO: replace with gather approach for better parallel scaling?
             BENCHMARK_START_TIMER_SECTION("Assembly");
             VXd neg_delta_g = VXd::Zero(Base::numVars());
             const auto &vs = Base::assembler().varStructure();
-            Base::assembler().assembleGradient(neg_delta_g, ne, [this, &x, &vs, &P, d, arclen, projectHessian, &lambda_4_TAD, &T_TAD](size_t ei) -> ElementLocalVars {
+            Base::assembler().assembleGradient(neg_delta_g, ne, [this, &x, &vs, &P, d, arclen, projectHessian, &projMask, &mod](size_t ei) -> ElementLocalVars {
                     const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric(); // TODO: higher-degree elements.
                     // P : (e_i otimes grad phi_j) = e_i . [P grad phi_j]
                     MNd P_e = arclen ? (*m_lambda_P)[d - 1][ei] : P[d - 1][ei];
-                    // MNd P_e = P[d - 1][ei];
-                    // Contribution from `H x'`
+
+                    // Add contribution from `H x'`
                     if (P->degree() == d) // Note: when the `F` field is constant, P(F) is degree 0 even after "upgrading" to degree 1...
                         P_e += d * P[d][ei];
 
-                    // Basic correctness test using first-order autodiff.
-                    if (projectHessian && d == 2) {
-                        using TAD = TaylorAutodiff<double, 1>;
-                        Eigen::Matrix<TAD, Dim, Dim> F_tad;
-                        const auto &F_prime = (*m_F)[1][ei];
-                        setTaylorCoefficient(F_tad, 0, (*m_F)[0][ei]);
-                        setTaylorCoefficient(F_tad, 1, F_prime);
-                        TAD lambda_4;
-                        lambda_4[0] = lambda_4_TAD[0][ei];
-                        lambda_4[1] = lambda_4_TAD[1][ei];
-
-                        double lambda_4_proj = std::max(lambda_4[0], 1.0 + eigenvalueClampTarget);
-                        TAD proj_dist = lambda_4_proj - lambda_4;
-
-                        if (proj_dist > 0.0) {
-                            auto R = fast_decompositions::closest_rotation(F_tad);
-                            Eigen::Matrix<TAD, Dim, Dim> T;
-                            T << R.col(1), -R.col(0);
-
-                            setTaylorCoefficient(T, 0, T_TAD[0][ei]);
-                            setTaylorCoefficient(T, 1, T_TAD[1][ei]);
-
-                            P_e += extractTaylorCoefficient((0.5 * proj_dist * (T.transpose() * F_prime).trace()) * T, d - 1);
-                        }
-                    }
+                    // Add contribution from Hessian projection.
+                    if (projectHessian && d >= 2 && projMask[ei])
+                        P_e += mod[d - 1][ei];
 
                     ElementLocalVars contrib;
                     Eigen::Map<Eigen::Matrix<double, Dim, Dim + 1>>(contrib.data()) = (-Base::elements[ei].elementData().volume()) * P_e * grad_bary;
@@ -223,7 +204,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 x_tilde += lambda_d * x[0];
 
                 m_lambdaCoeffPerturb->setPreappliedCoefficient(lambda, lambda.coefficientPtr(d - 1)); // but the coefficient computed in the previous iteration needs to be accounted for...
-                cs_lambdaP.perturbHighestDegreeCoefficient(*m_lambdaCoeffPerturb, d - 1);
+                cs_lambdaP.perturbHighestDegreeCoefficient(*m_lambdaCoeffPerturb);
 
                 // auto lambdaP_recompute = (*m_lambda) * (*m_P);
                 // for (int d2 = 0; d2 < d; ++d2)
