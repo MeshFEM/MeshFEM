@@ -27,6 +27,27 @@ struct SymmetricDirichletTADField {
         // return transpose(Finv) * Finv * transpose(Finv);
         return F - transpose(Finv) * Finv * transpose(Finv);
     }
+
+    template<class Mat>
+    static double minimumEigenvalue(const Mat &F) {
+        double I2 = F.squaredNorm();
+        double I3 = F.determinant();
+        return (I3 - I2) / std::pow(I3, 3);
+    }
+
+    // Perturbation of PK1 contributed by switching the evaluation of
+    // `H x'` to its projected version.
+    template<class FType, class FPrimeType>
+    static auto HessianProjectionDelta(double eigenvalueClampTarget, const FType &F, const FPrimeType &F_prime) {
+        auto I2 = frobeniusNormSq(F);
+        auto I3 = det(F);
+        auto lambda_4_TAD = (I3 - I2) / pow(I3, 3);
+        auto T = twist_eigenmatrix(F);
+        auto proj_coeff = doubleContract(T, F_prime);
+        auto proj_dist = (1 + eigenvalueClampTarget) - lambda_4_TAD;
+        auto mod = (proj_dist * proj_coeff) * T;
+        return mod;
+    }
 };
 
 template<size_t Dim, size_t FEMDeg>
@@ -60,7 +81,6 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         if (!m_coeffPerturb) m_coeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
         if (!m_lambdaCoeffPerturb) m_lambdaCoeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
 
-
         auto &F = *m_F;
         auto &P = *m_P;
 
@@ -78,14 +98,8 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
         // Note: the following projection formulas should be expanded only to degree `d - 1`.
         // They depend on F', which is known only to degree `d - 2`.
-        auto I2 = frobeniusNormSq(*m_F);
-        auto I3 = det(*m_F);
-        auto lambda_4_TAD = (I3 - I2) / pow(I3, 3);
-        auto T = twist_eigenmatrix(*m_F);
         auto F_prime = derivative(*m_F);
-        auto proj_coeff = doubleContract(T, F_prime);
-        auto proj_dist = (1 + eigenvalueClampTarget) - lambda_4_TAD;
-        auto mod = (proj_dist * proj_coeff) * T;
+        auto mod = SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, F, F_prime);
         auto mod_cs = mod->computeSequence();
         Eigen::Array<bool, Eigen::Dynamic, 1> projMask;
 
@@ -154,7 +168,14 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                     }
                     mod_cs.upgrade(d - 1, /* ignoreHigherDegrees = */ true);
                 }
-                if (projectHessian && (d == 2)) projMask = (proj_dist[0].array() > 0);
+                if (projectHessian && (d == 2)) {
+                    const size_t ne = m.numElements();
+                    projMask.resize(ne);
+                    parallel_for_range(ne, [this, &F, &projMask](size_t ei) {
+                        double lmin = SymmetricDirichletTADField::minimumEigenvalue(F[0][ei]);
+                        projMask[ei] = lmin < eigenvalueClampTarget;
+                    });
+                }
 
                 if (arclen) cs_lambdaP.upgrade(d - 1, /* ignoreHigherDegrees = */ true); // Use heterogeneous degrees: the `lambda * P` term is only needed to degree `d - 1` while the `P` term (originating from Hessian) is needed to degree `d`
             }
