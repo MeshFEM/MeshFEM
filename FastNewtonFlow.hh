@@ -16,7 +16,6 @@
 #include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
 #include "3rdparty/TaylorAutodiff/TaylorAutodiffFields.hh"
-#include "3rdparty/TaylorAutodiff/TaylorAutodiffStaticSize.hh"
 
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
@@ -65,11 +64,6 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         auto &F = *m_F;
         auto &P = *m_P;
 
-        // auto F_det    = det(*m_F);
-        // auto F_normsq = frobeniusNormSq(*m_F);
-        // auto cs_det    = F_det->computeSequence();
-        // auto cs_normsq = F_normsq->computeSequence();
-
         TaylorADFields::ComputeSequence cs_P = P->computeSequence();
         cs_P.reset(); // Note: this reset must happen before building m_lambda_P!
         auto &perturbations = *m_coeffPerturb;
@@ -82,20 +76,23 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
             cs_lambdaP.reset();
         }
 
-        // Whether to use the less efficient approach of
-        // downgrading and then upgrading the expansion graph
-        // to account for the `d - 1` coefficient of `F` computed
-        // by the prior pass.
-        const bool downgrade_upgrade_approach = false;
-        if (downgrade_upgrade_approach && arclen) throw std::runtime_error("Downgrade/upgrade approach not currently supported in arclength mode in FastNewtonFlow");
+        // Note: the following projection formulas should be expanded only to degree `d - 1`.
+        // They depend on F', which is known only to degree `d - 2`.
+        auto I2 = frobeniusNormSq(*m_F);
+        auto I3 = det(*m_F);
+        auto lambda_4_TAD = (I3 - I2) / pow(I3, 3);
+        auto T = twist_eigenmatrix(*m_F);
+        auto F_prime = derivative(*m_F);
+        auto proj_coeff = doubleContract(T, F_prime);
+        auto proj_dist = (1 + eigenvalueClampTarget) - lambda_4_TAD;
+        auto mod = (proj_dist * proj_coeff) * T;
+        auto mod_cs = mod->computeSequence();
+        Eigen::Array<bool, Eigen::Dynamic, 1> projMask;
+
+        TaylorADFields::CoefficientPerturbations mod_perturbations;
 
         for (int d = 1; d <= degree; ++d) {
-            if (downgrade_upgrade_approach && (d > 1)) {
-                // Force degree `d - 1` coefficient to be recomputed using the newly computed degree `d - 1` coefficient of `F`.
-                cs_P.downgrade(d - 2);
-            }
-
-            const bool needs_perturbation = !(downgrade_upgrade_approach || (d <= 2));
+            const bool needs_perturbation = d > 2;
 
             // Set coefficient `d - 1` of the `F` field,
             // updating the highest-degree coefficients if a `d - 1`-degree
@@ -138,21 +135,29 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 if (needs_perturbation)
                     cs_P.perturb_and_upgrade(perturbations);
                 else cs_P.upgrade(d);
+
+                if (projectHessian && d > 1) {
+                    // TODO: accelerate by doing a single `perturb_and_upgrade`
+                    // with node-varying degree (avoiding separate mod_cs and cs_lambdaP passes)
+
+                    // Currently F is newly known to degree `d - 1`, and so we can now determine coefficient `d - 2` of `F'`.
+                    assert(F_prime->degree() == d - 3);
+                    F_prime->computeSequence().upgrade(d - 2, /* ignoreHigherDegrees = */ true);
+
+                    if (d > 2) { // mod is first computed at degree 2, so perturbation is first needed at degree 3
+                        // The previous iteration computed a degree `d - 2` expansion of `mod`;
+                        // we need to update it to account for the new coefficient of `F'`.
+                        // Note that the `d - 2` coefficients of lambda_4/proj_dist are
+                        // already correct since they depend only the previously known `F` coefficients (up to degree `d - 2`).
+                        mod_perturbations.setPreappliedCoefficient(*F_prime, F_prime->coefficientPtr(d - 2));
+                        mod_cs.perturbHighestDegreeCoefficient(mod_perturbations);
+                    }
+                    mod_cs.upgrade(d - 1, /* ignoreHigherDegrees = */ true);
+                }
+                if (projectHessian && (d == 2)) projMask = (proj_dist[0].array() > 0);
+
+                if (arclen) cs_lambdaP.upgrade(d - 1, /* ignoreHigherDegrees = */ true); // Use heterogeneous degrees: the `lambda * P` term is only needed to degree `d - 1` while the `P` term (originating from Hessian) is needed to degree `d`
             }
-
-            if (arclen) cs_lambdaP.upgrade(d - 1, /* ignoreHigherDegrees = */ true); // Use heterogeneous degrees: the `lambda * P` term is only needed to degree `d - 1` while the `P` term (originating from Hessian) is needed to degree `d`
-
-            // Note: the following projection formulas should be expanded only to degree `d - 1`.
-            // They depend on F', which is known only to degree `d - 2`.
-            auto I2 = frobeniusNormSq(*m_F);
-            auto I3 = det(*m_F);
-            auto lambda_4_TAD = (I3 - I2) / pow(I3, 3);
-            auto T_TAD = twist_eigenmatrix(*m_F);
-            auto F_prime = derivative(*m_F);
-            auto proj_coeff = doubleContract(T_TAD, F_prime);
-            auto proj_dist = (1 + eigenvalueClampTarget) - makeFusable(lambda_4_TAD); // WARNING: makeFusable invalidates/subjects to modification the original `lambda_4_TAD` node.
-            auto mod = (proj_dist * proj_coeff) * T_TAD;
-            auto projMask = (proj_dist[0].array() > 0);
 
             // TODO: replace with gather approach for better parallel scaling?
             BENCHMARK_START_TIMER_SECTION("Assembly");
