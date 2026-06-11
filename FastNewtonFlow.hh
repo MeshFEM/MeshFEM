@@ -66,20 +66,29 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
     using Base = SolidMeshEnergy<FEMDeg, Psi>;
     using Base::Base;
 
-    using ScalarType = decltype(TaylorADFields::make_scalar<double>());
-    using FType = decltype(TaylorADFields::make_matrix_field<MNd>());
-    using PType = decltype(SymmetricDirichletTADField::PK1(std::declval<FType>())); // TODO: support additional energy densities beyond SymmetricDirichlet!
+    using ScalarType  = decltype(TaylorADFields::make_scalar<double>());
+    using FType       = decltype(TaylorADFields::make_matrix_field<MNd>());
+    using PType       = decltype(SymmetricDirichletTADField::PK1(std::declval<FType>())); // TODO: support additional energy densities beyond SymmetricDirichlet!
     using LambdaPType = decltype(std::declval<ScalarType>() * std::declval<PType>());
+    using FPrimeType  = decltype(derivative(std::declval<FType>()));
+    using HModType    = decltype(SymmetricDirichletTADField::HessianProjectionDelta(0.0, std::declval<FType>(), std::declval<FPrimeType>()));
 
     void upgradeTaylorCoefficients(const NewtonHessianFactorization &Hf, int degree, std::vector<VXd> &x, bool arclen = false, bool projectHessian = false) const {
+        BENCHMARK_START_TIMER_SECTION("Setup");
         const auto &m = Base::mesh();
         const size_t ne = m.numElements();
         const auto &vs = Base::assembler().varStructure();
 
         if (!m_F) m_F = std::make_unique<FType>(TaylorADFields::make_matrix_field<MNd>());
         if (!m_P) m_P = std::make_unique<PType>(SymmetricDirichletTADField::PK1(*m_F));
-        if (!m_coeffPerturb) m_coeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
+
+        if (!m_F_prime) m_F_prime = std::make_unique<FPrimeType>(derivative(*m_F));
+        // TODO: rebuild `m_mod` when eigenvalueClampTarget is updated...
+        if (!m_mod) m_mod = std::make_unique<HModType>(SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, *m_F, *m_F_prime));
+
+        if (!m_coeffPerturb)       m_coeffPerturb       = std::make_unique<TaylorADFields::CoefficientPerturbations>();
         if (!m_lambdaCoeffPerturb) m_lambdaCoeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
+        if (!m_modCoeffPerturb)    m_modCoeffPerturb    = std::make_unique<TaylorADFields::CoefficientPerturbations>();
 
         auto &F = *m_F;
         auto &P = *m_P;
@@ -96,63 +105,64 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
             cs_lambdaP.reset();
         }
 
-        // Note: the following projection formulas should be expanded only to degree `d - 1`.
-        // They depend on F', which is known only to degree `d - 2`.
-        auto F_prime = derivative(*m_F);
-        auto mod = SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, F, F_prime);
+        auto &F_prime = *m_F_prime;
+        auto &mod = *m_mod;
         auto mod_cs = mod->computeSequence();
-        Eigen::Array<bool, Eigen::Dynamic, 1> projMask;
+        mod_cs.reset();
+        auto &mod_perturbations = *m_modCoeffPerturb;
+        auto &projMask = m_projMask;
 
-        TaylorADFields::CoefficientPerturbations mod_perturbations;
+        x.reserve(degree);
+        BENCHMARK_STOP_TIMER_SECTION("Setup");
 
         for (int d = 1; d <= degree; ++d) {
             const bool needs_perturbation = d > 2;
 
-            // Set coefficient `d - 1` of the `F` field,
-            // updating the highest-degree coefficients if a `d - 1`-degree
-            // expansion was already produced.
-            if (!needs_perturbation) {
+            {
+                BENCHMARK_SCOPED_TIMER_SECTION timer("Compute F Coefficients");
+                // Set coefficient `d - 1` of the `F` field,
+                // updating the highest-degree coefficients if a `d - 1`-degree
+                // expansion was already produced.
                 F->emplace_back();
                 auto &F_coeff = F->back();
                 F_coeff.array().resize(ne, Dim * Dim);
-                parallel_for_range(ne, [this, &F_coeff, &x, &vs, d](size_t ei) {
+                const VXd &x_dm2 = (d == 1) ? Base::globalVars() : x[d - 2];
+                parallel_for_range(ne, [this, &F_coeff, &x_dm2, &vs, d](size_t ei) {
                     ElementNodePositions x_e;
-                    if (d == 1)  x_e = Base::extractLocalVars(ei, this->globalVars(), vs);
-                    else         x_e = Base::extractLocalVars(ei,           x[d - 2], vs);
+                    x_e = Base::extractLocalVars(ei, x_dm2, vs);
                     const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric();
                     F_coeff[ei] = x_e.transpose() * grad_bary.transpose();
                 });
+                if (needs_perturbation) {
+                    // A degree `d - 1` expansion was already produced using a
+                    // `d - 2` expansion of `F`. We mark the `d - 1` coefficient of
+                    // `F` as a "preapplied" perturbation to trigger recomputation
+                    // of downstream `d - 1` coefficients that depend on it.
+                    perturbations.setPreappliedCoefficient(*F, F->coefficientPtr(d - 1));
+                }
             }
-            else {
-                // A degree `d - 1` expansion was already produced using a
-                // `d - 2` expansion of `F`. We update it here to account for
-                // the newly known `d - 1` coefficient of `F`.
-                if (P->degree() != d - 1) throw std::runtime_error("Expected P to have degree " + std::to_string(d - 1) + " but it has degree " + std::to_string(P->degree()));
-                F->emplace_back();
-                auto &F_coeff = F->back();
-                F_coeff.array().resize(ne, Dim * Dim);
 
-                parallel_for_range(ne, [this, &F_coeff, &x, &vs, d](size_t ei) {
-                    ElementNodePositions x_e;
-                    x_e = Base::extractLocalVars(ei, x[d - 2], vs);
-                    const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric();
-                    F_coeff[ei] = x_e.transpose() * grad_bary.transpose();
-                });
-
-                perturbations.setPreappliedCoefficient(*F, F->coefficientPtr(d - 1));
-            }
             if (arclen) (*m_lambda)->emplace_back((d == 1) ? 1.0 : 0.0); // Note: lambda_d does not affect x_d
 
             {
                 BENCHMARK_SCOPED_TIMER_SECTION t("P upgrades");
                 BENCHMARK_SCOPED_TIMER_SECTION t2("P upgrade " + std::to_string(d));
                 if (needs_perturbation)
-                    cs_P.perturb_and_upgrade(perturbations);
+                    cs_P.perturb_and_upgrade(perturbations, d);
                 else cs_P.upgrade(d);
 
                 if (projectHessian && d > 1) {
-                    // TODO: accelerate by doing a single `perturb_and_upgrade`
-                    // with node-varying degree (avoiding separate mod_cs and cs_lambdaP passes)
+                    if (d == 2) {
+                        BENCHMARK_SCOPED_TIMER_SECTION t3("Compute Hessian Projection Mask");
+                        const size_t ne = m.numElements();
+                        projMask.resize(ne);
+                        const auto &F0 = F[0];
+                        double target = eigenvalueClampTarget;
+                        parallel_for_range(0, ne, [target, &F0, &projMask](size_t ei) {
+                            double lmin = SymmetricDirichletTADField::minimumEigenvalue(F0[ei]);
+                            projMask[ei] = lmin < target;
+                        }, 2048);
+                    }
 
                     // Currently F is newly known to degree `d - 1`, and so we can now determine coefficient `d - 2` of `F'`.
                     assert(F_prime->degree() == d - 3);
@@ -164,28 +174,18 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                         // Note that the `d - 2` coefficients of lambda_4/proj_dist are
                         // already correct since they depend only the previously known `F` coefficients (up to degree `d - 2`).
                         mod_perturbations.setPreappliedCoefficient(*F_prime, F_prime->coefficientPtr(d - 2));
-                        mod_cs.perturbHighestDegreeCoefficient(mod_perturbations);
+                        // mod_cs.perturbHighestDegreeCoefficient(mod_perturbations);
+                        mod_cs.perturb_and_upgrade(mod_perturbations, d - 1, /* ignoreHigherDegrees = */ true);
                     }
-                    mod_cs.upgrade(d - 1, /* ignoreHigherDegrees = */ true);
-                }
-                if (projectHessian && (d == 2)) {
-                    const size_t ne = m.numElements();
-                    projMask.resize(ne);
-                    parallel_for_range(ne, [this, &F, &projMask](size_t ei) {
-                        double lmin = SymmetricDirichletTADField::minimumEigenvalue(F[0][ei]);
-                        projMask[ei] = lmin < eigenvalueClampTarget;
-                    });
+                    else mod_cs.upgrade(d - 1, /* ignoreHigherDegrees = */ true);
                 }
 
                 if (arclen) cs_lambdaP.upgrade(d - 1, /* ignoreHigherDegrees = */ true); // Use heterogeneous degrees: the `lambda * P` term is only needed to degree `d - 1` while the `P` term (originating from Hessian) is needed to degree `d`
             }
 
-            // TODO: replace with gather approach for better parallel scaling?
             BENCHMARK_START_TIMER_SECTION("Assembly");
-            VXd neg_delta_g = VXd::Zero(Base::numVars());
-            const auto &vs = Base::assembler().varStructure();
-            Base::assembler().assembleGradient(neg_delta_g, ne, [this, &x, &vs, &P, d, arclen, projectHessian, &projMask, &mod](size_t ei) -> ElementLocalVars {
-                    const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric(); // TODO: higher-degree elements.
+            VXd neg_delta_g(Base::numVars());
+            Base::assembler().template assembleGradientScatterGather</* Accumulate = */ false>(neg_delta_g, m, [this, &P, d, arclen, projectHessian, &projMask, &mod](size_t ei) -> ElementLocalVars {
                     // P : (e_i otimes grad phi_j) = e_i . [P grad phi_j]
                     MNd P_e = arclen ? (*m_lambda_P)[d - 1][ei] : P[d - 1][ei];
 
@@ -198,16 +198,17 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                         P_e += mod[d - 1][ei];
 
                     ElementLocalVars contrib;
+                    const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric(); // TODO: higher-degree elements.
                     Eigen::Map<Eigen::Matrix<double, Dim, Dim + 1>>(contrib.data()) = (-Base::elements[ei].elementData().volume()) * P_e * grad_bary;
                     return contrib;
-                },
-                [this](size_t ei) { return Base::stencils[ei].blockVars; });
+                });
             BENCHMARK_STOP_TIMER_SECTION("Assembly");
 
             x.emplace_back();
             Hf.solve(neg_delta_g, x.back());
 
             if (arclen && (d > 1)) {
+                BENCHMARK_SCOPED_TIMER_SECTION t("Arclen Update");
                 auto &x_tilde = x.back();
                 auto &lambda = *(*m_lambda);
                 // Compute -T_{d - 1}[||xbar_{d - 1}'(s) + s^{d - 1} x_tilde||^2] // (2 ||x_1||^2)
@@ -239,6 +240,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
             // We just computed coefficient `d - 1` of  x'  which is
             // coefficient `d` of x scaled by `d`...
+            BENCHMARK_SCOPED_TIMER_SECTION tscale("Scale");
             x.back() *= (1.0 / d);
         }
     }
@@ -257,8 +259,14 @@ private:
     mutable std::unique_ptr<PType> m_P;
     mutable std::unique_ptr<LambdaPType> m_lambda_P; // Scaled version of `P` used for arclength variant.
     mutable std::unique_ptr<ScalarType> m_lambda; // Normalization factor for arclength variant.
-    mutable std::unique_ptr<TaylorADFields::CoefficientPerturbations> m_coeffPerturb, m_lambdaCoeffPerturb;
+    mutable std::unique_ptr<HModType> m_mod; // PK1 perturbation field for Hessian projection.
+    mutable std::unique_ptr<FPrimeType> m_F_prime; // F' field
+
+    mutable std::unique_ptr<TaylorADFields::CoefficientPerturbations> m_coeffPerturb, m_lambdaCoeffPerturb, m_modCoeffPerturb;
     double eigenvalueClampTarget = 0;
+
+    mutable Eigen::Matrix<double, Eigen::Dynamic, NumVarsPerElement, Eigen::RowMajor> m_elementContribs;
+    mutable Eigen::Array<bool, Eigen::Dynamic, 1> m_projMask;
 };
 
 #endif /* end of include guard: FASTNEWTONFLOW_HH */
