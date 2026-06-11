@@ -643,9 +643,13 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         // Cache vertex => (element, local index) map in a CSCMatrix<Char>
         if (!m_localNodesForNode) {
             TripletMatrix<Triplet<char>> localNodesForNodeTrip(numElemLocalVars * m.numElements(), m.numNodes());
-            for (auto e : m.elements())
-                for (auto n : e.nodes())
-                    localNodesForNodeTrip.addNZ(numElemLocalVars * e.index() + N * n.localIndex(), n.index(), 1);
+
+            const size_t ne = m.numElements();
+            for (size_t ei = 0; ei < ne; ++ei) {
+                auto enodes = m.elementNodeIndices(ei);
+                for (size_t lni = 0; lni < Mesh::NumNodesPerElement; ++lni)
+                    localNodesForNodeTrip.addNZ(numElemLocalVars * ei + N * lni, enodes[lni], 1);
+            }
 
             m_localNodesForNode = std::make_unique<NodeLocalNodeAdjacencyMatrix>(localNodesForNodeTrip);
         }
