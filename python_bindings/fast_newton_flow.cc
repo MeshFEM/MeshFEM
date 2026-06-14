@@ -12,7 +12,14 @@ template<size_t Dim, size_t FEMDeg>
 auto bindFastNewtonFlow(const std::string &name, py::module &m, py::module &detail) {
     using NFME = FastNewtonFlowMeshEnergy<Dim, FEMDeg>;
     return bindMeshEnergy<NFME>(name, m, detail)
-        .def("computeTaylorCoefficients", &NFME::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("arclen") = false, py::arg("projectHessian") = false)
+
+        .def("initCoefficients", &NFME::initCoefficients, py::arg("d"), py::arg("arclen") = false, py::arg("projectHessian") = false)
+        .def("getCoefficient", []( NFME &me, int d) -> py::array {
+            const auto &xd = me.getCoefficient(d);
+            return py::array(xd.size(), xd.data());
+        }, py::arg("d"), "Get the degree-d Taylor coefficient as a numpy array (note: this is a view into the internal storage of the energy, not a copy)")
+        .def("upgradeToDegree", &NFME::upgradeToDegree, py::arg("hessianFactorization"), py::arg("targetDegree"))
+        .def("computeTaylorCoefficients", &NFME::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("x1"), py::arg("degree") = 6, py::arg("arclen") = false, py::arg("projectHessian") = false)
         .def_readonly("neg_delta_g", &NFME::neg_delta_g)
         ;
 }
