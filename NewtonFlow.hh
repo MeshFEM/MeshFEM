@@ -100,7 +100,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
 
         BENCHMARK_START_TIMER_SECTION("Assemble RHS");
         BENCHMARK_START_TIMER_SECTION("order " + std::to_string(Degree));
-        VXd neg_delta_g = VXd::Zero(Base::numVars());
+        neg_delta_g.setZero(Base::numVars());
 
         const auto &vs = Base::assembler().varStructure();
         if (!(ProjectHessian && this->hasPerElementHessianProjectionMasks())) {
@@ -371,6 +371,8 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
 
     bool remove_rigid_translation = false,
          remove_rigid_rotation = false;
+
+    mutable VXd neg_delta_g;
 };
 
 #endif /* end of include guard: NEWTONFLOW_HH */

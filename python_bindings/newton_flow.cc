@@ -29,6 +29,7 @@ auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) 
         .def_property("eigenvalueProjectionModulation", &NFME::getEigenvalueProjectionModulation, &NFME::setEigenvalueProjectionModulation)
         .def_readwrite("remove_rigid_translation", &NFME::remove_rigid_translation)
         .def_readwrite("remove_rigid_rotation", &NFME::remove_rigid_rotation)
+        .def_readonly("neg_delta_g", &NFME::neg_delta_g)
         ;
 }
 

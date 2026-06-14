@@ -32,7 +32,7 @@ struct SymmetricDirichletTADField {
     static double minimumEigenvalue(const Mat &F) {
         double I2 = F.squaredNorm();
         double I3 = F.determinant();
-        return (I3 - I2) / std::pow(I3, 3);
+        return 1 + (I3 - I2) / std::pow(I3, 3);
     }
 
     // Perturbation of PK1 contributed by switching the evaluation of
@@ -41,11 +41,18 @@ struct SymmetricDirichletTADField {
     static auto HessianProjectionDelta(double eigenvalueClampTarget, const FType &F, const FPrimeType &F_prime) {
         auto I2 = frobeniusNormSq(F);
         auto I3 = det(F);
-        auto lambda_4_TAD = (I3 - I2) / pow(I3, 3);
+        auto lambda_4_minus_1 = (I3 - I2) / pow(I3, 3);
         auto T = twist_eigenmatrix(F);
         auto proj_coeff = doubleContract(T, F_prime);
-        auto proj_dist = (1 + eigenvalueClampTarget) - lambda_4_TAD;
+        auto proj_dist = (eigenvalueClampTarget - 1) - lambda_4_minus_1;
         auto mod = (proj_dist * proj_coeff) * T;
+
+        // Also name the graph nodes for debugging/benchmarking purposes.
+        I2->setName("I2"); I3->setName("I3");
+        lambda_4_minus_1->setName("lambda_4_minus_1");
+        proj_coeff->setName("proj_coeff"); proj_dist->setName("proj_dist");
+        T->setName("T"); mod->setName("mod");
+
         return mod;
     }
 };
@@ -184,7 +191,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
             }
 
             BENCHMARK_START_TIMER_SECTION("Assembly");
-            VXd neg_delta_g(Base::numVars());
+            neg_delta_g.resize(Base::numVars());
             Base::assembler().template assembleGradientScatterGather</* Accumulate = */ false>(neg_delta_g, m, [this, &P, d, arclen, projectHessian, &projMask, &mod](size_t ei) -> ElementLocalVars {
                     // P : (e_i otimes grad phi_j) = e_i . [P grad phi_j]
                     MNd P_e = arclen ? (*m_lambda_P)[d - 1][ei] : P[d - 1][ei];
@@ -193,9 +200,38 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                     if (P->degree() == d) // Note: when the `F` field is constant, P(F) is degree 0 even after "upgrading" to degree 1...
                         P_e += d * P[d][ei];
 
+#if 1
                     // Add contribution from Hessian projection.
                     if (projectHessian && d >= 2 && projMask[ei])
                         P_e += mod[d - 1][ei];
+#else // Comparison against scalar TAD implementation of projection contribution for debugging
+                    if (projectHessian && d == 2) {
+                        using TAD = TaylorAutodiff<double, 1>;
+                        Eigen::Matrix<TAD, Dim, Dim> F_tad;
+                        const auto &F_prime = (*m_F)[1][ei];
+                        setTaylorCoefficient(F_tad, 0, (*m_F)[0][ei]);
+                        setTaylorCoefficient(F_tad, 1, F_prime);
+                        TAD I2 = F_tad.squaredNorm();
+                        TAD I3 = F_tad.determinant();
+                        TAD I3Sq = I3*I3;
+                        TAD I3Cu = I3Sq*I3;
+                        TAD lambda_4 = 1.0 + (1.0/I3Sq) - (I2/I3Cu);
+
+                        double lambda_4_proj = std::max(lambda_4[0], eigenvalueClampTarget);
+                        TAD proj_dist = lambda_4_proj - lambda_4;
+
+                        if (proj_dist > 0.0) {
+                            auto R = fast_decompositions::closest_rotation(F_tad);
+                            Eigen::Matrix<TAD, Dim, Dim> T;
+                            T << R.col(1), -R.col(0);
+
+                            // setTaylorCoefficient(T, 0, T_TAD[0][ei]);
+                            // setTaylorCoefficient(T, 1, T_TAD[1][ei]);
+
+                            P_e += extractTaylorCoefficient((0.5 * proj_dist * (T.transpose() * F_prime).trace()) * T, d - 1);
+                        }
+                    }
+#endif
 
                     ElementLocalVars contrib;
                     const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric(); // TODO: higher-degree elements.
@@ -253,6 +289,8 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
         return result;
     }
+
+    mutable VXd neg_delta_g;
 
 private:
     mutable std::unique_ptr<FType> m_F;

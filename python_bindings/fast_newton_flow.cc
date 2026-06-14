@@ -13,6 +13,7 @@ auto bindFastNewtonFlow(const std::string &name, py::module &m, py::module &deta
     using NFME = FastNewtonFlowMeshEnergy<Dim, FEMDeg>;
     return bindMeshEnergy<NFME>(name, m, detail)
         .def("computeTaylorCoefficients", &NFME::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6, py::arg("arclen") = false, py::arg("projectHessian") = false)
+        .def_readonly("neg_delta_g", &NFME::neg_delta_g)
         ;
 }
 
