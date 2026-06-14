@@ -198,7 +198,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
 
         BENCHMARK_START_TIMER_SECTION("Assemble RHS");
         BENCHMARK_START_TIMER_SECTION("order " + std::to_string(Degree));
-        VXd neg_delta_g = VXd::Zero(Base::numVars());
+        neg_delta_g.setZero(Base::numVars());
 
         if (lambda.size() != Degree - 1) throw std::runtime_error("computeTaylorCoefficientsArclenImpl: lambda size should be degree - 1");
         TaylorAutodiff<double, Degree - 1> lambda_ad;

@@ -19,6 +19,7 @@
 
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
+#include <MeshFEM/ParallelVectorOps.hh>
 
 struct SymmetricDirichletTADField {
     template<class MatTCField>
@@ -149,7 +150,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 }
             }
 
-            if (arclen) (*m_lambda)->emplace_back((d == 1) ? 1.0 : 0.0); // Note: lambda_d does not affect x_d
+            if (arclen & (d == 1)) (*m_lambda)->emplace_back(1.0); // Note: lambda_d does not affect x_d
 
             {
                 BENCHMARK_SCOPED_TIMER_SECTION t("P upgrades");
@@ -248,23 +249,28 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 auto &x_tilde = x.back();
                 auto &lambda = *(*m_lambda);
                 // Compute -T_{d - 1}[||xbar_{d - 1}'(s) + s^{d - 1} x_tilde||^2] // (2 ||x_1||^2)
-                // TODO (potential acceleration):
-                // - Parallelize over chunks, computing partial sums that are then reduced.
-                Real lambda_d = -2 * x[0].dot(x_tilde);
+                // Note: the `j` loop eploits symmetry to compute only half of
+                // the dot products.
+                Real lambda_d = tbb::parallel_reduce(tbb::blocked_range<int>(0, x[0].size()), 0.0,
+                    [&](const tbb::blocked_range<int> &r, double local_lambda_d = 0.0) {
+                        auto slice_dot = [r](const VXd &a, const VXd &b) { return a.segment(r.begin(), r.size()).dot(b.segment(r.begin(), r.size())); };
 
-                // Note: the following loop leverages symmetry to compute only
-                // half of the dot products.
-                const int j_max = (d - 1) / 2;
-                for (int j = 1; j <= j_max; ++j) {
-                    int idx_other = (d - 1) - j;
-                    const Real contrib = (j + 1) * (idx_other + 1) * x[idx_other].dot(x[j]);
-                    lambda_d -= (j == idx_other) ? contrib : 2 * contrib;
-                }
+                        // Parallel version of initialization: lambda_d = -2 * x[0].dot(x_tilde);
+                        local_lambda_d -= 2 * slice_dot(x[0], x_tilde);
+                        const int j_max = (d - 1) / 2;
+                        for (int j = 1; j <= j_max; ++j) {
+                            int idx_other = (d - 1) - j;
+                            const double contrib = (j + 1) * (idx_other + 1) * slice_dot(x[idx_other], x[j]);
+                            local_lambda_d -= (j == idx_other) ? contrib : 2 * contrib;
+                        }
+                        return local_lambda_d;
+                }, std::plus<double>());
+                if (d == 2) x_0_normSq = x[0].squaredNorm();
 
-                lambda_d /= 2 * x[0].squaredNorm();
+                lambda_d /= 2 * x_0_normSq;
 
-                lambda.back() = lambda_d;
-                x_tilde += lambda_d * x[0];
+                lambda.emplace_back(lambda_d);
+                addScaledInPlace(x_tilde, x[0], lambda_d);
 
                 m_lambdaCoeffPerturb->setPreappliedCoefficient(lambda, lambda.coefficientPtr(d - 1)); // but the coefficient computed in the previous iteration needs to be accounted for...
                 cs_lambdaP.perturbHighestDegreeCoefficient(*m_lambdaCoeffPerturb);
@@ -291,6 +297,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
     }
 
     mutable VXd neg_delta_g;
+    mutable double x_0_normSq = 0.0; // Cached value of ||x[0]||^2 used for arclength normalization.
 
 private:
     mutable std::unique_ptr<FType> m_F;
