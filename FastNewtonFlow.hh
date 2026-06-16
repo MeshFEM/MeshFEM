@@ -120,7 +120,6 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         auto &mod = *m_mod;
         auto mod_cs = mod->computeSequence();
         mod_cs.reset();
-        auto &projMask = m_projMask;
 
         BENCHMARK_SCOPED_TIMER_SECTION timer2("Compute F0 and F1");
         size_t ne = Base::mesh().numElements();
@@ -168,7 +167,12 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         auto &F_prime = *m_F_prime;
         auto &mod = *m_mod;
         auto mod_cs = mod->computeSequence();
-        auto &projMask = m_projMask;
+
+        Eigen::Array<bool, Eigen::Dynamic, 1> *projMaskPtr = nullptr;
+        if (this->hasPerElementHessianProjectionMasks())
+            projMaskPtr = &(this->elementHessianProjectionMasks);
+        else projMaskPtr = &m_eigenvalueNeedsProjection;
+        auto &projMask = *projMaskPtr;
 
         auto &perturbations = *m_coeffPerturb;
         auto &mod_perturbations = *m_modCoeffPerturb;
@@ -217,7 +221,11 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 else cs_P.upgrade(d);
 
                 if (m_projectHessian && d > 1) {
-                    if (d == 2) {
+                    // Automatically compute the per-element projection mask if
+                    // one was not already specified (here we disable projection
+                    // on elements whose minimum Hessian eigenvalues are already
+                    // at or above the clamp target).
+                    if (d == 2 && !this->hasPerElementHessianProjectionMasks()) {
                         BENCHMARK_SCOPED_TIMER_SECTION t3("Compute Hessian Projection Mask");
                         const size_t ne = m.numElements();
                         projMask.resize(ne);
@@ -251,7 +259,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
             {
             BENCHMARK_SCOPED_TIMER_SECTION ta("Assembly");
             neg_delta_g.resize(Base::numVars());
-            Base::assembler().template assembleGradientScatterGather</* Accumulate = */ false>(neg_delta_g, m, [this, &P, d, &projMask, &mod](size_t ei) -> ElementLocalVars {
+            Base::assembler().template assembleGradientConditionalGather</* Accumulate = */ false>(neg_delta_g, m, [this, &P, d, &projMask, &mod](size_t ei) -> ElementLocalVars {
                     // P : (e_i otimes grad phi_j) = e_i . [P grad phi_j]
                     MNd P_e = m_arclen ? (*m_lambda_P)[d - 1][ei] : P[d - 1][ei];
 
@@ -378,7 +386,7 @@ private:
     double eigenvalueClampTarget = 0;
 
     Eigen::Matrix<double, Eigen::Dynamic, NumVarsPerElement, Eigen::RowMajor> m_elementContribs;
-    Eigen::Array<bool, Eigen::Dynamic, 1> m_projMask;
+    Eigen::Array<bool, Eigen::Dynamic, 1> m_eigenvalueNeedsProjection;
 
     // We record the current degree separately from the coefficient array
     // to enable resetting higher-degree coefficients without freeing their
