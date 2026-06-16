@@ -172,7 +172,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.gradient");
 #if 0
         if (weight != 1.0) throw std::runtime_error("weighted gradient unimplemented");
-        assembler().assembleGradientScatterGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
+        assembler().assembleGradientGather(g, mesh(), [this](size_t ei) { return elementGradient(ei); } );
 #else
         if (weight == 1.0) assembler().assembleGradient(g, mesh(), [this        ](size_t ei) { return elementGradient(ei); } );
         else               assembler().assembleGradient(g, mesh(), [this, weight](size_t ei) { return (weight * elementGradient(ei)).eval(); } );
