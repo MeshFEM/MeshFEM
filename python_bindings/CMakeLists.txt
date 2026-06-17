@@ -1,17 +1,3 @@
-pybind11_add_module(variable_coefficient_poisson variable_coefficient_poisson.cc)
-set_target_properties(variable_coefficient_poisson PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(variable_coefficient_poisson PUBLIC MeshFEM)
-
-pybind11_add_module(metric_fitting metric_fitting.cc)
-set_target_properties(metric_fitting PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(metric_fitting PUBLIC MeshFEM)
-target_compile_options(metric_fitting PRIVATE -ftemplate-backtrace-limit=0)
-
-pybind11_add_module(panelization panelization.cc)
-set_target_properties(panelization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(panelization PUBLIC MeshFEM)
-target_compile_options(panelization PRIVATE -ftemplate-backtrace-limit=0)
-
 if (INCLUDE_TINYAD)
     pybind11_add_module(tinyad_parametrization tinyad_parametrization.cc)
     set_target_properties(tinyad_parametrization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
@@ -29,11 +15,6 @@ pybind11_add_module(symdir_test symdir_test.cc)
 set_target_properties(symdir_test PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(symdir_test PUBLIC MeshFEM)
 target_compile_options(symdir_test PRIVATE -ftemplate-backtrace-limit=0)
-
-pybind11_add_module(custom_energy_demo custom_energy_demo.cc)
-set_target_properties(custom_energy_demo PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(custom_energy_demo PUBLIC MeshFEM)
-target_compile_options(custom_energy_demo PRIVATE -ftemplate-backtrace-limit=0)
 
 pybind11_add_module(flip_avoiding_step_length flip_avoiding_step_length.cc)
 set_target_properties(flip_avoiding_step_length PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
@@ -54,11 +35,6 @@ pybind11_add_module(fast_newton_flow fast_newton_flow.cc)
 set_target_properties(fast_newton_flow PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(fast_newton_flow PUBLIC MeshFEM)
 target_compile_options(fast_newton_flow PRIVATE -ftemplate-backtrace-limit=0)
-
-pybind11_add_module(simple_elastic_solid simple_elastic_solid.cc)
-set_target_properties(simple_elastic_solid PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(simple_elastic_solid PUBLIC MeshFEM)
-target_compile_options(simple_elastic_solid PRIVATE -ftemplate-backtrace-limit=0)
 
 pybind11_add_module(poisson_gradient_integration poisson_gradient_integration.cc)
 set_target_properties(poisson_gradient_integration PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
