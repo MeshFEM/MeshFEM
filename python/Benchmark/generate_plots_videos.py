@@ -68,10 +68,10 @@ def gen_plots_videos(base_path, modeltxt_path, plots_folder_name, videos_folder_
         print(f"{model_ind+1}/{numModels} Model: {model_name} generation starts.")
         in_model_timer = time.time()
         # read benchmark data
-        obj_grad_time_list = plot_video_utils.readConvergenceTimingData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
-        obj_list, grad_norm_list, hessian_projected_list, hessian_shifted_amount_list, hessian_indef_list, step_list, dd_list = plot_video_utils.readHessianData(os.path.join(base_path, model_name), hessian_option_list)
-        # uv_dist_list = plot_video_utils.readUVdist(os.path.join(base_path, model_name), hessian_option_list)
-        model_dict = plot_video_utils.readDictData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
+        # obj_grad_time_list = plot_video_utils.readConvergenceTimingData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
+        obj_list, grad_norm_list, time_list, hessian_projected_list, hessian_shifted_amount_list, hessian_indef_list, step_list, dd_list = plot_video_utils.readHessianData(os.path.join(base_path, model_name), hessian_option_list)
+        # # uv_dist_list = plot_video_utils.readUVdist(os.path.join(base_path, model_name), hessian_option_list)
+        # model_dict = plot_video_utils.readDictData(os.path.join(base_path, model_name), thread_num_list, hessian_option_list)
 
         numThreads = len(thread_num_list)
         if video_flag:
@@ -81,32 +81,29 @@ def gen_plots_videos(base_path, modeltxt_path, plots_folder_name, videos_folder_
                 video_dir = os.path.join(base_path, videos_folder_name, model_name)
                 if not os.path.exists(video_dir):  os.makedirs(video_dir)
 
-                obj_sected_list = plot_video_utils.sectMetricList(obj_list, sect=section_dict[model_name])
-                grad_norm_sected_list = plot_video_utils.sectMetricList(grad_norm_list, sect=section_dict[model_name])
-                hessian_projected_sected_list = plot_video_utils.sectMetricList(hessian_projected_list, sect=section_dict[model_name])
-                obj_grad_time_sected_list = plot_video_utils.sectObjGradTimeList(obj_grad_time_list, sect=section_dict[model_name])
+                # obj_sected_list = plot_video_utils.sectMetricList(obj_list, sect=section_dict[model_name])
+                # grad_norm_sected_list = plot_video_utils.sectMetricList(grad_norm_list, sect=section_dict[model_name])
+                # hessian_projected_sected_list = plot_video_utils.sectMetricList(hessian_projected_list, sect=section_dict[model_name])
+                # obj_grad_time_sected_list = plot_video_utils.sectObjGradTimeList(obj_grad_time_list, sect=section_dict[model_name])
+
+                # plot_video_utils.genParamVideos(base_path, model_name, MODEL_BASE, video_dir, hessian_option_list, speedup=1)
+                plot_video_utils.genMetricIterVideos(grad_norm_list, time_list, model_name, 'Grad', video_dir, hessian_option_list)
 
                 # full version
                 # plot_video_utils.gen_MetricIter_videos(grad_norm_list, hessian_projected_list, obj_grad_time_list, 
                 #                                        model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
                 # plot_video_utils.gen_MetricIter_videos(obj_list, hessian_projected_list, obj_grad_time_list, 
                 #                                        model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1)
-                # plot_video_utils.gen_Param_videos(base_path, obj_list, obj_grad_time_list, 
-                #                                     model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1)
+
                 
                 # sected Version
                 
                 # plot_video_utils.gen_MetricIter_videos(obj_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
                 #                                        model_name, 'Obj', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
 
-                plot_video_utils.gen_MetricIter_videos(grad_norm_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
-                                                       model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
+                # plot_video_utils.gen_MetricIter_videos(grad_norm_sected_list, hessian_projected_sected_list, obj_grad_time_sected_list, 
+                #                                        model_name, 'Grad', video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
                 
-                # plot_video_utils.gen_Param_videos(base_path, obj_sected_list, obj_grad_time_sected_list, 
-                #                                     model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=speedup_dict[model_name], sect=section_dict[model_name])
-                # For TinyAD
-                # plot_video_utils.gen_Param_videos(base_path, obj_sected_list, obj_grad_time_sected_list, 
-                #                                     model_name, MODEL_BASE, video_dir, i, thread_num_list, hessian_option_list, speedup=1, sect=section_dict[model_name])
                 
         
         else:

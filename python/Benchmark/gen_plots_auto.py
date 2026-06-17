@@ -131,7 +131,7 @@ def gen_plots(base_path, thread_num_list):
 if __name__ == "__main__":
     # Check if the script is provided with the required arguments
     if len(sys.argv) != 2:
-        print("Usage: python run_all_models.py <result_path>")
+        print("Usage: python gen_plots_auto.py <result_path>")
         sys.exit(1)
 
     # Parse command-line arguments
