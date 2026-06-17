@@ -90,13 +90,16 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
         m_arclen = arclen;
         m_projectHessian = projectHessian;
+        m_projectedElementIndices.clear();
+        m_sliceIndexForElement.clear();
 
         if (!m_F) m_F = std::make_unique<FType>(TaylorADFields::make_matrix_field<MNd>());
         if (!m_P) m_P = std::make_unique<PType>(SymmetricDirichletTADField::PK1(*m_F));
 
-        if (!m_F_prime) m_F_prime = std::make_unique<FPrimeType>(derivative(*m_F));
+        if (!m_F_slice) m_F_slice = std::make_unique<FType>(TaylorADFields::make_matrix_field<MNd>());
+        if (!m_F_prime) m_F_prime = std::make_unique<FPrimeType>(derivative(*m_F_slice));
         // TODO: rebuild `m_mod` when eigenvalueClampTarget is updated...
-        if (!m_mod) m_mod = std::make_unique<HModType>(SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, *m_F, *m_F_prime));
+        if (!m_mod) m_mod = std::make_unique<HModType>(SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, *m_F_slice, *m_F_prime));
 
         if (!m_coeffPerturb)       m_coeffPerturb       = std::make_unique<TaylorADFields::CoefficientPerturbations>();
         if (!m_lambdaCoeffPerturb) m_lambdaCoeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
@@ -221,20 +224,44 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 else cs_P.upgrade(d);
 
                 if (m_projectHessian && d > 1) {
-                    // Automatically compute the per-element projection mask if
-                    // one was not already specified (here we disable projection
-                    // on elements whose minimum Hessian eigenvalues are already
-                    // at or above the clamp target).
-                    if (d == 2 && !this->hasPerElementHessianProjectionMasks()) {
-                        BENCHMARK_SCOPED_TIMER_SECTION t3("Compute Hessian Projection Mask");
-                        const size_t ne = m.numElements();
-                        projMask.resize(ne);
-                        const auto &F0 = F[0];
-                        double target = eigenvalueClampTarget;
-                        parallel_for_range(0, ne, [target, &F0, &projMask](size_t ei) {
-                            double lmin = SymmetricDirichletTADField::minimumEigenvalue(F0[ei]);
-                            projMask[ei] = lmin < target;
-                        }, 2048);
+                    if (d == 2) {
+                        // Automatically compute the per-element projection mask if
+                        // one was not already specified (here we disable projection
+                        // on elements whose minimum Hessian eigenvalues are already
+                        // at or above the clamp target).
+                        if (!this->hasPerElementHessianProjectionMasks()) {
+                            BENCHMARK_SCOPED_TIMER_SECTION t3("Compute Hessian Projection Mask");
+                            const size_t ne = m.numElements();
+                            projMask.resize(ne);
+                            const auto &F0 = F[0];
+                            double target = eigenvalueClampTarget;
+                            parallel_for_range(0, ne, [target, &F0, &projMask](size_t ei) {
+                                double lmin = SymmetricDirichletTADField::minimumEigenvalue(F0[ei]);
+                                projMask[ei] = lmin < target;
+                            }, 2048);
+                        }
+
+                        // Update the slicing indices
+                        m_sliceIndexForElement.assign(ne, -1);
+                        for (size_t ei = 0; ei < ne; ++ei) {
+                            if (projMask[ei]) {
+                                m_sliceIndexForElement[ei] = m_projectedElementIndices.size();
+                                m_projectedElementIndices.push_back(ei);
+                            }
+                        }
+                    }
+
+                    // Update the `F_slice` based on the contents of `F`.
+                    auto &F_slice = *m_F_slice;
+                    for (int dd = F_slice->degree() + 1; dd <= F->degree(); ++dd) {
+                        F_slice->emplace_back();
+                        const auto &F_coeff = (*F)[dd];
+                        auto &F_slice_coeff = F_slice->back();
+                        F_slice_coeff.resize(m_projectedElementIndices.size());
+                        for (size_t i = 0; i < m_projectedElementIndices.size(); ++i) { // parallelize?
+                            size_t ei = m_projectedElementIndices[i];
+                            F_slice_coeff[i] = F_coeff[ei];
+                        }
                     }
 
                     // Currently F is newly known to degree `d - 1`, and so we can now determine coefficient `d - 2` of `F'`.
@@ -270,7 +297,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 #if 1
                     // Add contribution from Hessian projection.
                     if (m_projectHessian && d >= 2 && projMask[ei])
-                        P_e += mod[d - 1][ei];
+                        P_e += mod[d - 1][m_sliceIndexForElement[ei]];
 #else // Comparison against scalar TAD implementation of projection contribution for debugging
                     if (projectHessian && d == 2) {
                         using TAD = TaylorAutodiff<double, 1>;
@@ -375,8 +402,8 @@ private:
 
     double x1_normSq = 0.0; // Cached value of ||x_1||^2 used for arclength normalization.
 
-    std::unique_ptr<FType> m_F;
-    std::unique_ptr<PType> m_P;
+    std::unique_ptr<FType> m_F, m_F_slice;   // Deformation gradient field and a sliced version used to restrict more expensive Hessian projection computations to only the elements that need them.
+    std::unique_ptr<PType> m_P;              // PK1 stress field
     std::unique_ptr<LambdaPType> m_lambda_P; // Scaled version of `P` used for arclength variant.
     std::unique_ptr<ScalarType> m_lambda; // Normalization factor for arclength variant.
     std::unique_ptr<HModType> m_mod; // PK1 perturbation field for Hessian projection.
@@ -387,6 +414,7 @@ private:
 
     Eigen::Matrix<double, Eigen::Dynamic, NumVarsPerElement, Eigen::RowMajor> m_elementContribs;
     Eigen::Array<bool, Eigen::Dynamic, 1> m_eigenvalueNeedsProjection;
+    std::vector<int> m_projectedElementIndices, m_sliceIndexForElement;
 
     // We record the current degree separately from the coefficient array
     // to enable resetting higher-degree coefficients without freeing their
