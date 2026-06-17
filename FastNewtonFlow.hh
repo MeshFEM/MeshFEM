@@ -123,8 +123,8 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
         BENCHMARK_SCOPED_TIMER_SECTION timer2("Compute F0 and F1");
         size_t ne = Base::mesh().numElements();
-        F->emplace_back(); auto &F0 = F->back(); F0.array().resize(ne, Dim * Dim);
-        F->emplace_back(); auto &F1 = F->back(); F1.array().resize(ne, Dim * Dim);
+        F->emplace_back(); auto &F0 = F->back(); F0.resize(ne);
+        F->emplace_back(); auto &F1 = F->back(); F1.resize(ne);
 
         const VXd &x0 = Base::globalVars();
         const VXd &x1 = getCoefficient(1);
@@ -197,7 +197,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 // expansion was already produced.
                 F->emplace_back();
                 auto &F_coeff = F->back();
-                F_coeff.array().resize(ne, Dim * Dim);
+                F_coeff.resize(ne);
                 const VXd &x_dm1 = getCoefficient(d - 1);
                 parallel_for_range(ne, [this, &F_coeff, &x_dm1, &vs, d](size_t ei) {
                     ElementNodePositions x_e = Base::extractLocalVars(ei, x_dm1, vs);
