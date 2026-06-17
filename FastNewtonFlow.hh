@@ -240,27 +240,33 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                                 projMask[ei] = lmin < target;
                             }, 2048);
                         }
-
-                        // Update the slicing indices
-                        m_sliceIndexForElement.assign(ne, -1);
-                        for (size_t ei = 0; ei < ne; ++ei) {
-                            if (projMask[ei]) {
-                                m_sliceIndexForElement[ei] = m_projectedElementIndices.size();
-                                m_projectedElementIndices.push_back(ei);
-                            }
-                        }
                     }
 
-                    // Update the `F_slice` based on the contents of `F`.
-                    auto &F_slice = *m_F_slice;
-                    for (int dd = F_slice->degree() + 1; dd <= F->degree(); ++dd) {
-                        F_slice->emplace_back();
-                        const auto &F_coeff = (*F)[dd];
-                        auto &F_slice_coeff = F_slice->back();
-                        F_slice_coeff.resize(m_projectedElementIndices.size());
-                        for (size_t i = 0; i < m_projectedElementIndices.size(); ++i) { // parallelize?
-                            size_t ei = m_projectedElementIndices[i];
-                            F_slice_coeff[i] = F_coeff[ei];
+                    {
+                        // BENCHMARK_SCOPED_TIMER_SECTION t3("Projected Element Slicing");
+                        if (d == 2) {
+                            // Update the slicing indices
+                            m_sliceIndexForElement.resize(ne); // Note: could have garbage in the unprojected elements positions, but these aren't referenced.
+                            const int ne_int = int(ne);
+                            for (int ei = 0; ei < ne_int; ++ei) {
+                                if (projMask[ei]) {
+                                    m_sliceIndexForElement[ei] = m_projectedElementIndices.size();
+                                    m_projectedElementIndices.push_back(ei);
+                                }
+                            }
+                        }
+
+                        // Update the `F_slice` based on the contents of `F`.
+                        auto &F_slice = *m_F_slice;
+                        for (int dd = F_slice->degree() + 1; dd <= F->degree(); ++dd) {
+                            F_slice->emplace_back();
+                            const auto &F_coeff = (*F)[dd];
+                            auto &F_slice_coeff = F_slice->back();
+                            F_slice_coeff.resize(m_projectedElementIndices.size());
+                            parallel_for_range(m_projectedElementIndices.size(), [this, &F_coeff, &F_slice_coeff](size_t i) {
+                                size_t ei = m_projectedElementIndices[i];
+                                F_slice_coeff[i] = F_coeff[ei];
+                            }, 100, 1000);
                         }
                     }
 
