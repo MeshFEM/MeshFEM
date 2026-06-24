@@ -177,13 +177,13 @@ struct MeshEnergy : public MeshEnergyBase {
     void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".accumulateGradient");
         if constexpr (Element::CachesDeformedQuantities) {
-            assembler().assembleGradient(g, elements.size(), [&](size_t ei) {
+            assembler().assembleGradientConditionalGather(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight);
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }
         else {
             const auto &vs = m_vars.varStructure();
-            assembler().assembleGradient(g, elements.size(), [&](size_t ei) {
+            assembler().assembleGradientConditionalGather(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight, extractLocalVars(ei, m_vars.globalVars(), vs));
             }, [this](size_t ei) { return stencils[ei].blockVars; });
         }

@@ -12,7 +12,6 @@
 #define SYSTEMASSEMBLER_HH
 
 #include <vector>
-#include <array>
 #include <atomic>
 #include <tuple>
 #include <functional>
@@ -630,44 +629,171 @@ struct MESHFEM_EXPORT SystemAssembler : public SystemAssemblerBase {
         return assembleGradient(g, m.numElements(), eval_ge, [&m](size_t ei) { return m.elementNodeIndices(ei); });
     }
 
-    using VXd = Eigen::VectorXd;
-    mutable VXd m_pregatherGradient;
-    using NodeLocalNodeAdjacencyMatrix = CSCMatrix<SuiteSparse_long, char>;
-    mutable std::shared_ptr<NodeLocalNodeAdjacencyMatrix> m_localNodesForNode;
-    template<bool Accumulate = true, class Result, class Mesh, class PEGEval>
-    void assembleGradientScatterGather(Result &g, const Mesh &m, const PEGEval &eval_ge) const {
+    ////////////////////////////////////////////////////////////////////////////
+    // Gather-based assembly: a more scalable alternative for high threadcount
+    // settings.
+    //
+    // WARNING: this is only supported in cases where only a single, fixed
+    // element set is used across the lifetime of the assembler object.
+    // Supporting different/changing element sets would require maintaining
+    // multiple GatherCache objects.
+    //
+    // Currently the implemenation also only supports the SingleBlockDim case
+    // with compile-time-known per-element gradient sizes. These
+    // are not fundamental limitations and could be lifted with additional
+    // bookkeeping in the GatherCache.
+    struct GatherCache {
+        template<class ElementGetter>
+        GatherCache(size_t ne, size_t N, size_t numBlockVarsPerElement, const ElementGetter &element) {
+            // Cache vertex => (element, local index) map in a CSCMatrix<Char>
+            int largest_var_idx = -1;
+            TripletMatrix<Triplet<char>> localNodesForNodeTrip(ne * numBlockVarsPerElement * N, /* init_ncols = */ 0);
+            for (size_t ei = 0; ei < ne; ++ei) {
+                auto bvars = element(ei);
+                for (size_t lni = 0; lni < numBlockVarsPerElement; ++lni) {
+                    localNodesForNodeTrip.nz.emplace_back(N * (numBlockVarsPerElement * ei + lni), bvars[lni], 1); // bypasses size checks
+                    largest_var_idx = std::max<int>(largest_var_idx, bvars[lni]);
+                }
+            }
+            localNodesForNodeTrip.n = largest_var_idx + 1; // infer column size
+            localBVarsForGlobalBVar = NodeLocalNodeAdjacencyMatrix(localNodesForNodeTrip);
+        }
+
+        Eigen::VectorXd pregatherGradient;
+        using NodeLocalNodeAdjacencyMatrix = CSCMatrix<SuiteSparse_long, char>;
+        NodeLocalNodeAdjacencyMatrix localBVarsForGlobalBVar; // TODO: we could use a more compact special-purpose datastructure here
+    };
+
+    mutable std::unique_ptr<GatherCache> m_gatherCache;
+
+    template<bool Accumulate = true, class Result, class PEGEval, class ElementGetter>
+    void assembleGradientGather(Result &g, size_t ne, const PEGEval &eval_ge, const ElementGetter &element) const {
+        using PEG = decltype(eval_ge(0));
+        static_assert(PEG::SizeAtCompileTime > 0, "Per-element gradient currently must be of compile-time-known size for scatter-gather assembly");
         static_assert(VarStructure::SingleBlockDim, "Only SingleBlockDim case is implemented");
+
+        constexpr size_t numElemLocalVars = PEG::SizeAtCompileTime;
         constexpr size_t N = VarStructure::FirstBlockDim;
-        constexpr size_t numElemLocalVars = N * Mesh::NumNodesPerElement;
+        static constexpr int numBlockVarsPerElement = numElemLocalVars / N;
 
         // Cache vertex => (element, local index) map in a CSCMatrix<Char>
-        if (!m_localNodesForNode) {
-            TripletMatrix<Triplet<char>> localNodesForNodeTrip(numElemLocalVars * m.numElements(), m.numNodes());
-            for (auto e : m.elements())
-                for (auto n : e.nodes())
-                    localNodesForNodeTrip.addNZ(numElemLocalVars * e.index() + N * n.localIndex(), n.index(), 1);
+        if (!m_gatherCache)
+            m_gatherCache = std::make_unique<GatherCache>(ne, N, numBlockVarsPerElement, element);
 
-            m_localNodesForNode = std::make_unique<NodeLocalNodeAdjacencyMatrix>(localNodesForNodeTrip);
-        }
-        m_pregatherGradient.resize(m.numElements() * numElemLocalVars);
+        auto &pregatherGradient = m_gatherCache->pregatherGradient;
+        pregatherGradient.resize(ne * numElemLocalVars);
 
-        BENCHMARK_SCOPED_TIMER_SECTION timer("assembleGradientScatterGather");
-        parallel_for_range(m.numElements(), [this, &eval_ge](size_t ei) {
-            m_pregatherGradient.template segment<numElemLocalVars>(ei * numElemLocalVars) = eval_ge(ei);
+        const auto &localBVarsForGlobalBVar = m_gatherCache->localBVarsForGlobalBVar;
+        size_t num_bvars = localBVarsForGlobalBVar.n;
+
+        parallel_for_range(ne, [&pregatherGradient, &eval_ge](size_t ei) {
+            pregatherGradient.template segment<numElemLocalVars>(ei * numElemLocalVars) = eval_ge(ei);
         }, 32, 100);
 
-        if (size_t(g.size()) != N * m.numNodes()) throw std::runtime_error("Unexpected g size");
-        auto *Ai = m_localNodesForNode->Ai.data();
-        auto *Ap = m_localNodesForNode->Ap.data();
-        parallel_for_range(m.numNodes(), [&g, Ai, Ap, this](size_t ni) {
+        if (size_t(g.size()) < N * num_bvars) throw std::runtime_error("Gradient assembly destination is too small (elements stencils access out-of-bounds)");
+        auto *Ai = localBVarsForGlobalBVar.Ai.data();
+        auto *Ap = localBVarsForGlobalBVar.Ap.data();
+        parallel_for_range(num_bvars, [&g, Ai, Ap, &pregatherGradient](size_t ni) {
                 auto *idxPtr = Ai + Ap[ni];
                 auto *colEnd = Ai + Ap[ni + 1];
-                VecN_T<Real, N> g_n = m_pregatherGradient.template segment<N>(*idxPtr);
+                VecN_T<Real, N> g_n = pregatherGradient.template segment<N>(*idxPtr);
                 for (++idxPtr; idxPtr < colEnd; ++idxPtr)
-                    g_n += m_pregatherGradient.template segment<N>(*idxPtr);
+                    g_n += pregatherGradient.template segment<N>(*idxPtr);
                 if constexpr (Accumulate) g.template segment<N>(N * ni) += g_n;
                 else                      g.template segment<N>(N * ni)  = g_n;
-            }, 100, 100);
+            }, 100, 1000);
+    }
+
+    template<bool Accumulate = true, class Result, class Mesh, class PEGEval>
+    void assembleGradientGather(Result &g, const Mesh &m, const PEGEval &eval_ge) const {
+        return assembleGradientGather<Accumulate>(g, m.numElements(), eval_ge, [&m](size_t ei) { return m.elementNodeIndices(ei); });
+    }
+
+    // Due to the limitations of `assembleGradientGather`, we provide
+    // this method that dispatches to either it or the regular
+    // `assembleGradient` based on compile-time compatibility checks and
+    // threading settings.
+    // However, this method still only should be used when the caller is sure
+    // that the same element set is reused across the lifetime of the
+    // assembler object.
+    template<bool Accumulate = true, class Result, class PEGEval, class ElementGetter>
+    void assembleGradientConditionalGather(Result &g, size_t ne, const PEGEval &eval_ge, const ElementGetter &element) const {
+        using PEG = decltype(eval_ge(0));
+        if constexpr (PEG::SizeAtCompileTime > 0 && VarStructure::SingleBlockDim) {
+            // Gather-based assembly is only beneficial in higher thread-count settings
+            if (get_max_num_tbb_threads() >= 4) {
+                assembleGradientGather<Accumulate>(g, ne, eval_ge, element);
+                return;
+            }
+        }
+        if constexpr (!Accumulate) g.setZero();
+        assembleGradient(g, ne, eval_ge, element);
+    }
+
+    template<bool Accumulate = true, class Result, class Mesh, class PEGEval>
+    void assembleGradientConditionalGather(Result &g, const Mesh &m, const PEGEval &eval_ge) const {
+        return assembleGradientConditionalGather<Accumulate>(g, m.numElements(), eval_ge, [&m](size_t ei) { return m.elementNodeIndices(ei); });
+    }
+
+    struct ElementColoring {
+        template<class ElementGetter>
+        ElementColoring(size_t numBlockVars, size_t ne, const ElementGetter &element) {
+            int maxColor = -1;
+            colors.resize(ne);
+            std::vector<std::vector<int>> colorsIncidentNode(numBlockVars);
+            for (size_t ei = 0; ei < ne; ++ei) {
+                auto bvars = element(ei);
+                auto conflict = [&](int color) { // This could be made more efficient (avoiding a separate scan over nodes per color)
+                    for (auto v : bvars) {
+                        for (int c : colorsIncidentNode[v])
+                            if (c == color) return true;
+                    }
+                    return false;
+                };
+                int color = 0;
+                while (conflict(color)) ++color;
+
+                colors[ei] = color;
+                for (auto v : bvars)
+                    colorsIncidentNode[v].push_back(color);
+                maxColor = std::max(maxColor, color);
+            }
+
+            elementsForColor.resize(maxColor + 1);
+            Eigen::VectorXi colorCounts = Eigen::VectorXi::Zero(maxColor + 1);
+            for (size_t ei = 0; ei < ne; ++ei) ++colorCounts[colors[ei]];
+            for (size_t ci = 0; ci < elementsForColor.size(); ++ci) elementsForColor[ci].resize(colorCounts[ci]);
+
+            colorCounts.setZero();
+            for (size_t ei = 0; ei < ne; ++ei) {
+                int color = colors[ei];
+                elementsForColor[color][colorCounts[color]++] = ei;
+            }
+        }
+
+        Eigen::VectorXi colors;
+        std::vector<Eigen::VectorXi> elementsForColor;
+    };
+
+    mutable std::unique_ptr<ElementColoring> elementColoring;
+
+    template<class Result, class PEGEval, class ElementGetter>
+    void assembleGradientColoring(Result &g, size_t ne, const PEGEval &eval_ge, const ElementGetter &element) const {
+        // TODO: run serially for small stencil sets...
+        if (!elementColoring)
+            elementColoring = std::make_unique<ElementColoring>(numBlockVars(), ne, element);
+
+        for (const auto &efc : elementColoring->elementsForColor) {
+            parallel_for_range(efc.size(), [&g, &eval_ge, &element, &efc](size_t i) {
+                size_t ei = efc[i];
+                auto ge = eval_ge(ei);
+                auto bvars = element(ei);
+                for (decltype(bvars.size()) lbi = 0; lbi < bvars.size(); ++lbi) {
+                    g.template segment<VarStructure::FirstBlockDim>(VarStructure::FirstBlockDim * bvars[lbi]) +=
+                        ge.template segment<VarStructure::FirstBlockDim>(VarStructure::FirstBlockDim * lbi);
+                }
+            }, 32, 100);
+        }
     }
 
 private:

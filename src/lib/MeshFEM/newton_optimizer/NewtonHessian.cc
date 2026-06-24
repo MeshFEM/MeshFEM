@@ -26,6 +26,11 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
     m_problem->updateSparsityPattern();
 
     bool needsUpdate = (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID);
+
+    // If the solver changed out from under us, it won't have a symbolic
+    // factorization for the current pattern, and we need to force an update.
+    needsUpdate |= !s.hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic);
+
     if (!needsUpdate) {
         // Even if the sparsity pattern ID is the same, the fixed variables might have changed.
         m_setFixedVars(m_problem->fixedVars());
@@ -417,9 +422,9 @@ void BorderedSparseFactorization::solve(const Eigen::VectorXd &b, Eigen::VectorX
 void NewtonHessianFactorization::solve(const Eigen::VectorXd &b, Eigen::VectorXd &x) const {
     BorderedSparseFactorization::solve(b, x);
 
-    if (m_shift > 0) {
-        // Attempt to use Neumann series to correct for the shift applied during factorization...
-        size_t numCorrections = 0;
+    // Attempt to use Neumann series to correct for the shift applied during factorization...
+    const size_t numCorrections = 0;
+    if (m_shift > 0 && numCorrections > 0) {
         Eigen::VectorXd x_orig = x;
         Eigen::VectorXd x_tilde;
         for (size_t i = 0; i < numCorrections; ++i) {
