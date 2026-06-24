@@ -112,7 +112,7 @@ struct CollisionMesh {
         if ((size_t(dst.rows()) != ncv) || (size_t(dst.cols()) != N)) throw std::runtime_error("CollisionMesh.extractVectorField: dst must already be the correct size");
         parallel_for_range(ncv, [&](size_t i) {
             dst.row(i) = vars.segment(N * nodeForCollisionMeshVertex[i], N);
-        }, /* grain_size */ 0, /* parallelism_threshold */ 1000);
+        }, /* grain_size */ 100, /* parallelism_threshold */ 1000);
     }
 };
 
