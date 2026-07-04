@@ -45,13 +45,13 @@ struct AttenuatedSymmetricDirichlet {
         if (sigma[sigma.size() - 1] < 0) return std::numeric_limits<double>::infinity();
 
         using Scalar = typename Vec::Scalar;
-        if (p == 0.0) return Scalar(2.0 * sigma.size());
+        if (p == 0.0) return Scalar(1.0 * sigma.size());
 
         using std::pow;
         const double exponent = 2.0 * p;
         Scalar result = 0.0;
         for (int i = 0; i < sigma.size(); ++i)
-            result += pow(sigma[i], exponent) + pow(sigma[i], -exponent);
+            result += 0.5*(pow(sigma[i], exponent) + pow(sigma[i], -exponent));
         return result;
     }
 
