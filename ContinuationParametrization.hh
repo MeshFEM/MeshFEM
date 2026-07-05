@@ -41,7 +41,7 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
         F0 << e.node(1)->p - e.node(0)->p,
               e.node(2)->p - e.node(0)->p;
 
-        Eigen::JacobiSVD<M32> svd(F0, Eigen::ComputeThinV);
+        Eigen::JacobiSVD<M32> svd(F0, Eigen::ComputeFullV);
         auto referenceSigma = svd.singularValues();
         area = 0.5 * referenceSigma.prod();
         auto referenceSigmaInv = (1.0 / referenceSigma.array()).matrix();
