@@ -69,6 +69,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Helper functions
 include(MeshFEMUtils)
 
+include(sanitizers)
+
 ################################################################################
 # Options
 ################################################################################
