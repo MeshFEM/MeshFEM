@@ -16,9 +16,8 @@
 template<size_t N>
 struct IPCWrapper : public IPCWrapperBase {
     IPCWrapper(const MXd &collisionVertexPositions, const CombinedCollisionMesh<Real> &cm)
-        : m_assembler(cm.fullModelBlockVars) {
-        collisionMesh = ipc::CollisionMesh(collisionVertexPositions, cm.edges, cm.faces);
-        collisionMesh.can_collide = [&cm](size_t vi, size_t vj) {
+        : m_assembler(cm.fullModelBlockVars), collisionMesh(collisionVertexPositions, cm.edges, cm.faces) {
+        collisionMesh.can_collide = [&cm](size_t vi, size_t vj) -> bool {
             // Obstacles cannot collide
             return !(cm.isObstacleVertex(vi) && cm.isObstacleVertex(vj));
         };
