@@ -12,6 +12,8 @@
 #include <limits>
 #include <MeshFEM/CollisionGrid.hh>
 
+namespace MeshFEM {
+
 inline void merge_duplicate_vertices(
     const std::vector<MeshIO::IOVertex > &inVertices,
     const std::vector<MeshIO::IOElement> &inElements,
@@ -43,5 +45,8 @@ inline void merge_duplicate_vertices(
         for (size_t &vi : e) vi = renumber[vi];
     }
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MERGE_DUPLICATE_VERTICES_HH */

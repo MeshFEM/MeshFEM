@@ -3,11 +3,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/ClosestPointProjection.hh>
 #include <MeshFEM/FEMMesh.hh>
 
 namespace py = pybind11;
+using namespace MeshFEM;
 
 template<size_t D>
 void bind(py::module &detail) {

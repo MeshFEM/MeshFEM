@@ -2,17 +2,20 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
 namespace py = pybind11;
 
 #include <MeshFEM/libigl_aabb/point_simplex_squared_distance.h>
 
 #include <MeshFEM/FieldSampler.hh>
 #include <MeshFEM/EmbeddedElement.hh>
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/Parallelism.hh>
 #include <MeshFEM/algorithms/marching_tetrahedra.hh>
 
 #include "BindingInstantiations.hh"
 #include <MeshFEM/Utilities/MeshConversion.hh>
+
+using namespace MeshFEM;
 
 // `marching_tetrahedra` is specific to tetrahedral meshes...
 template<class Mesh>

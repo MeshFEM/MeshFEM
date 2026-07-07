@@ -15,8 +15,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef QUAD_TRI_SUBDIV_HH
 #define QUAD_TRI_SUBDIV_HH
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <vector>
+
+namespace MeshFEM {
 
 // quadIdx: index of the quad from which each output element originated
 //          This can be propagated across several subdivisions by passing the
@@ -73,5 +75,6 @@ void quad_tri_subdiv(const std::vector<Vertex>  &inVertices,
     }
 }
 
-#endif /* end of include guard: QUAD_TRI_SUBDIV_HH */
+} // namespace MeshFEM
 
+#endif /* end of include guard: QUAD_TRI_SUBDIV_HH */

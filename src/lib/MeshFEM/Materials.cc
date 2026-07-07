@@ -9,6 +9,8 @@
 using boost::property_tree::ptree;
 #endif
 
+namespace MeshFEM {
+
 namespace Materials {
 
 // Derivatives of the elasticity tensor with respect to the material properties:
@@ -381,3 +383,5 @@ template struct Constant<2>;
 template struct Constant<3>;
 
 }
+
+} // namespace MeshFEM

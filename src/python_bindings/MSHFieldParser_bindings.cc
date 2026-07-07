@@ -1,7 +1,9 @@
 #include "MSHFieldWriter_bindings.hh"
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include <MeshFEM/MSHFieldParser.hh>
-#include <MeshFEM/Future.hh>
+#include <MeshFEMCore/Future.hh>
+
+using namespace MeshFEM;
 
 template<size_t N>
 void bindMSHFieldParserDimSpecific(py::module &m) {

@@ -14,6 +14,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include "LoadBinding.hh"
 #include "BindingInstantiations.hh"
 
+using namespace MeshFEM;
+
 using APC = Loads::AttachmentPointCoordinate<double>;
 template<class Springs>
 auto bindSprings(py::module &m, const std::string name) {
@@ -152,4 +154,3 @@ PYBIND11_MODULE(loads, m)
     bindProjectedSprings<2>(m, detail_module);
     bindProjectedSprings<3>(m, detail_module);
 }
-

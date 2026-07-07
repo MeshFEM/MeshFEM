@@ -19,6 +19,8 @@
 #include "EnergyTraits.hh"
 #include "Tensor.hh"
 
+namespace MeshFEM {
+
 // Dimension-specific calculations
 template<typename _Real, size_t N>
 struct CRQuantities;
@@ -240,5 +242,7 @@ private:
     typename CRQ::IRotType m_g;
     bool m_isotropic;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: COROTATEDLINEARELASTICITY_HH */

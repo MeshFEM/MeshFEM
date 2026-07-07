@@ -19,6 +19,8 @@
 #include <MeshFEM/filters/quad_tri_subdiv.hh>
 #include <MeshFEM/filters/hex_tet_subdiv.hh>
 
+namespace MeshFEM {
+
 template<class Vertex, class Element>
 void voxels_to_simplices(const std::vector<Vertex>  &inVertices,
                          const std::vector<Element> &inElements,
@@ -35,5 +37,7 @@ void voxels_to_simplices(const std::vector<Vertex>  &inVertices,
     if (eSize == 8) { return  hex_tet_subdiv(inVertices, inElements, outVertices, outElements, voxelIdx); }
     throw std::runtime_error("Invalid voxel sizes.");
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: VOXELS_TO_SIMPLICES_HH */

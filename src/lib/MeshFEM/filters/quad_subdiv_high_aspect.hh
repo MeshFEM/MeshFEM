@@ -35,6 +35,8 @@
 #include <queue>
 #include <limits>
 
+namespace MeshFEM {
+
 struct QSEdgeData {
     // Edge is only created when an element wants to split it, so init count = 1
     QSEdgeData(size_t elem) : midpointIndex(std::numeric_limits<size_t>::max()) {
@@ -215,5 +217,7 @@ bool quad_subdiv_high_aspect(
 
     return subdivided;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: QUAD_SUBDIV_HIGH_ASPECT_HH */

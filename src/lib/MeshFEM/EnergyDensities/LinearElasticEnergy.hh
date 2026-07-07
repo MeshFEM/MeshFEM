@@ -7,6 +7,8 @@
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
+namespace MeshFEM {
+
 template <typename _Real, size_t _Dimension>
 struct LinearElasticEnergy : public Concepts::LinearElaticEnergy {
     static constexpr EDensityType EDType = EDensityType::FBased;
@@ -92,5 +94,7 @@ protected:
     ETensor m_elasticity_tensor;
     SMatrix m_small_strain_tensor;
 };
+
+} // namespace MeshFEM
 
 #endif

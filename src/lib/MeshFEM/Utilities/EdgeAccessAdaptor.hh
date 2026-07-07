@@ -15,6 +15,8 @@
 #include <utility>
 #include <MeshFEM/MeshIO.hh>
 
+namespace MeshFEM {
+
 template<class EdgeType>
 struct EdgeAccessAdaptor {
     static constexpr size_t   size(const EdgeType &e)           { return e.size(); }
@@ -34,5 +36,8 @@ struct EdgeAccessAdaptor<std::pair<size_t, size_t>> {
     static constexpr size_t    get(const std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; /* assert(false && "Index passed to EdgeAccessAdaptor::get is out of bounds!"); */ return e.second; }
     static constexpr size_t   &get(      std::pair<size_t, size_t> &e, size_t i) { if (i == 0) return e.first; if (i == 1) return e.second; /* assert(false && "Index passed to EdgeAccessAdaptor::get is out of bounds!"); */ return e.second; }
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EDGEACCESSADAPTOR_HH */

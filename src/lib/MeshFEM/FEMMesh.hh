@@ -17,6 +17,7 @@
 #include <cassert>
 #include <memory>
 
+
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/EmbeddedElement.hh>
 
@@ -26,7 +27,9 @@
 
 #include <MeshFEM/Utilities/VertexArrayAdaptor.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/Parallelism.hh>
+
+namespace MeshFEM {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
@@ -536,5 +539,7 @@ private:
 };
 
 #include <MeshFEM/FEMMesh.inl>
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FEMMESH_HH */

@@ -27,6 +27,8 @@
 #include <iostream>
 #include <MeshFEM/Geometry.hh>
 
+namespace MeshFEM {
+
 template<size_t N>
 struct DenseGridStorage;
 
@@ -36,7 +38,7 @@ struct DenseGridStorage;
 template<>
 struct DenseGridStorage<2> {
     using BinIndex = std::array<size_t, 2>;
-    using BBox = ::BBox<VectorND<2>>;
+    using BBox = ::MeshFEM::BBox<VectorND<2>>;
     using TaggedBBox = std::pair<BBox, size_t>;
     using Bin = std::vector<TaggedBBox, Eigen::aligned_allocator<TaggedBBox>>;
     DenseGridStorage(size_t size) : data(size, std::vector<Bin>(size)) { }
@@ -67,7 +69,7 @@ struct DenseGridStorage<2> {
 template<>
 struct DenseGridStorage<3> {
     using BinIndex = std::array<size_t, 3>;
-    using BBox = ::BBox<VectorND<3>>;
+    using BBox = ::MeshFEM::BBox<VectorND<3>>;
     using TaggedBBox = std::pair<BBox, size_t>;
     using Bin = std::vector<TaggedBBox, Eigen::aligned_allocator<TaggedBBox>>;
 
@@ -104,7 +106,7 @@ class DenseCollisionGrid {
 public:
     using Point      = VectorND<N>;
     using Vector     = VectorND<N>;
-    using BBox       = ::BBox<Point>;
+    using BBox       = ::MeshFEM::BBox<Point>;
     using TaggedBBox = std::pair<BBox, size_t>;
     using Bin        = std::vector<TaggedBBox>;
     using BinIndex   = typename DenseGridStorage<N>::BinIndex;
@@ -157,5 +159,7 @@ private:
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DENSECOLLISIONGRID_HH */

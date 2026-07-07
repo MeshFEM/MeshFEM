@@ -1,8 +1,10 @@
-#include "MeshFEM/Types.hh"
+#include <MeshFEMCore/Types.hh>
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
+
+using namespace MeshFEM;
 namespace py = pybind11;
 
 #include <MeshFEM/MonteCarloIntegration.hh>

@@ -10,6 +10,8 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 #include <MeshFEM/EquilibriumSolver.hh>
 #include "EquilibriumBinding.hh"
 
+using namespace MeshFEM;
+
 template<typename Real_>
 void bind(py::module &m) {
     const std::string name = "ElasticObject" + floatingPointTypeSuffix<Real_>();

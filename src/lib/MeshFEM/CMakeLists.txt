@@ -1,5 +1,7 @@
 ################################################################################
 
+include(MeshFEMDependencies)
+
 add_library(MeshFEM SHARED
         Algebra.hh
         BaseCellType.hh
@@ -24,18 +26,11 @@ add_library(MeshFEM SHARED
         FEMMesh.inl
         Fields.hh
         Flattening.hh
-        function_traits.hh
         Functions.hh
-        Future.hh
         FieldSampler.hh
         GaussQuadrature.hh
         Geometry.hh
-        GlobalBenchmark.cc
-        GlobalBenchmark.hh
         GridFunction.hh
-        HalfEdge.hh
-        HalfEdge.inl
-        HalfedgeDictionary.hh
         InterpolantRestriction.hh
         JSFieldWriter.hh
         Laplacian.hh
@@ -53,12 +48,8 @@ add_library(MeshFEM SHARED
         MSHFieldParser.cc
         MSHFieldParser.hh
         MSHFieldWriter.hh
-        NTuple.hh
         OneForm.hh
         OrthotropicHomogenization.hh
-        Parallelism.hh
-        Parallelism.cc
-        ParallelAssembly.hh
         Parametrization.cc
         Parametrization.hh
         PeriodicBoundaryMatcher.hh
@@ -68,33 +59,20 @@ add_library(MeshFEM SHARED
         Simplex.hh
         SimplicialMesh.hh
         SimplicialMeshInterface.hh
-        SparseMatrices.hh
         StringUtils.cc
         StringUtils.hh
         SymmetricMatrix.hh
         SymmetricMatrixInterpolant.hh
-        TemplateHacks.hh
         TensorProjection.hh
         TetMesh.hh
         TetMesh.inl
-        Timer.hh
         Triangulate.h
         TriMesh.hh
         TriMesh.inl
-        Types.cc
-        Types.hh
         UniformLaplacian.hh
         util.h
         utils.hh
         VonMises.hh
-
-        Solvers/make_cholesky_factorizer.cc
-        Solvers/CatamariFactorizer.cc
-        Solvers/PardisoFactorizer.cc
-        Solvers/AccelerateFactorizer.cc
-        Solvers/MatrixRecorder.cc
-        Solvers/accelerate_ordering.cc
-        Solvers/pardiso_ordering.cc
 
         algorithms/get_element_components.hh
         algorithms/remove_if_index.hh
@@ -137,7 +115,7 @@ add_library(MeshFEM SHARED
         newton_optimizer/newton_optimizer.hh
         newton_optimizer/ConvergenceReport.hh
         newton_optimizer/MultiobjectiveProblem.cc
-        newton_optimizer/NewtonHessian.cc
+        newton_optimizer/NewtonHessianFactorization.cc
 
         EnergyDensities/LinearElasticEnergy.hh
         EnergyDensities/NeoHookeanEnergy.hh
@@ -149,19 +127,8 @@ add_library(MeshFEM SHARED
         IPCIntegration/IPCObjectiveTerm.cc
         IPCIntegration/IPCWrapper.cc
 
-        BlockCSCHessian.cc
-
         ClosestPointProjection.cc
 )
-
-# Swap `Solvers/CatamariFactorizerLegacy.cc` in for `Solvers/CatamariFactorizer.cc`
-# if the legacy Catamari solver is requested.
-if (MESHFEM_USE_LEGACY_CATAMARI)
-    get_target_property(modified_sources MeshFEM SOURCES)
-    list(REMOVE_ITEM modified_sources Solvers/CatamariFactorizer.cc)
-    list(APPEND modified_sources Solvers/CatamariFactorizerLegacy.cc)
-    set_target_properties(MeshFEM PROPERTIES SOURCES "${modified_sources}")
-endif()
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC ..)
@@ -174,6 +141,8 @@ target_link_libraries(${PROJECT_NAME}
         TBB::tbb
         Threads::Threads
         Eigen3::Eigen
+        MeshFEMCore
+        MeshFEMSparse
         optional::optional
         triangle::triangle
         tinyexpr::tinyexpr

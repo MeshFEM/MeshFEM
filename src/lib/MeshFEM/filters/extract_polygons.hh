@@ -16,6 +16,8 @@
 #include <MeshFEM/MeshIO.hh>
 #include <MeshFEM/Utilities/EdgeAccessAdaptor.hh>
 
+namespace MeshFEM {
+
 template<size_t N, class PointType, class EdgeType>
 void extract_polygons(const std::vector<PointType> &inVertices,
                       const std::vector< EdgeType> &inEdges,
@@ -52,5 +54,7 @@ void extract_polygons(const std::vector<PointType> &inVertices,
         }
     }
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EXTRACT_POLYGONS_HH */

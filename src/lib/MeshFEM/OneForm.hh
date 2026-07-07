@@ -18,9 +18,12 @@
 #include <MeshFEM/Fields.hh>
 #include <stdexcept>
 
+
 #include <MeshFEM/Algebra.hh>
 
-#include <MeshFEM/function_traits.hh>
+#include <MeshFEMCore/function_traits.hh>
+
+namespace MeshFEM {
 
 template<typename T, size_t N>
 struct OneForm : public VectorSpace<Real, OneForm<T, N>> {
@@ -153,5 +156,7 @@ private:
 // Scalar-valued one form
 template<size_t N>
 using ScalarOneForm = OneForm<Real, N>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ONEFORM_HH */

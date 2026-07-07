@@ -17,11 +17,14 @@
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 
+
 #ifdef MESHFEM_WITH_TINYAD
 #include <TinyAD/Scalar.hh>
 #else // !MESHFEM_WITH_TINYAD
-#include <MeshFEM/AutomaticDifferentiation.hh>
+#include <MeshFEMCore/AutomaticDifferentiation.hh>
 #endif // MESHFEM_WITH_TINYAD
+
+namespace MeshFEM {
 
 template<class ElementEnergy>
 struct AutodiffElement;
@@ -151,5 +154,8 @@ private:
     }
 
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: AUTODIFFELEMENT_HH */

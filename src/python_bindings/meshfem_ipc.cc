@@ -16,6 +16,8 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include "MeshBindings.hh"
 
+using namespace MeshFEM;
+
 using PyCM = py::class_<CollisionMesh, std::shared_ptr<CollisionMesh>>;
 
 struct CollisionMeshBinder {

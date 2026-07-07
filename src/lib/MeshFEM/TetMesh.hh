@@ -90,6 +90,8 @@
 #include <MeshFEM/Handles/TetMeshHandles.hh>
 #include <MeshFEM/SimplicialMeshInterface.hh>
 
+namespace MeshFEM {
+
 template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class HalfFaceData = TMEmptyData, class TetData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryHalfEdgeData = TMEmptyData,
          class BoundaryFaceData = TMEmptyData>
@@ -681,6 +683,8 @@ protected:
         return _HERep(tet, lhf, m_faceCornerToTetCorner(lhf, lhe)).index();
     }
 };
+
+} // namespace MeshFEM
 
 #include <MeshFEM/TetMesh.inl>
 

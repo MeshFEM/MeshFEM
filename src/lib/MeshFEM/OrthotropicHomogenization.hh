@@ -14,15 +14,18 @@
 #ifndef ORTHOTROPICHOMOGENIZATION_HH
 #define ORTHOTROPICHOMOGENIZATION_HH
 
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/Solvers/SPSDSystem.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/SPSDSystem.hh>
 #include <vector>
 #include <memory>
 #include <stdexcept>
 #include <bitset>
 
+
 #include <MeshFEM/PeriodicBoundaryMatcher.hh>
 #include <MeshFEM/PeriodicHomogenization.hh>
+
+namespace MeshFEM {
 
 // WARNING: ONLY WORKS WITH ORTHOTROPIC BASE MATERIAL
 namespace PeriodicHomogenization {
@@ -237,5 +240,7 @@ homogenizedElasticityTensorDiscreteDifferential(
 
 } // Orthotropic
 } // PeriodicHomogenization
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ORTHOTROPICHOMOGENIZATION_HH */

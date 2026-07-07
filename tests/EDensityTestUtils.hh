@@ -60,16 +60,16 @@ void compareEnergies(Psi_C &&psi_C, Psi_F &&psi_F) {
         psi_C.setC(C);
         REQUIRE(psi_F.energy() == Approx(psi_C.energy()));
 
-        REQUIRE(psi_F.denergy(dF) == Approx(doubleContract(psi_C.PK2Stress(), 0.5 * dC)));
+        REQUIRE(psi_F.denergy(dF) == Approx(MeshFEM::doubleContract(psi_C.PK2Stress(), 0.5 * dC)));
         requireApproxEqual(psi_F.delta_denergy(dF), dF * psi_C.PK2Stress() + F * psi_C.delta_PK2Stress(dC));
 
         // Also test the VectorizedShapeFunctionJacobian version of directional derivatives.
-        using VSFJ = VectorizedShapeFunctionJacobian<FType::RowsAtCompileTime, decltype(F.row(0).transpose().eval())>;
+        using VSFJ = MeshFEM::VectorizedShapeFunctionJacobian<FType::RowsAtCompileTime, decltype(F.row(0).transpose().eval())>;
         VSFJ dF_VSFJ(0, dF.row(0));
         auto dC_VSFJ = (F.transpose() * dF_VSFJ.matrix()).eval();
         dC_VSFJ = (dC_VSFJ + dC_VSFJ.transpose()).eval();
 
-        REQUIRE(doubleContract(psi_F.denergy(), dF_VSFJ) == Approx(doubleContract(psi_C.PK2Stress(), 0.5 * dC_VSFJ)));
+        REQUIRE(MeshFEM::doubleContract(psi_F.denergy(), dF_VSFJ) == Approx(MeshFEM::doubleContract(psi_C.PK2Stress(), 0.5 * dC_VSFJ)));
         requireApproxEqual(psi_F.delta_denergy(dF_VSFJ), dF_VSFJ.matrix() * psi_C.PK2Stress() + F * psi_C.delta_PK2Stress(dC_VSFJ));
     });
 }

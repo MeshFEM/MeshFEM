@@ -20,8 +20,11 @@
 #define STRESSTOBIOTSTRAIN_HH
 
 #include "EnergyTraits.hh"
+#include "Tensor.hh"
 #include <MeshFEM/newton_optimizer/dense_newton.hh>
 #include <MeshFEM/Flattening.hh>
+
+namespace MeshFEM {
 
 template<class Psi>
 struct StressToBiotStrainProblem {
@@ -122,5 +125,7 @@ template<class Psi>
 auto stressToDefGrad(const Psi &psi, const typename StressToBiotStrainProblem<Psi>::MNd &PK1Stress, double gradTol = 1e-9, bool verbose = false) {
     return (StressToBiotStrainProblem<Psi>::solve(psi, PK1Stress, gradTol, verbose) + StressToBiotStrainProblem<Psi>::MNd::Identity()).eval();
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: STRESSTOBIOTSTRAIN_HH */

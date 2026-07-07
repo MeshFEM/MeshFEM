@@ -10,6 +10,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "../argparse.hh"
 
+namespace MeshFEM {
+
 struct AbsOp   : public UnaryOp { AbsOp(const std::string &arg) : UnaryOp(arg) { }; virtual Real operator()(Real a) const { return std::abs(a); } };
 struct ScaleOp : public UnaryOp { virtual Real operator()(Real a) const { return m_s * a; };
     ScaleOp(const std::string &arg) { setArg(arg); }
@@ -48,3 +50,5 @@ std::unique_ptr<T> applyUnaryOp(const UnaryOp &op, const T &a) {
     applyUnaryOpInPlace(op, *result);
     return result;
 }
+
+} // namespace MeshFEM

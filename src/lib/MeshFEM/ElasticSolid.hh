@@ -9,16 +9,17 @@
 
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
-#include "GlobalBenchmark.hh"
-#include "ParallelAssembly.hh"
-#include "SparseMatrices.hh"
-#include "SystemAssembler.hh"
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMSparse/ParallelAssembly.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
 #include "Functions.hh"
 #include "EnergyDensities/EnergyTraits.hh"
 #include "FieldSamplerMatrix.hh"
 #include <Eigen/Sparse>
 #include "Utilities/MeshConversion.hh"
 #include "Utilities/DensePSDDetect.hh"
+
 
 #include "RigidMotionPins.hh"
 #include "FieldPostProcessing.hh"
@@ -32,6 +33,8 @@
 #include "Elements/SolidElement.hh"
 
 #include "newton_optimizer/NewtonHessian.hh"
+
+namespace MeshFEM {
 
 // _K: simplex dimension (2 ==> tri/3 ==> tet)
 // _Deg: finite element degree (1 or 2)
@@ -339,7 +342,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     virtual NewtonHessian hessianSparsityPattern(VariableMask vmask = VariableMask::Defo) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.hessianSparsityPattern");
         if (vmask != VariableMask::Defo) throw std::runtime_error("Unimplemented VariableMask");
-        return NewtonHessian(blockSparsityPattern());
+        return blockSparsityPattern();
     }
 
     // Construct a block-valued Hessian (for comparison purposes)
@@ -558,7 +561,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     void filterRMPinArtifacts(const typename RMPins::PinVertices &pinVertices) {
-        ::filterRMPinArtifacts(*this, pinVertices);
+        MeshFEM::filterRMPinArtifacts(*this, pinVertices);
     }
 
     virtual std::unique_ptr<FieldSampler> referenceConfigSampler() const override {
@@ -632,5 +635,7 @@ protected:
         setDeformedPositions(m_x);
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELASTICSOLID_HH */

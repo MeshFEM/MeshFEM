@@ -25,6 +25,8 @@
 // (Otherwise vertices and elements arrays are unmodified.)
 // componentIndex: index of the component into which each element falls
 // componentSize:  number of elements in each component
+namespace MeshFEM {
+
 bool remove_small_components(const std::vector<size_t> &componentIndex,
                              const std::vector<size_t> &componentSize,
                              std::vector<MeshIO::IOVertex> &vertices,
@@ -71,5 +73,8 @@ bool remove_small_components(const Mesh &m,
     return remove_small_components(componentIndex, componentSize, vertices, elements);
 }
 
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: REMOVE_SMALL_COMPONENTS_HH */

@@ -26,6 +26,8 @@
 //  @param[out] line string output to hold data line
 //  @return     reference to input stream for operator chaining
 *///////////////////////////////////////////////////////////////////////////////
+namespace MeshFEM {
+
 inline std::istream &getDataLine(std::istream &is, std::string &line) {
     do  {
         std::getline(is >> std::ws, line);
@@ -96,8 +98,11 @@ inline std::string rtrim(std::string s) {
 }
 
 // trim from both ends
-inline std::string trim(std::string s) {
+inline std::string trim(const std::string &s) {
     return ltrim(rtrim(s));
 }
+
+
+} // namespace MeshFEM
 
 #endif // UTIL_H

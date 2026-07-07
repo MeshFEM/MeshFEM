@@ -23,7 +23,9 @@
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/GaussQuadrature.hh>
-#include <MeshFEM/TemplateHacks.hh>
+#include <MeshFEMCore/TemplateHacks.hh>
+
+namespace MeshFEM {
 
 // The *EmbeddedSimplex classes store the degree-independent information
 // needed to compute integrals and gradients on embedded simplices for which the
@@ -491,5 +493,7 @@ template<size_t _K, size_t _Deg, class EmbeddingSpace>
 using LinearlyEmbeddedElement = EmbeddedElement<LinearlyEmbeddedSimplex<_K, EmbeddingSpace>, _Deg>;
 template<size_t _K, size_t _Deg, class EmbeddingSpace>
 using   AffineEmbeddedElement = EmbeddedElement<  AffineEmbeddedSimplex<_K, EmbeddingSpace>, _Deg>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EMBEDDEDELEMENT_HH */

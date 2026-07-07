@@ -4,6 +4,8 @@
 
 #include "EDensityTestUtils.hh"
 
+using namespace MeshFEM;
+
 template<size_t K, size_t Deg, class EmbeddingSpace>
 static void run_test() {
     constexpr size_t N = EmbeddingSpace::RowsAtCompileTime;

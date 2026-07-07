@@ -10,7 +10,9 @@
 *///////////////////////////////////////////////////////////////////////////////
 #include <Eigen/Dense>
 #include <MeshFEM/Utilities/DensePSDDetect.hh>
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/Parallelism.hh>
+
+using namespace MeshFEM;
 
 #include <iostream>
 #include <vector>

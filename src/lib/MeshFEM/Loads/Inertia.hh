@@ -12,7 +12,9 @@
 #define INERTIALOAD_HH
 
 #include "Load.hh"
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
+namespace MeshFEM {
 
 namespace Loads {
     template<class Object>
@@ -107,5 +109,7 @@ namespace Loads {
     };
 
 } // namespace Loads
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: INERTIALOAD_HH */

@@ -13,8 +13,10 @@
 #define BOUNDARYMESH_HH
 #include <type_traits>
 #include <MeshFEM/Handles/Handle.hh>
-#include <MeshFEM/TemplateHacks.hh>
+#include <MeshFEMCore/TemplateHacks.hh>
 #include <MeshFEM/MeshDataTraits.hh>
+
+namespace MeshFEM {
 
 template<class _Mesh, size_t VolK = _Mesh::K, bool IsFemMesh = MeshDataTraits<_Mesh>::isFEMMesh>
 struct BoundaryMesh;
@@ -181,5 +183,7 @@ struct BoundaryMesh<_FEMMesh, VolK, true> : public BoundaryMesh<_FEMMesh, VolK, 
 protected:
     using Base::m_mesh;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: BOUNDARYMESH_HH */

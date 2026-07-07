@@ -8,6 +8,8 @@
 
 #include <map>
 
+namespace MeshFEM {
+
 // Triangulates either a set of simple polygons connected by hinge vertices or
 // a single non-simple polygon.
 template<typename _Real, typename _Point, typename _Edge>
@@ -564,5 +566,7 @@ auto make_polygon_set_triangulation(const std::vector<_Point>& points,
 {
     return PolygonSetTriangulation<_Real, _Point, _Edge>(points, polygons, holes, target_area, min_hinge_radius);
 }
+
+} // namespace MeshFEM
 
 #endif

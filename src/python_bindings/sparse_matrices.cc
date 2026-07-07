@@ -2,16 +2,19 @@
 #include <pybind11/stl.h>
 #include <pybind11/eigen.h>
 #include <pybind11/iostream.h>
+
 namespace py = pybind11;
 
-#include <MeshFEM/Types.hh>
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/Solvers/SPSDSystem.hh>
-#include <MeshFEM/Solvers/MatrixRecorder.hh>
+#include <MeshFEMCore/Types.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/SPSDSystem.hh>
+#include <MeshFEMSparse/Solvers/MatrixRecorder.hh>
 
 #if MESHFEM_WITH_CATAMARI
-#include <MeshFEM/Solvers/CatamariFactorizer.hh>
+#include <MeshFEMSparse/Solvers/CatamariFactorizer.hh>
 #endif
+
+using namespace MeshFEM;
 
 PYBIND11_MODULE(sparse_matrices, m) {
     m.doc() = "Sparse Representations and Solvers";

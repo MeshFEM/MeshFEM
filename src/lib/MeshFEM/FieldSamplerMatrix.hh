@@ -13,8 +13,10 @@
 #ifndef DEFORMATIONSAMPLERMATRIX_HH
 #define DEFORMATIONSAMPLERMATRIX_HH
 
-#include "SparseMatrices.hh"
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include "FieldSampler.hh"
+
+namespace MeshFEM {
 
 // m: mesh to sample
 // valueDim: the dimension of the scalar/vector/tensor field's domain
@@ -50,5 +52,7 @@ SuiteSparseMatrix fieldSamplerMatrix(const FEMMesh_ &m, const size_t valueDim, E
 
     return SuiteSparseMatrix(triplet_result);
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DEFORMATIONSAMPLERMATRIX_HH */

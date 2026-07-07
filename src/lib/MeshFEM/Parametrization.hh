@@ -10,9 +10,11 @@
 #ifndef MESHFEM_PARAMETRIZATION_HH
 #define MESHFEM_PARAMETRIZATION_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/FEMMesh.hh>
-#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+
+namespace MeshFEM {
 
 namespace Parametrization {
 
@@ -99,5 +101,6 @@ MESHFEM_EXPORT
 TripletMatrix<> assembleMassMatrix(const Mesh &mesh);
 
 }
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHFEM_PARAMETRIZATION_HH */

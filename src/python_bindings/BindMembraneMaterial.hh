@@ -14,6 +14,8 @@
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/Elements/MembraneElement.hh>
 
+namespace MeshFEM {
+
 template<class Psi>
 auto bindMembraneMaterial(py::module &m, py::module &detail) {
     using MMat = std::conditional_t<
@@ -36,5 +38,7 @@ auto bindMembraneMaterial(py::module &m, py::module &detail) {
 
     return pyMM;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: BINDMEMBRANEMATERIAL_HH */

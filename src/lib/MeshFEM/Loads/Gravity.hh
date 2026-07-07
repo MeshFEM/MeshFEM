@@ -22,6 +22,7 @@
 
 #include "BodyForce.hh"
 
+namespace MeshFEM {
 namespace Loads {
     template<class Object>
     struct Gravity : public BodyForce<Object> {
@@ -67,5 +68,7 @@ namespace Loads {
     };
 
 } // namespace Loads
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: GRAVITY_HH */

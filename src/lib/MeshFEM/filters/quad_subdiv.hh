@@ -20,6 +20,8 @@
 #include <stdexcept>
 #include <MeshFEM/CollisionGrid.hh>
 
+namespace MeshFEM {
+
 // quadIdx: index of the quad from which each output element originated
 //          This can be propagated across several subdivisions by passing the
 //          same array for each call.
@@ -82,5 +84,7 @@ void quad_subdiv(const std::vector<Vertex>  &inVertices,
         }
     }
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: QUAD_SUBDIV_HH */

@@ -18,15 +18,18 @@
 #include <memory>
 #include <stdexcept>
 #include <MeshFEM_export.h>
-#include "Types.hh"
+#include <MeshFEMCore/Types.hh>
 #include "Functions.hh"
 #include "Utilities/MeshConversion.hh"
 #include "ClosestPointProjection.hh"
-#include "Parallelism.hh"
+#include <MeshFEMCore/Parallelism.hh>
+
 
 #include "TetMesh.hh"
 #include "EmbeddedElement.hh"
-#include "TemplateHacks.hh"
+#include <MeshFEMCore/TemplateHacks.hh>
+
+namespace MeshFEM {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Factory Function Declarations
@@ -446,5 +449,7 @@ std::unique_ptr<FieldSampler> ConstructFieldSamplerImpl(const Eigen::MatrixBase<
     else if (V.cols() == 2) return std::make_unique<RawMeshFieldSampler<2>>(V, F);
     else throw std::runtime_error("Only 2D and 3D samplers are implemented.");
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FIELDSAMPLER_HH */

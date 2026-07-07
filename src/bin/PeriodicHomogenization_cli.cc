@@ -4,7 +4,7 @@
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/PeriodicHomogenization.hh>
 #include <MeshFEM/OrthotropicHomogenization.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <MeshFEM/TensorProjection.hh>
 #include <vector>
 #include <queue>
@@ -12,6 +12,8 @@
 #include <iomanip>
 #include <memory>
 #include <cmath>
+
+using namespace MeshFEM;
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>

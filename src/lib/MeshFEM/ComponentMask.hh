@@ -1,7 +1,9 @@
 #ifndef COMPONENTMASK_HH
 #define COMPONENTMASK_HH
 #include <bitset>
-#include "Types.hh"
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 struct ComponentMask {
     ComponentMask(const std::string &components = "") {
@@ -83,5 +85,7 @@ struct ComponentMask {
 private:
     std::bitset<3> m_active;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: COMPONENTMASK_HH */

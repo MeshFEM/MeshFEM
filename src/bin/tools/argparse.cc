@@ -9,6 +9,7 @@
 
 namespace po = boost::program_options;
 using namespace std;
+using namespace MeshFEM;
 
 [[ noreturn ]] void usage(int status, const po::options_description &visible_opts) {
     cout << "Usage: msh_processor in.msh [options]" << endl;

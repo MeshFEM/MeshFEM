@@ -6,6 +6,8 @@ namespace py = pybind11;
 
 #include <MeshFEM/Parametrization.hh>
 
+using namespace MeshFEM;
+
 PYBIND11_MODULE(parametrization, m)
 {
     py::module::import("mesh");

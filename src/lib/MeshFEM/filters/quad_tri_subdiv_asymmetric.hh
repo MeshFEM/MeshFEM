@@ -14,12 +14,15 @@
 #ifndef QUAD_TRI_SUBDIV_ASYMMETRIC_HH
 #define QUAD_TRI_SUBDIV_ASYMMETRIC_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <vector>
+
 
 // quadIdx: index of the quad from which each output element originated
 //          This can be propagated across several subdivisions by passing the
 //          same array for each call.
+namespace MeshFEM {
+
 template<class Vertex, class Element>
 void quad_tri_subdiv_asymmetric(const std::vector<Vertex>  &inVertices,
                      const std::vector<Element> &inElements,
@@ -64,5 +67,8 @@ void quad_tri_subdiv_asymmetric(const std::vector<Vertex>  &inVertices,
         }
     }
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: QUAD_TRI_SUBDIV_ASYMMETRIC_HH */

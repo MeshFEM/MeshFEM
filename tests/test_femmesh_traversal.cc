@@ -3,6 +3,8 @@
 // after MeshFEM.
 #include <catch2/catch.hpp>
 
+using namespace MeshFEM;
+
 // Tet mesh tests
 template<size_t _Deg>
 void dimensionSpecificTests(const FEMMesh<3, _Deg, VectorND<3>> &m) {

@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 #include <MeshFEM/util.h>
-#include <MeshFEM/Types.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/Types.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <MeshFEM/SymmetricMatrix.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
@@ -22,6 +22,8 @@
 #include <MeshFEM/PeriodicHomogenization.hh>
 #include <MeshFEM/MSHFieldWriter.hh>
 #include <MeshFEM/filters/remove_dangling_vertices.hh>
+
+using namespace MeshFEM;
 
 #include <boost/program_options.hpp>
 #include <json.hpp>

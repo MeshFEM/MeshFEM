@@ -3,6 +3,8 @@
 #include <map>
 #include <string>
 
+namespace MeshFEM {
+
 struct ConvergenceReport {
     bool success = false;
     bool backtracking_failure = false;
@@ -38,5 +40,8 @@ struct ConvergenceReport {
         }
     }
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CONVERGENCE_REPORT_HH */

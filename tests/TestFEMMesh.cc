@@ -1,7 +1,9 @@
 #include <iostream>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
+using namespace MeshFEM;
 
 #include <vector>
 #include <queue>

@@ -33,6 +33,8 @@
 #include <MeshFEM/PeriodicBoundaryMatcher.hh>
 #include <MeshFEM/Geometry.hh>
 
+namespace MeshFEM {
+
 bool isOutsideResamplingRegions(Point3D p, std::vector<Region<Point3D> *> inRegions, std::vector<Region<Point3D> *> outRegions) {
 
     // marking which points are filtered and which are not
@@ -374,5 +376,8 @@ void resampleCurve(std::list<VectorND<int(N)>> &curve,
         segmentStart = segmentEnd;
     } while (segmentStart != start);
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: RESAMPLECURVE_HH */

@@ -17,6 +17,8 @@
 #include <string>
 #include <memory>
 
+namespace MeshFEM {
+
 // Expression environment for storing variable and their values
 struct ExpressionEnvironment {
     void setValue(const std::string &name, double value) {
@@ -140,5 +142,7 @@ public:
 private:
     std::vector<std::shared_ptr<Expression>> m_evaluators;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EXPRESSIONVECTOR_HH */

@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <Eigen/Dense>
 
+namespace MeshFEM {
+
 template<int paddingCols, typename Derived, typename T = typename Derived::Scalar, typename = typename std::enable_if<(Derived::ColsAtCompileTime > 0), void>::type>
 auto pad_columns(const Eigen::DenseBase<Derived> &mat, T value = 0.0) {
     using MType = Eigen::Matrix<typename Derived::Scalar,
@@ -22,5 +24,8 @@ auto pad_columns(const Eigen::DenseBase<Derived> &mat, T value = 0.0) {
                 return value;
             });
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ARRAYPADDER_HH */

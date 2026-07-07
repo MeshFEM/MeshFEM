@@ -13,9 +13,10 @@
 #define BOUNDARYCONDITIONS_HH
 #include <MeshFEM/PeriodicBoundaryMatcher.hh>
 #include <MeshFEM/Geometry.hh>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/ExpressionVector.hh>
 #include <MeshFEM/ComponentMask.hh>
+
 
 #include <stdexcept>
 #include <string>
@@ -33,6 +34,8 @@
 #include <cassert>
 #include <limits>
 #include <bitset>
+
+namespace MeshFEM {
 
 template<size_t _N>
 struct MESHFEM_EXPORT BoundaryCondition {
@@ -685,5 +688,7 @@ private:
     std::vector<size_t> m_boundaryNodeIndexForNode;
     std::vector<std::vector<size_t>> m_boundaryNodesForDoF;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: BOUNDARYCONDITIONS_HH */

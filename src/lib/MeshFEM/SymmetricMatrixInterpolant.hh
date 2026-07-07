@@ -15,6 +15,8 @@
 #include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/Functions.hh>
 
+namespace MeshFEM {
+
 template<class SMat, size_t _K, size_t _Deg>
 class SymmetricMatrixInterpolant : public Interpolant<SMat, _K, _Deg>
 {
@@ -34,5 +36,7 @@ public:
         return result;
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SYMMETRICMATRIXINTERPOLANT_HH */

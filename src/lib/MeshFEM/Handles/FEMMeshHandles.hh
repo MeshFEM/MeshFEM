@@ -8,11 +8,13 @@
 #include <MeshFEM/SimplicialMesh.hh>
 #include <MeshFEM/Simplex.hh>
 
+namespace MeshFEM {
+
 namespace _FEMMeshHandles {
 
 // We need to expliclty reference this enclosing scope to hack around an old
 // clang bug involving injected class names; make it less verbose
-namespace _hndl = ::_FEMMeshHandles;
+namespace _hndl = ::MeshFEM::_FEMMeshHandles;
 
 template<class _Mesh> using  _VData = typename MeshDataTraits<_Mesh>::VertexData;
 template<class _Mesh> using  _NData = typename MeshDataTraits<_Mesh>::NodeData;
@@ -204,5 +206,7 @@ template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::HEHandle<_Mesh>>
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices(); } }; // Boundary vertex
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BNHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryNodes()   ; } }; // Boundary node
 template<class _Mesh> struct HandleRangeTraits<_FEMMeshHandles::BEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryElements(); } }; // Boundary element
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FEMMESHHANDLES_HH */

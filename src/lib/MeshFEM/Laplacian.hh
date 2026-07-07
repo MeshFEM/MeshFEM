@@ -17,9 +17,11 @@
 #ifndef LAPLACIAN_HH
 #define LAPLACIAN_HH
 
-#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include <limits>
 #include <MeshFEM/GaussQuadrature.hh>
+
+namespace MeshFEM {
 
 namespace Laplacian {
 
@@ -115,5 +117,7 @@ TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh) {
 }
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: LAPLACIAN_HH */

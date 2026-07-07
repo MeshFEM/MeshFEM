@@ -17,12 +17,15 @@
 //  Company:  University of California, Davis
 //  Created:  09/28/2025 12:39:01
 ////////////////////////////////////////////////////////////////////////////////
-#include "MeshFEM/Parallelism.hh"
-#include <MeshFEM/GlobalBenchmark.hh>
-#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEMCore/Parallelism.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
+#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
 #include <Eigen/Sparse>
+
+using namespace MeshFEM;
 
 using EigenRowIndex = int32_t; // Using a narrower integer type substantially reduces memory i/o
 
@@ -35,7 +38,7 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
 
     SystemAssembler<BlockSize> assembler(m.numNodes());
 
-    NewtonHessian Hsp = assembler.sparsityPattern(m.numElements(),
+    NewtonHessian Hsp = assembler.blockSparsityPattern(m.numElements(),
             [&m](size_t ei) { return m.elementNodeIndices(ei); });
 
     static constexpr size_t numNodesPerElement = Simplex::numNodes(K, Deg);
@@ -97,7 +100,7 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
     }
 }
 
-#include <MeshFEM/BlockCSCHessianDynCastWorkaround.hh> // Needed for custom <3, 1> instantiation
+#include <MeshFEMSparse/BlockCSCHessianDynCastWorkaround.hh> // Needed for custom <3, 1> instantiation
 void run_mixed(std::vector<MeshIO::IOVertex> &vertices,
          const std::vector<MeshIO::IOElement> &elements,
          bool useBlockMergeAlgorithm) {
@@ -123,7 +126,7 @@ void run_mixed(std::vector<MeshIO::IOVertex> &vertices,
 
     SystemAssembler<3, 1> assembler(m.numNodes(), numEdges);
 
-    NewtonHessian Hsp = assembler.sparsityPattern(m.numElements(), elementStencil);
+    NewtonHessian Hsp = assembler.blockSparsityPattern(m.numElements(), elementStencil);
 
     static constexpr size_t numNodesPerElement = 3;
     static constexpr size_t numElementLocalVars = 3 * numNodesPerElement + 3;

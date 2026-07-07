@@ -13,14 +13,12 @@ add_executable(unit_tests
     test_interpolant.cc
     test_shape_functions.cc
     test_materials.cc
-    test_sparse_matrices.cc
     test_tensors.cc
     test_mass.cc
     test_femmesh_traversal.cc
     test_edensity_adaptors.cc
     test_edensities.cc
     test_field_sampler.cc
-    test_block_csc_hessian.cc
     test_fast_decompositions.cc
     test_analytic_hessian_projections.cc
 )
@@ -30,18 +28,6 @@ target_link_libraries(unit_tests PUBLIC
 	MeshFEM
 	warnings::all
 )
-
-add_executable(solve_system solve_system.cc)
-target_link_libraries(solve_system MeshFEM)
-
-add_executable(benchmark_linear_systems benchmark_linear_systems.cc)
-target_link_libraries(benchmark_linear_systems MeshFEM)
-
-add_executable(benchmark_sparsity_lru benchmark_sparsity_lru.cc)
-target_link_libraries(benchmark_sparsity_lru MeshFEM)
-
-add_executable(benchmark_solves benchmark_solves.cc)
-target_link_libraries(benchmark_solves MeshFEM)
 
 if (NOT MESHFEM_USE_LEGACY_CATAMARI)
     add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
@@ -55,9 +41,6 @@ if (MESHFEM_WITH_IPC_TOOLKIT)
 add_executable(benchmark_ipc_toolkit benchmark_ipc_toolkit.cc)
 target_link_libraries(benchmark_ipc_toolkit MeshFEM)
 endif()
-
-add_executable(benchmark_sorts benchmark_sorts.cc)
-target_link_libraries(benchmark_sorts MeshFEM)
 
 add_executable(benchmark_assembly benchmark_assembly.cc)
 target_link_libraries(benchmark_assembly MeshFEM)
@@ -77,11 +60,6 @@ if (MESHFEM_WITH_MKL_PARDISO)
     find_package(OpenMP REQUIRED)
     target_link_libraries(test_product_based_assembly OpenMP::OpenMP_CXX)
     target_link_libraries(benchmark_product_based_assembly OpenMP::OpenMP_CXX)
-endif()
-
-if (MESHFEM_WITH_SCOTCH)
-    add_executable(benchmark_scotch benchmark_scotch.cc)
-    target_link_libraries(benchmark_scotch MeshFEM)
 endif()
 
 if (MSVC)

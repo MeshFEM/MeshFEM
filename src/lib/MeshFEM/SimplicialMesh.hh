@@ -15,6 +15,8 @@
 #include <MeshFEM/TriMesh.hh>
 #include <MeshFEM/TetMesh.hh>
 
+namespace MeshFEM {
+
 // Metafunction to choose simplicial mesh (Tri/Tet) based on dimension.
 template<size_t _K, class  VData = TMEmptyData, class  SData = TMEmptyData,
                     class BVData = TMEmptyData, class BSData = TMEmptyData>
@@ -40,5 +42,7 @@ template<class VData, class SData, class BVData, class BSData>
 struct SimplicialMeshSelector<3, VData, SData, BVData, BSData> {
     using type = TetMesh<VData, TMEmptyData, TMEmptyData, SData, BVData, TMEmptyData, BSData>;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SIMPLICIALMESH_HH */

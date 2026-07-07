@@ -46,6 +46,8 @@
 #include "Sampler.hh"
 #include "MeshConnectivity.hh"
 
+namespace MeshFEM {
+
 class Value;
 using UVPtr  = std::unique_ptr<      Value>;
 using CUVPtr = std::unique_ptr<const Value>;
@@ -524,6 +526,8 @@ template<class T> typename     enable_if_point_value<T, Real>::type
 &getScalarValueAtIndex(T &val, size_t i) { return val[i]; }
 template<class T> typename enable_if_not_point_value<T, Real>::type
 &getScalarValueAtIndex(T &val, size_t i) { return val[i].value; }
+
+} // namespace MeshFEM
 
 #include "ValueOperations/Printing.inl"
 #include "ValueOperations/BinaryOps.inl"

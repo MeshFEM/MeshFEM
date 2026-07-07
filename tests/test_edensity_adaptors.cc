@@ -10,6 +10,8 @@
 
 #include "EDensityTestUtils.hh"
 
+using namespace MeshFEM;
+
 template<class Psi_F>
 void testCWrapper(Psi_F psi_F) {
     compareEnergies(EnergyDensityCBasedFromFBased<Psi_F>(psi_F), psi_F);

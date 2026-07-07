@@ -17,6 +17,10 @@
 #ifndef ISOCRLETENSIONFIELD_HH
 #define ISOCRLETENSIONFIELD_HH
 
+#include "Tensor.hh"
+
+namespace MeshFEM {
+
 template <typename _Real>
 struct IsoCRLETensionFieldMembrane {
     static constexpr size_t Dimension          = 2;
@@ -288,5 +292,7 @@ protected:
     Real m_excessStrain;
     M32d m_F;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ISOCRLETENSIONFIELD_HH */

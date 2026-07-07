@@ -43,6 +43,8 @@
 #include <MeshFEM/Handles/TriMeshHandles.hh>
 #include <MeshFEM/SimplicialMeshInterface.hh>
 
+namespace MeshFEM {
+
 template<class VertexData = TMEmptyData, class HalfEdgeData = TMEmptyData, class TriData = TMEmptyData,
          class BoundaryVertexData = TMEmptyData, class BoundaryEdgeData = TMEmptyData>
 class TriMesh : public SimplicialMeshInterface<TriMesh<VertexData, HalfEdgeData, TriData, BoundaryVertexData, BoundaryEdgeData>>,
@@ -403,6 +405,8 @@ protected:
         return m_bdryEdgeIdx(m_halfEdgeOfVertex(v));
     }
 };
+
+} // namespace MeshFEM
 
 #include <MeshFEM/TriMesh.inl>
 

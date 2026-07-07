@@ -8,6 +8,7 @@
 
 namespace po = boost::program_options;
 using namespace std;
+using namespace MeshFEM;
 
 [[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: Simulate_cli [options] mesh" << endl;

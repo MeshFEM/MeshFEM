@@ -21,11 +21,14 @@
 #include <string>
 #include <limits>
 
-#include <MeshFEM/Types.hh>
-#include <MeshFEM/SparseMatrices.hh>
+
+#include <MeshFEMCore/Types.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include <MeshFEM/filters/gen_grid.hh>
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/MSHFieldWriter.hh>
+
+namespace MeshFEM {
 
 struct GridConstants {
     static constexpr size_t NONE = std::numeric_limits<size_t>::max();
@@ -445,5 +448,8 @@ GridFunction<D> smoothedGridFunction(const GridFunction<D> &gf, bool maxConstrai
     smoothedGridFunction(gf, smoothed_gf, maxConstrained);
     return smoothed_gf;
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: GRIDFUNCTION_HH */

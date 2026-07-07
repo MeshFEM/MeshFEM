@@ -12,6 +12,8 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 #include "BindingUtils.hh"
 #include "CallbackWrapper.hh"
 
+using namespace MeshFEM;
+
 template<class DerivedController, class BaseController>
 auto bindController(py::module &m, const char *name) {
     py::class_<DerivedController, BaseController, std::shared_ptr<DerivedController>> binding(m, name);

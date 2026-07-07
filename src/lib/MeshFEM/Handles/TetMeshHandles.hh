@@ -6,11 +6,13 @@
 #include "Circulator.hh"
 #include <queue>
 
+namespace MeshFEM {
+
 namespace _TetMeshHandles {
 
 // We need to expliclty reference this enclosing scope to hack around an old
 // clang bug involving injected class names; make it less verbose
-namespace _hndl = ::_TetMeshHandles;
+namespace _hndl = ::MeshFEM::_TetMeshHandles;
 
 template<class _Mesh> using   _VData = typename MeshDataTraits<_Mesh>::VertexData;
 template<class _Mesh> using  _HFData = typename MeshDataTraits<_Mesh>::HalfFaceData;
@@ -397,5 +399,7 @@ template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::  THandle<_Mesh>
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices() ; } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles::BHEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryHalfEdges(); } };
 template<class _Mesh> struct HandleRangeTraits<_TetMeshHandles:: BFHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryFaces()    ; } };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TETMESHHANDLES_HH */

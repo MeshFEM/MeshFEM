@@ -14,8 +14,11 @@
 #include <Eigen/Dense>
 #include <functional>
 
-#include <MeshFEM/Types.hh>
+
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Geometry.hh>
+
+namespace MeshFEM {
 
 struct Obstacle {
     using MXd = Eigen::MatrixXd;
@@ -64,5 +67,7 @@ private:
     const xFunction xFunc; // Obstacle position as a function of time for moving obstacle in time
     VMaxd m_force;
 };
+
+} // namespace MeshFEM
 
 #endif

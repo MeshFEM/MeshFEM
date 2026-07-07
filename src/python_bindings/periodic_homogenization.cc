@@ -15,6 +15,8 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 
+using namespace MeshFEM;
+
 template<typename Mesh>
 using ETensor = ElasticityTensor<typename Mesh::Real, Mesh::EmbeddingDimension>;
 

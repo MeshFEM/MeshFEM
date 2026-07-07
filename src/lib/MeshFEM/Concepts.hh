@@ -18,6 +18,8 @@
 
 #include <type_traits>
 
+namespace MeshFEM {
+
 template<class Concept, class Model>
 using models_concept = std::is_base_of<Concept, Model>;
 
@@ -37,5 +39,8 @@ struct ElementMesh { };
 struct EdgeSoup { };
 
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CONCEPTS_HH */

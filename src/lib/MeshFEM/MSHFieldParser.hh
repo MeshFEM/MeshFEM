@@ -21,12 +21,14 @@
 #include <Eigen/Dense>
 
 #include <MeshFEM/MeshIO.hh>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/Fields.hh>
 #include <MeshFEM/SymmetricMatrix.hh>
 
 #include <MeshFEM_export.h>
+
+namespace MeshFEM {
 
 // N: spatial dimension
 template<size_t N>
@@ -219,5 +221,7 @@ private:
                       Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic> &fieldData,
                       DomainType &type, bool binary = false);
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MSHFIELDPARSER_HH */

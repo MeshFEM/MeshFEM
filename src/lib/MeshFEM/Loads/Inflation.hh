@@ -12,6 +12,7 @@
 
 #include "Load.hh"
 
+namespace MeshFEM {
 namespace Loads {
 
 template<typename T>
@@ -132,5 +133,7 @@ private:
 };
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: LOADS_INFLATION_HH */

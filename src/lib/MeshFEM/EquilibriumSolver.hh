@@ -23,6 +23,8 @@
 #include <memory>
 #include <utility>
 
+namespace MeshFEM {
+
 template<typename _Real>
 using LoadCollection = std::vector<std::shared_ptr<Loads::Load<_Real>>>;
 
@@ -57,5 +59,7 @@ ConvergenceReport equilibrium_newton(std::shared_ptr<ElasticObject<_Real>> obj, 
                                      const std::vector<size_t> &fixedVars, const NewtonOptimizerOptions &opts, NewtonMultiobjectiveProblem::CallbackFunction customCallback, Real systemEnergyIncreaseFactorLimit = safe_numeric_limits<Real>::max(), Real energyLimitingThreshold = 1e-6, Real hessianShift = 0.0) {
     return get_equilibrium_optimizer(obj, loads, fixedVars, opts, customCallback, systemEnergyIncreaseFactorLimit, energyLimitingThreshold, hessianShift)->optimize();
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EQUILIBRIUMSOLVER_HH */

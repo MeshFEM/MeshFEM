@@ -11,6 +11,7 @@
 #include <tuple>
 
 namespace py = pybind11;
+using namespace MeshFEM;
 
 PYBIND11_MODULE(triangulation, m) {
     m.doc() = "Triangulation of line segments";

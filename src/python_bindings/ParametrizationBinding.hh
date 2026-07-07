@@ -8,6 +8,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
                          //
 #include <MeshFEM/Elements/ParametrizationElement.hh>
 
+namespace MeshFEM {
+
 template<class E>
 auto bindParametrizationMeshEnergy(py::module &m, py::module &detail) {
     using PME = ParametrizationMeshEnergy<E>;
@@ -22,5 +24,7 @@ auto bindParametrizationMeshEnergy(py::module &m, py::module &detail) {
 
     return pyPME;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: PARAMETRIZATIONBINDING_HH */

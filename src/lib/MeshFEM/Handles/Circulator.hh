@@ -15,6 +15,8 @@
 
 // Iterator-like type for circulating counter clockwise (++) or clockwise (--)
 // around the tip of a halfedge "h".
+namespace MeshFEM {
+
 template<class HEHType>
 struct Circulator {
     Circulator(const HEHType    &h, int wn = 0) : m_h(    h), m_begin(        h), m_windingNumber(               wn) { }
@@ -49,5 +51,8 @@ struct CirculatorRange {
 private:
     HEHType m_h;
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CIRCULATOR_HH */

@@ -5,7 +5,10 @@
 #include <MeshFEM/Elements/HyperelasticLagrange.hh>
 #include "ElementBase.hh"
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
+#include "../MeshEnergy.hh"
 #include <type_traits>
+
+namespace MeshFEM {
 
 template<size_t Deg, class Psi, class EData>
 struct SolidElement;
@@ -88,8 +91,6 @@ private:
     EData m_edata;
 };
 
-#include "../MeshEnergy.hh"
-
 template<size_t Deg, class Psi>
 using SolidMeshEnergy = MeshEnergy<FEMMesh<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>,
                                    NodalVars<Psi::N>,
@@ -101,5 +102,7 @@ using SolidMeshEnergyReembeddable = MeshEnergy<FEMMesh<Psi::N, Deg, VecN_T<typen
                                    NodalVars<Psi::N>,
                                    ElementStencil<Psi::N, Deg, Psi::N>,
                                    SolidElement<Deg, Psi, LinearlyEmbeddedElement<Psi::N, Deg, VecN_T<typename Psi::Real, Psi::N>>>>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SOLIDELEMENT_HH */

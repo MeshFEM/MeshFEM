@@ -34,6 +34,8 @@
 #include "EnergyDensities/CorotatedLinearElasticity.hh"
 #include <rotation_optimization.hh>
 
+namespace MeshFEM {
+
 template<typename Real, size_t N>
 struct RotExtrap;
 
@@ -371,5 +373,8 @@ private:
 
     Method m_method = Method::ModalWarping;
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELASTICSOLIDROTEXTRAP_HH */

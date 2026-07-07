@@ -1,8 +1,9 @@
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/MeshIO.hh>
-#include <MeshFEM/Future.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/Future.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <iostream>
+
 
 ////////////////////////////////////////////////////////////////////////////
 /*! Constructor builds up the edge node connectivity after constructing the

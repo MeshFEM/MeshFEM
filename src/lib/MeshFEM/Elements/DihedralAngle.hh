@@ -31,6 +31,7 @@
 #include <iostream>
 #include "DeformedTriangleGeometry.hh"
 
+namespace MeshFEM {
 namespace elements {
 
 template<class Real>
@@ -120,6 +121,7 @@ private:
     Real theta;
 };
 
+}
 }
 
 #endif /* end of include guard: DIHEDRALANGLE_HH */

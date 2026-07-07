@@ -22,6 +22,7 @@
 #include <MeshFEM/GaussQuadrature.hh>
 #include <MeshFEM/MassMatrix.hh>
 
+namespace MeshFEM {
 namespace Loads {
     namespace detail {
         template<class Object>
@@ -174,5 +175,7 @@ private:
 };
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: BODYFORCE_HH */

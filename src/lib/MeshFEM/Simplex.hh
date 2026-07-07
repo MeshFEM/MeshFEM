@@ -11,7 +11,9 @@
 #ifndef SIMPLEX_HH
 #define SIMPLEX_HH
 #include <stdexcept>
-#include "Types.hh"
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 namespace Simplex {
     constexpr size_t numVertices(size_t K) { return K + 1; }
@@ -61,5 +63,7 @@ using EvalPt = std::array<Real, Simplex::numVertices(_K)>; // typename NTuple<Re
 // Evaluation point as an Eigen vector type
 template<size_t _K>
 using EigenEvalPt = VectorND<Simplex::numVertices(_K)>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SIMPLEX_HH */

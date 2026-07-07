@@ -32,7 +32,9 @@
 #define FAST_2X2_DECOMPOSITIONS_HH
 
 #include <cmath>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 namespace fast_decompositions {
 
@@ -269,5 +271,7 @@ void polar(const Mat2_T<Real> &A, Mat2_T<Real> &R, Mat2_T<Real> &S) {
 }
 
 } // namespace fast_decompositions
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FAST_2X2_DECOMPOSITIONS_HH */

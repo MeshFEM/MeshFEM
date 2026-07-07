@@ -2,12 +2,16 @@
 #include <pybind11/stl.h>
 #include <pybind11/eigen.h>
 #include <pybind11/iostream.h>
+
 namespace py = pybind11;
 
-#include <MeshFEM/VarStructure.hh>
-#include <MeshFEM/BlockCSCHessian.hh>
-#include <MeshFEM/SparsityLRU.hh>
+#include <MeshFEMSparse/VarStructure.hh>
+#include <MeshFEMSparse/BlockCSCHessian.hh>
+#include <MeshFEMSparse/SparsityLRU.hh>
 #include <MeshFEM/newton_optimizer/NewtonHessian.hh>
+#include <MeshFEM/newton_optimizer/NewtonHessianFactorization.hh>
+
+using namespace MeshFEM;
 
 PYBIND11_MODULE(block_sparse_hessian, m) {
     m.doc() = "Module exposing our block sparse Hessians NewtonHessian types";

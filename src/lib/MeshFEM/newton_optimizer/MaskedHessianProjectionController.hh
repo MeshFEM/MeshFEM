@@ -16,6 +16,8 @@
 #include <MeshFEM/MeshEnergyBase.hh>
 #include <algorithm>
 
+namespace MeshFEM {
+
 // Configures the per-element Hessian projection flags based on the norm of
 // the fully assembled gradient restricted to each element.
 // We project only if the norm exceeds `threshold` (eliminating damping in regions that
@@ -237,5 +239,7 @@ private:
     MeshEnergyBase &m_me;
     int m_failures = 0;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MASKEDHESSIANPROJECTIONCONTROLLER_HH */

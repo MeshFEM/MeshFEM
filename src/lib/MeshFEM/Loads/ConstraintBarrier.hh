@@ -11,7 +11,10 @@
 #ifndef CONSTRAINTBARRIER_HH
 #define CONSTRAINTBARRIER_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
+
+
+namespace MeshFEM {
 
 struct RawBarrierLog {
     template<typename Real_>
@@ -70,5 +73,8 @@ struct ConstraintBarrier_T : public RawBarrier {
 };
 
 using ConstraintBarrier = ConstraintBarrier_T<RawBarrierLog>;
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CONSTRAINTBARRIER_HH */

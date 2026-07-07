@@ -18,8 +18,11 @@
 #include <stdexcept>
 #include <iostream>
 
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/Solvers/SPSDSystem.hh>
+
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/SPSDSystem.hh>
+
+namespace MeshFEM {
 
 namespace UniformLaplacian {
 
@@ -90,5 +93,7 @@ void assemble(_Mesh &mesh, SPSDSystem<Real> &system,
 }
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: UNIFORMLAPLACIAN_HH */

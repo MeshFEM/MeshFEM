@@ -4,6 +4,8 @@
 #include "HyperelasticLagrange.hh"
 #include "PlateBending.hh"
 
+namespace MeshFEM {
+
 // Implements both the `MembraneMaterial` and `PlateBendingMaterial` interfaces.
 template<class Psi_2x2>
 struct ShellMaterial : public PlateBendingMaterialProperties<typename Psi_2x2::Real> {
@@ -153,5 +155,7 @@ struct ShellElement {
     EData elementData;
     PBE plate;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SHELLELEMENT_HH */

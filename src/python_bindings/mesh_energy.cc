@@ -12,6 +12,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include <memory>
@@ -23,7 +24,7 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/Elements/ParametrizationElement.hh>
 #include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/Elements/DiscreteShellHingeEnergy.hh>
-#include <MeshFEM/Stencils.hh>
+#include <MeshFEMSparse/Stencils.hh>
 
 #include "MeshBindings.hh"
 #include "BindMembraneMaterial.hh"
@@ -39,6 +40,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include <MeshFEM/EnergyDensities/IsotropicAutodiffEDensity.hh>
 
 #include "ParametrizationBinding.hh"
+
+using namespace MeshFEM;
 
 // Bind the "NodalVars" factory method on each mesh type.
 struct NodalVarsBinder {

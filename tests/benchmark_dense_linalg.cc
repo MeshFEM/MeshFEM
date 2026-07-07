@@ -7,10 +7,12 @@
 //  Company:  University of California, Davis
 //  Created:  01/28/2025 13:02:01
 *///////////////////////////////////////////////////////////////////////////////
-#include "MeshFEM/Parallelism.hh"
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/Parallelism.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <catamari/dense_factorizations.hpp>
 #include <tbb/tbb.h>
+
+using namespace MeshFEM;
 
 int main(int argc, const char *argv[]) {
     if (argc != 2) {

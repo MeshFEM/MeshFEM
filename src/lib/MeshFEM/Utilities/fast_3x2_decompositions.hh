@@ -14,6 +14,8 @@
 
 #include "fast_2x2_decompositions.hh"
 
+namespace MeshFEM {
+
 namespace fast_decompositions {
 
 // This constructs a "thin" reduced SVD A = U diag(s) V^T for a 3x2 matrix A,
@@ -73,5 +75,7 @@ void svd(const Mat32_T<Real> &A, Mat32_T<Real> &U, Vec2_T<Real> &s, Mat2_T<Real>
 }
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FAST_3X2_DECOMPOSITIONS_HH */

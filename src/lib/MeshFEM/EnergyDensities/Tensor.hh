@@ -6,8 +6,10 @@
 #include "../ElasticityTensor.hh"
 #include "../Flattening.hh"
 #include "../SymmetricMatrix.hh"
-#include "../Types.hh"
+#include <MeshFEMCore/Types.hh>
 #include "EnergyTraits.hh"
+
+namespace MeshFEM {
 
 template<typename _Real,
          size_t t_N,
@@ -589,5 +591,7 @@ template<class Derived>
 bool is_sym_mat_approx_diagonal(const Eigen::MatrixBase<Derived> &A) {
     return is_sym_mat_approx_diagonal(A, std::numeric_limits<typename Derived::Scalar>::epsilon() * 100);
 }
+
+} // namespace MeshFEM
 
 #endif

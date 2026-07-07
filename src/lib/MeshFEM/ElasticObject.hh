@@ -14,10 +14,13 @@
 #include <cstdlib>
 #include <functional>
 
+
 #include "FieldSampler.hh"
-#include "SparseMatrices.hh"
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include "newton_optimizer/MultiobjectiveProblem.hh"
 #include "IPCIntegration/CollisionMesh.hh"
+
+namespace MeshFEM {
 
 ////////////////////////////////////////////////////////////////////////////
 // Generic variables:
@@ -208,5 +211,7 @@ protected:
     void m_defoConfigUpdated() const { m_issueNotifications(VarType::Variable); }
     void m_restConfigUpdated() const { m_issueNotifications(VarType::Parameter); }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELASTICOBJECT_HH */

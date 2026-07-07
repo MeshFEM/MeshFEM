@@ -75,10 +75,13 @@
 #ifndef BOUNDARYLAPLACIAN_HH
 #define BOUNDARYLAPLACIAN_HH
 
-#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include <MeshFEM/GaussQuadrature.hh>
 
+
 #include <vector>
+
+namespace MeshFEM {
 
 namespace BoundaryLaplacian {
 
@@ -145,5 +148,8 @@ TripletMatrix<> assemble(const _Mesh &mesh,
 }
 
 } // End of namespace BoundaryLaplacian
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: BOUNDARYLAPLACIAN_HH */

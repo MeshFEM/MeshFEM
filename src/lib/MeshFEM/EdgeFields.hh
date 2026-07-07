@@ -19,9 +19,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef EDGEFIELDS_HH
 #define EDGEFIELDS_HH
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Fields.hh>
+
 
 #include <map>
 #include <iostream>
@@ -30,6 +31,8 @@
 #include <cassert>
 #include <algorithm>
 #include <stdexcept>
+
+namespace MeshFEM {
 
 class EdgeFields {
 public:
@@ -116,5 +119,7 @@ private:
     std::map<UnorderedPair, size_t> m_edgeIdx;
     std::vector<UnorderedPair> m_edges;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EDGEFIELDS_HH */

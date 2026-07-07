@@ -19,15 +19,18 @@
 *///////////////////////////////////////////////////////////////////////////////
 #ifndef PLATEBENDINGELEMENT_HH
 #define PLATEBENDINGELEMENT_HH
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/TangentElasticityTensor.hh>
 #include <MeshFEM/EmbeddedElement.hh>
 
+
 #include "DeformedTriangleGeometry.hh"
 #include "MembraneElement.hh"
 #include "ElementBase.hh"
+
+namespace MeshFEM {
 
 // [Grinspun et al. 2006] effectively applies a small angle approximation to
 // replace sin(gamma) with gamma in the expression for the shape operator. No
@@ -326,5 +329,7 @@ private:
 // struct PlateBendingElementTriangleAveraged {
 //
 // };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: PLATEBENDINGELEMENT_HH */

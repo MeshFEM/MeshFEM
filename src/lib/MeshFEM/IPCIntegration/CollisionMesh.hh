@@ -1,8 +1,10 @@
 #ifndef COLLISIONMESH_HH
 #define COLLISIONMESH_HH
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Geometry.hh>
 #include <map>
+
+namespace MeshFEM {
 
 struct CollisionMesh {
     template<class Mesh_>
@@ -105,5 +107,7 @@ struct CollisionMesh {
         return result;
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: COLLISIONMESH_HH */

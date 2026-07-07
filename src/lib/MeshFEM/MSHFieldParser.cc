@@ -1,5 +1,5 @@
 #include <MeshFEM/MSHFieldParser.hh>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/StringUtils.hh>
 
 #include <iostream>
@@ -7,6 +7,8 @@
 #include <map>
 
 using namespace std;
+
+namespace MeshFEM {
 
 int readIntLine(istream &is) {
     string tmp;
@@ -34,9 +36,9 @@ MSHFieldParser<N>::MSHFieldParser(const string &mshPath, bool permitDimMismatch)
 
 // Constructor used to avoid re-parsing the input mesh
 template<size_t N>
-MSHFieldParser<N>::MSHFieldParser(istream &is, const ::MeshIO::MeshType type,
-                                                 std::vector<::MeshIO::IOElement> &&elements,
-                                                 std::vector<::MeshIO::IOVertex>  &&vertices,
+MSHFieldParser<N>::MSHFieldParser(istream &is, const MeshIO::MeshType type,
+                                                 std::vector<MeshIO::IOElement> &&elements,
+                                                 std::vector<MeshIO::IOVertex>  &&vertices,
                                                  const bool binary, bool permitDimMismatch)
     : m_elements(std::move(elements)), m_vertices(std::move(vertices)), m_type(type)
 {
@@ -269,3 +271,5 @@ m_parseField(istream &is, const string &header, string &name,
 template class MSHFieldParser<1>;
 template class MSHFieldParser<2>;
 template class MSHFieldParser<3>;
+
+} // namespace MeshFEM

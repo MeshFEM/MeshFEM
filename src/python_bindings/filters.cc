@@ -8,6 +8,7 @@
 #include "BindingInstantiations.hh"
 
 namespace py = pybind11;
+using namespace MeshFEM;
 
 struct ExtractComponentPolygonsBinder {
     template<class Mesh>

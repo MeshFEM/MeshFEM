@@ -35,6 +35,8 @@
 #include <vector>
 #include <memory>
 
+namespace MeshFEM {
+
 namespace MaterialOptimization {
 
 // Simulator supporting material field attachment, target boundary conditions,
@@ -417,5 +419,8 @@ Optimizer<_Simulator> *Optimizer<_Simulator>::_problem = NULL;
 #endif
 
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MATERIALOPTIMIZATION_HH */

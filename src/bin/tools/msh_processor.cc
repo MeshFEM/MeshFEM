@@ -51,7 +51,7 @@
 #include <MeshFEM/MSHFieldParser.hh>
 #include <MeshFEM/MSHFieldWriter.hh>
 #include <MeshFEM/SimplicialMesh.hh>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/VonMises.hh>
 #include <boost/algorithm/string.hpp>
 #include <iomanip>
@@ -66,6 +66,8 @@
 #include <functional>
 #include <limits>
 #include <sstream>
+
+using namespace MeshFEM;
 
 //using namespace MeshIO;
 using namespace std;

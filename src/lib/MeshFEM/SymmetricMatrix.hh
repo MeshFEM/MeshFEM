@@ -25,6 +25,8 @@
 #include <type_traits>
 #include "utils.hh"
 
+namespace MeshFEM {
+
 ////////////////////////////////////////////////////////////////////////////////
 // Forward declarations/aliases
 ////////////////////////////////////////////////////////////////////////////////
@@ -619,5 +621,7 @@ ConstSMViewSliceType<t_N, Derived>
 symmetricMatrixViewSlice(const Eigen::MatrixBase<Derived> &v, size_t offset) {
     return ConstSMViewSliceType<t_N, Derived>(v.template segment<flatLen(t_N)>(offset));
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SYMMETRICMATRIX_HH */

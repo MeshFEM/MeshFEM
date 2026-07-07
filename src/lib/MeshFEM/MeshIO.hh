@@ -15,9 +15,10 @@
 #ifndef MESH_IO_HH
 #define MESH_IO_HH
 
-#include <MeshFEM/Types.hh>
-#include <MeshFEM/TemplateHacks.hh>
+#include <MeshFEMCore/Types.hh>
+#include <MeshFEMCore/TemplateHacks.hh>
 #include <MeshFEM/Concepts.hh>
+
 
 #include <string>
 #include <fstream>
@@ -28,6 +29,7 @@
 
 #include <MeshFEM_export.h>
 
+namespace MeshFEM {
 namespace MeshIO {
     /** Supported file formats */
     typedef enum { FMT_OFF = 0, FMT_OBJ = 1, FMT_MSH = 2, FMT_MSH_ASCII = 3, FMT_POLY = 4, FMT_NODE_ELE = 5, FMT_MEDIT = 6, FMT_STL = 7,
@@ -75,7 +77,7 @@ namespace MeshIO {
         int attribute = 0;
     };
 
-    template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const IOVertex &p) { return ::truncateFromND<EmbeddingSpace, Point3D>(p.point); }
+    template<class EmbeddingSpace> EmbeddingSpace truncateFromND(const IOVertex &p) { return MeshFEM::truncateFromND<EmbeddingSpace, Point3D>(p.point); }
 
     ////////////////////////////////////////////////////////////////////////////
     /*! @class IOElement
@@ -440,5 +442,6 @@ namespace MeshIO {
                   std::vector<IOElement> &elements, Format format = FMT_GUESS,
                   MeshType type = MESH_GUESS);
 }
+} // namespace MeshFEM
 
 #endif // MESH_IO_HH

@@ -44,6 +44,8 @@
 #include <MeshFEM/Utilities/RandomAccessIndexSet.hh>
 #include <MeshFEM/Geometry.hh>
 
+namespace MeshFEM {
+
 // Clean a closed polygonal curve.
 // Curve is given in order as curve[0], curve[1], ..., curve[len - 1], curve[0],
 // and we clean it in-place.
@@ -420,5 +422,7 @@ void curveCleanup(const std::vector<PointType> &inVertices,
         curveCleanup<3>(inVertices, inElements, outVertices, outElements,   bbox, std::forward<Args>(args)...);
     }
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CURVECLEANUP_HH */

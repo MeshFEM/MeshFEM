@@ -15,6 +15,8 @@
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/MeshIO.hh>
 
+namespace MeshFEM {
+
 template<class Vertex, class Element>
 void highlight_dangling_vertices(const std::vector<Vertex>  &vertices,
                                  const std::vector<Element> &elements,
@@ -58,5 +60,6 @@ void highlight_dangling_vertices(const std::vector<Vertex>  &vertices,
         std::cerr << "WARNING: No dangling vertices detected; not creating highlight file." << std::endl;
 }
 
+} // namespace MeshFEM
 
 #endif /* end of include guard: HIGHLIGHT_DANGLING_VERTICES_HH */

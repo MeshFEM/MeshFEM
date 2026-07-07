@@ -33,6 +33,8 @@
 #include <MeshFEM/Fields.hh>
 
 // Per-element material field
+namespace MeshFEM {
+
 template<class _Material>
 class MaterialField {
 public:
@@ -225,5 +227,8 @@ private:
         assert(matIdx < numMaterials());
     }
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MATERIALFIELD_HH */

@@ -5,18 +5,21 @@
 #include <string>
 #include <MeshFEM/OneForm.hh>
 
+
 #include <MeshFEM/BoundaryConditions.hh>
 #include <MeshFEM/GaussQuadrature.hh>
 #include <MeshFEM/InterpolantRestriction.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 
 #include <MeshFEM/ElasticityTensor.hh>
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/Parallelism.hh>
 
 // #define FD_SD_DEBUG
 #ifdef FD_SD_DEBUG
 #include <MeshFEM/MSHFieldWriter.hh>
 #endif
+
+namespace MeshFEM {
 
 namespace PeriodicHomogenization {
 
@@ -564,5 +567,7 @@ deltaMacroStrainToMicroStrainTensors(const _Sim &sim,
 }
 
 } // namespace PeriodicHomogenization
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: PERIODICHOMOGENIZATION_HH */

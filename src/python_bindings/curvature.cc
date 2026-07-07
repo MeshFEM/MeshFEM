@@ -8,6 +8,7 @@
 #include <tuple>
 
 namespace py = pybind11;
+using namespace MeshFEM;
 
 template<size_t _Degree>
 void bindCurvature(py::module &m, py::module &detail_module) {

@@ -14,8 +14,11 @@
 #include "Loads/Inertia.hh"
 #include "ElasticObject.hh"
 
-#include <MeshFEM/Solvers/CholeskyFactorizerBase.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+
+#include <MeshFEMSparse/Solvers/CholeskyFactorizerBase.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
+namespace MeshFEM {
 
 enum class TimesteppingMethod { BackwardEuler, ImplicitNewmark };
 
@@ -298,5 +301,7 @@ private:
     std::vector<ConvergenceReport> m_crs; // Newton solver convergence report
     std::vector<Real> m_kineticEnergy, m_potentialEnergy;
 };
+
+} // namespace MeshFEM
 
 #endif

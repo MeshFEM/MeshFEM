@@ -1,5 +1,6 @@
 #include <type_traits>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
@@ -7,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <map>
 #include <MeshFEM/Utilities/ElementArrayAdaptor.hh>
+
+namespace MeshFEM {
 
 template<class VertexData, class HalfFaceData, class HalfEdgeData, class TetData,
          class BoundaryVertexData, class BoundaryHalfEdgeData, class BoundaryFaceData>
@@ -150,3 +153,5 @@ TetMesh(const Tets &tets, const size_t nVertices, bool /* suppressNonmanifoldWar
     m_boundaryHalfEdgeData.resize(nBoundaryHalfEdges);
     m_boundaryFaceData    .resize(nBoundaryFaces);
 }
+
+} // namespace MeshFEM

@@ -1,14 +1,18 @@
 #include "Eigensolver.hh"
-#include <MeshFEM/Solvers/CholmodFactorizer.hh>
-#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/CholmodFactorizer.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include <MeshFEM/newton_optimizer/NewtonHessian.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <Spectra/SymEigsSolver.h>
 #include <Spectra/SymGEigsSolver.h>
 #include <Spectra/MatOp/SparseCholesky.h>
 #include <Spectra/Util/CompInfo.h>
 #include <Spectra/Util/GEigsMode.h>
 #include <memory>
+
+using namespace MeshFEM;
+
+namespace MeshFEM {
 
 template<class SpMat>
 struct SparseMatrixProd {
@@ -363,3 +367,5 @@ std::pair<Eigen::VectorXd, Eigen::MatrixXd> smallestNonzeroGenEigenpairsPSDKnown
     result.second = eigs.eigenvectors();
     return result;
 }
+
+} // namespace MeshFEM

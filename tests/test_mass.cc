@@ -3,6 +3,8 @@
 // after MeshFEM.
 #include <catch2/catch.hpp>
 
+using namespace MeshFEM;
+
 template<size_t _Dim, size_t _Deg>
 static void test() {
     constexpr size_t N = _Dim;

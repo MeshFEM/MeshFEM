@@ -22,6 +22,8 @@
 
 #include <iostream>
 
+using namespace MeshFEM;
+
 // Test the cubic polynomial solver in the case of three real roots
 // (used for the polar decomposition code).
 void test_cubicroot() {

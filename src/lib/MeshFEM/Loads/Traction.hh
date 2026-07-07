@@ -20,6 +20,7 @@
 #include "Load.hh"
 #include <MeshFEM/GaussQuadrature.hh>
 
+namespace MeshFEM {
 namespace Loads {
 
 template<class Object>
@@ -86,5 +87,7 @@ private:
 };
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TRACTION_HH */

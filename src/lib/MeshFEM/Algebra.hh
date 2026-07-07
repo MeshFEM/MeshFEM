@@ -12,6 +12,8 @@
 // JP: pass-by-values used below are intentional--they can in some cases avoid
 // the copy construction that is always required by accepting a const ref
 // argument.
+namespace MeshFEM {
+
 template<class Real, class Element>
 class VectorSpace {
 public:
@@ -199,5 +201,8 @@ public:
         return e1;
     }
 };
+
+
+} // namespace MeshFEM
 
 #endif // ALGEBRA_INCLUDED

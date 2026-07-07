@@ -11,8 +11,11 @@
 #ifndef DENSE_NEWTON_HH
 #define DENSE_NEWTON_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <iostream>
+
+
+namespace MeshFEM {
 
 template<class Problem>
 void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, bool verbose=false) {
@@ -91,5 +94,8 @@ void dense_newton(Problem &prob, size_t maxIter = 100, double gradTol = 1e-14, b
 
     if (verbose) printReport(it + 1, prob.energy(), prob.gradient(), isIndefinite);
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DENSE_NEWTON_HH */

@@ -7,9 +7,11 @@
 #ifndef MESHENTITIES_HH
 #define MESHENTITIES_HH
 
-#include <MeshFEM/Future.hh>
+#include <MeshFEMCore/Future.hh>
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Handles/Handle.hh>
+
+namespace MeshFEM {
 
 // Get the indices of the vertices making up a volume or boundary element.
 // If `volumeIndices` is true, then the indices of *volume* vertices are obtained even in the boundary element case.
@@ -373,5 +375,7 @@ getShrunkenTetVisualizationField(const Mesh &m, const FieldType &field) {
 
     return result;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHENTITIES_HH */

@@ -13,10 +13,12 @@
 
 #include "NewtonProblem.hh"
 #include "FeasibleStepLengthComputer.hh"
-#include <MeshFEM/SystemAssembler.hh>
-#include <MeshFEM/SparsityLRU.hh>
-#include <MeshFEM/Solvers/MatrixRecorder.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
+#include <MeshFEMSparse/SparsityLRU.hh>
+#include <MeshFEMSparse/Solvers/MatrixRecorder.hh>
 #include <memory>
+
+namespace MeshFEM {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Term increase limiting functionality:
@@ -688,5 +690,7 @@ private:
         return false; // don't exit early
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MULTIOBJECTIVEPROBLEM_HH */

@@ -20,6 +20,7 @@
 double CURSOR_RADIUS = 1;
 
 using namespace std;
+using namespace MeshFEM;
 using namespace MeshIO;
 
 [[noreturn]] void usage() {

@@ -13,6 +13,8 @@
 #define SIMPLICIALMESHINTERFACE_HH
 #include <MeshFEM/Handles/Handle.hh>
 
+namespace MeshFEM {
+
 template<class _Mesh>
 struct SimplicialMeshTraits;
 
@@ -63,5 +65,7 @@ struct SimplicialMeshInterface {
     CHR<BSHandle>      boundarySimplices() const { return CHR<BSHandle>(*static_cast<const _Mesh *>(this)); }
     CHR<BSHandle> constBoundarySimplices() const { return CHR<BSHandle>(*static_cast<const _Mesh *>(this)); }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SIMPLICIALMESHINTERFACE_HH */

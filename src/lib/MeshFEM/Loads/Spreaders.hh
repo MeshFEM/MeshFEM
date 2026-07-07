@@ -12,6 +12,7 @@
 
 #include "Load.hh"
 
+namespace MeshFEM {
 namespace Loads {
 
 namespace detail {
@@ -141,7 +142,7 @@ struct Spreaders : public ObjectSpecificLoad<Object> {
 
     virtual NewtonHessian hessianSparsityPattern() const override {
         if (m_disableHessian) return NewtonHessian();
-        return assembler().sparsityPattern(numSpreaders(), [&](size_t e) { return m_elements[e]; });
+        return assembler().blockSparsityPattern(numSpreaders(), [&](size_t e) { return m_elements[e]; });
     }
 
     virtual ~Spreaders() { }
@@ -195,5 +196,7 @@ private:
 };
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SPREADERS_HH */

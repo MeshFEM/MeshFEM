@@ -4,6 +4,8 @@
 
 #include "EDensityTestUtils.hh"
 
+using namespace MeshFEM;
+
 template<size_t N, class Psi>
 Eigen::Matrix<Real, N * N, N * N> evalHessian(const Psi &psi) {
     Eigen::Matrix<Real, N * N, N * N> H;

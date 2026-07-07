@@ -14,6 +14,8 @@
 #include <stdexcept>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
+namespace MeshFEM {
+
 template<typename _Real>
 std::string floatingPointTypeSuffix() {
     if (std::is_same<_Real,      double>::value) return "";
@@ -149,5 +151,7 @@ std::string get_name_of_type() {
     throw std::runtime_error("Unsupported compiler for type_name");
 #endif
 }
+
+} // namespace MeshFEM
 
 #endif /* ecnd of include guard: NAME_MANGLING_HH */

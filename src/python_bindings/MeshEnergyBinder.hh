@@ -20,6 +20,8 @@
 
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
+namespace MeshFEM {
+
 template<class ME>
 struct ElementSpecificMEBindings {
     template<class PyME>
@@ -173,5 +175,7 @@ auto bindSolidMeshEnergy(const std::string &name, py::module &m, py::module &det
     using ME = SolidMeshEnergy<Degree, Psi>;
     return bindMeshEnergy<ME, Psi>(name, m, detail, bindConstructors);
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHENERGYBINDER_HH */

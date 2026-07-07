@@ -10,6 +10,7 @@
 #include <tuple>
 
 namespace py = pybind11;
+using namespace MeshFEM;
 
 template<size_t _K, size_t _Degree, class _EmbeddingSpace>
 struct DiffOpBindings {

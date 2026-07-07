@@ -1,12 +1,14 @@
 #include "newton_optimizer.hh"
-#include "../AutomaticDifferentiation.hh"
-#include <MeshFEM/GlobalBenchmark.hh>
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/ParallelVectorOps.hh>
+#include <MeshFEMCore/AutomaticDifferentiation.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMCore/ParallelVectorOps.hh>
 #include <Eigen/src/Core/Matrix.h>
 
-#include <MeshFEM/Solvers/MatrixRecorder.hh>
+#include <MeshFEMSparse/Solvers/MatrixRecorder.hh>
 #include "NewtonHessian.hh"
+
+namespace MeshFEM {
 
 // Solve the Newton system `H d = -g`, modifying H to be pos. def. if it is indefinite.
 // Returns "tau", the coefficient of the metric term that was added to make the Hessian positive definite.
@@ -374,3 +376,5 @@ ConvergenceReport NewtonOptimizer::optimize(WorkingSet &workingSet) {
 
     return report;
 }
+
+} // namespace MeshFEM

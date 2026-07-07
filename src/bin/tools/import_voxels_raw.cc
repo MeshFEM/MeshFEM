@@ -23,6 +23,7 @@
 #include <MeshFEM/MeshIO.hh>
 
 using namespace std;
+using namespace MeshFEM;
 
 static std::vector<char> ReadAllBytes(char const* filename) {
     ifstream ifs(filename, ios::binary|ios::ate);

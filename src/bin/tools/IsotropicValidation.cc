@@ -16,7 +16,7 @@
 #include <MeshFEM/LinearElasticity.hh>
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/PeriodicHomogenization.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <vector>
 #include <queue>
 #include <iostream>
@@ -24,6 +24,8 @@
 #include <memory>
 #include <cmath>
 #include <random>
+
+using namespace MeshFEM;
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>

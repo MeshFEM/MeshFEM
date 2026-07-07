@@ -12,11 +12,14 @@
 #ifndef DENSEPSDPROJECT_HH
 #define DENSEPSDPROJECT_HH
 #include "DensePSDDetect.hh"
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include "fast_2x2_decompositions.hh"
 #include "fast_3x3_decompositions.hh"
 
+
 // Returns `true` if projection was actually needed.
+namespace MeshFEM {
+
 template<bool HasLower = false, bool Filter = true, class Derived>
 bool projectPSD(Eigen::MatrixBase<Derived> &A_base, bool useAbs = false) {
     auto &A = A_base.derived();
@@ -47,5 +50,8 @@ void projectNSD(Eigen::MatrixBase<Derived> &A_base) {
     Eigen::SelfAdjointEigenSolver<Derived> es(A);
     A = es.eigenvectors() * es.eigenvalues().cwiseMin(0.0).asDiagonal() * es.eigenvectors().transpose();
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DENSEPSDPROJECT_HH */

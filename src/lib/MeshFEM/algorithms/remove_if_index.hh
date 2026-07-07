@@ -13,6 +13,8 @@
 
 #include <utility>
 
+namespace MeshFEM {
+
 template <class ForwardIterator, class IndexPredicate>
 ForwardIterator remove_if_index (ForwardIterator first, ForwardIterator last,
         const IndexPredicate &shouldRemove)
@@ -40,5 +42,8 @@ ForwardIterator remove_if_index (ForwardIterator first, ForwardIterator last,
     }
     return result;
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: REMOVE_IF_INDEX_HH */

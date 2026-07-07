@@ -1,5 +1,7 @@
 #include <map>
 
+namespace MeshFEM {
+
 // Construct an interpolant holding the restriction of a piecewise polynomial
 // nodal field (with nodal value nvals) to the element with node indices nidx.
 // Assumes the nodal field originates from the msh file and therefore has the
@@ -33,3 +35,5 @@ InterpolantValue<PointValueType> nodalFieldElementInterpolant(size_t meshDeg, si
     }
     return impl.at(key)(nvals, nidx);
 }
+
+} // namespace MeshFEM

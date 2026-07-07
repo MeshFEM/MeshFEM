@@ -14,6 +14,8 @@
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 
+namespace MeshFEM {
+
 namespace elements {
 
 // A simplicial Lagrange element for hyperelasticity. The simplex dimension `K`
@@ -183,5 +185,7 @@ struct HyperelasticLagrange {
 };
 
 } // namespace elements
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: HYPERELASTICLAGRANGE_HH */

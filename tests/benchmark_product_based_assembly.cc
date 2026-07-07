@@ -1,9 +1,12 @@
 #include <iostream>
 
 #include <MeshFEM/FEMMesh.hh>
-#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
+#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
 
 #include "product_based_assembly.hh"
+
+using namespace MeshFEM;
 
 #define INCLUDE_EIGEN 0 // super slow...
 #define INCLUDE_F_BASED 0 // These can use excessive memory at high-resolution degree 2 and fail.
@@ -34,7 +37,7 @@ void execute(const std::vector<MeshIO::IOVertex> &vertices,
     {
         SystemAssembler<_N> assembler(m.numNodes());
         // Warm-up
-        auto H_ours = assembler.sparsityPatternForMesh(m);
+        NewtonHessian H_ours = assembler.blockSparsityPatternForMesh(m);
         assembler.assembleHessian(H_ours, m, He_getter);
 
         {

@@ -10,7 +10,9 @@
 #ifndef CURVATURE_HH
 #define CURVATURE_HH
 #include "FEMMesh.hh"
-#include "AutomaticDifferentiation.hh"
+#include <MeshFEMCore/AutomaticDifferentiation.hh>
+
+namespace MeshFEM {
 
 template<class _FEMMesh>
 struct GaussianCurvatureSensitivity;
@@ -289,5 +291,7 @@ private:
 //      (k^T L) grad k
 // Hessian:
 //      (grad k^T) L (grad k) + (k^T L) Hess k
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CURVATURE_HH */

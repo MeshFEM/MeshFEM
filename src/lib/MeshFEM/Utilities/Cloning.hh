@@ -12,6 +12,8 @@
 
 // Implementation adapted from:
 // https://stackoverflow.com/questions/55076438/is-it-possible-to-clone-a-polymorphic-object-without-manually-adding-overridden
+namespace MeshFEM {
+
 template<class Base, class Derived>
 struct CloneableSubclass : public Base {
     using Base::Base;
@@ -21,5 +23,8 @@ struct CloneableSubclass : public Base {
 
     virtual std::unique_ptr<Base> clone() const { return static_clone(); }
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CLONING_HH */

@@ -17,6 +17,8 @@
 #include <cassert>
 #include <stdexcept>
 
+namespace MeshFEM {
+
 struct RandomAccessIndexSet {
     RandomAccessIndexSet(size_t N) : m_locInSetPlusOne(N, 0) { }
 
@@ -58,5 +60,8 @@ private:
     std::vector<size_t> m_locInSetPlusOne;
     //size_t m_size = 0;
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: RANDOMACCESSINDEXSET_HH */

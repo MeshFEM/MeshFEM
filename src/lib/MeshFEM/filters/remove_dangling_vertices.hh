@@ -15,6 +15,8 @@
 #include <vector>
 #include <limits>
 
+namespace MeshFEM {
+
 template<class Vertex, class Element>
 void remove_dangling_vertices(std::vector<Vertex>  &vertices,
                               std::vector<Element> &elements) {
@@ -42,5 +44,8 @@ void remove_dangling_vertices(std::vector<Vertex>  &vertices,
     }
     vertices.resize(curr);
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: REMOVE_DANGLING_VERTICES_HH */

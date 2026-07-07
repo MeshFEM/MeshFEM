@@ -11,7 +11,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef VERTEXARRAYADAPTOR_HH
 #define VERTEXARRAYADAPTOR_HH
-#include<MeshFEM/Types.hh>
+#include<MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 // Version for types conforming to std::vector interface.
 template<class VertexArray, class Enable = void>
@@ -41,5 +43,7 @@ struct VertexArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<Eige
         return V.col(idx);
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: VERTEXARRAYADAPTOR_HH */

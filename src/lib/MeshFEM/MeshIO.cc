@@ -7,6 +7,7 @@
 
 using namespace std;
 
+namespace MeshFEM {
 namespace MeshIO {
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -891,3 +892,4 @@ MeshType MeshIO_Medit::load(istream &is, vector<Vertex> &nodes,
 }
 
 }
+} // namespace MeshFEM

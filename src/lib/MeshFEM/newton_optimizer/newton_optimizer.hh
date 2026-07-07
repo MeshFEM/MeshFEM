@@ -12,15 +12,18 @@
 #ifndef NEWTON_OPTIMIZER_HH
 #define NEWTON_OPTIMIZER_HH
 
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/make_cholesky_factorizer.hh>
+
 
 #include "NewtonOptions.hh"
 #include "NewtonProblem.hh"
 #include "WorkingSet.hh"
-#include "NewtonHessian.hh"
+#include "NewtonHessianFactorization.hh"
 
 #include <MeshFEM_export.h>
+
+namespace MeshFEM {
 
 struct MESHFEM_EXPORT NewtonOptimizer {
     NewtonOptimizer(std::shared_ptr<NewtonProblem> p)
@@ -63,5 +66,7 @@ private:
     std::shared_ptr<NewtonProblem> prob;
     NewtonHessianFactorization m_hessianFactorization;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: NEWTON_OPTIMIZER_HH */

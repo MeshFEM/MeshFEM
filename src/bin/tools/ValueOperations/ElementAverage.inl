@@ -1,3 +1,5 @@
+namespace MeshFEM {
+
 // Types not supporting averaging.
 template<class T, typename>
 struct ElmAvgImpl { static UVPtr run(const T &/* val */, const std::vector<MeshIO::IOElement> &/* elems */, size_t /* meshDeg */, size_t /* meshDim */) { throw std::runtime_error("Invalid operand for elementAverage"); } };
@@ -53,3 +55,5 @@ struct ElmAvgImpl<FieldValue<InterpolantValue<_PointValue>>, typename enable_if_
         else { throw std::runtime_error("Invalid interpolant field domain type: " + std::to_string((int) val.domainType)); };
     }
 };
+
+} // namespace MeshFEM

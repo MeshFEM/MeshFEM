@@ -9,12 +9,15 @@
 //  Company:  University of California, Davis
 //  Created:  09/01/2025 17:01:58
 *///////////////////////////////////////////////////////////////////////////////
-#include "MeshFEM/Parallelism.hh"
-#include <MeshFEM/GlobalBenchmark.hh>
-#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEMCore/Parallelism.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
+#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
 #include <Eigen/Sparse>
+
+using namespace MeshFEM;
 
 template<size_t K, size_t N, size_t Deg>
 void run(std::vector<MeshIO::IOVertex> &vertices,
@@ -32,7 +35,7 @@ void run(std::vector<MeshIO::IOVertex> &vertices,
     NewtonHessian Hsp;
 
     for (size_t run = 0; run < num_runs; ++run)
-        Hsp = assembler.sparsityPatternForMesh(m);
+        Hsp = assembler.blockSparsityPatternForMesh(m);
 
     std::cout << "Nonzeros in Hsp: " << Hsp.H_ss->nnz() << std::endl;
 

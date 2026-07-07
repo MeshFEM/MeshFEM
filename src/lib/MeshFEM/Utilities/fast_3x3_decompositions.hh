@@ -60,7 +60,9 @@
 #define FAST_3X3_DECOMPOSITIONS_HH
 
 #include <cmath>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 namespace fast_decompositions {
 
@@ -503,5 +505,7 @@ void svd(const Mat3_T<Real> &A, Mat3_T<Real> &U, Vec3_T<Real> &s, Mat3_T<Real> &
 }
 
 } // namespace fast_decompositions
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FAST_3X3_DECOMPOSITIONS_HH */

@@ -4,8 +4,9 @@
 #include <string>
 #include <tuple>
 #include <vector>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <boost/optional.hpp>
+
 
 // Filter invocation: (name, argument string)
 using FilterInvocation = std::pair<std::string, std::string>;

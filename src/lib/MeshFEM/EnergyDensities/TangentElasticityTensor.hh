@@ -15,6 +15,8 @@
 
 #include "EDensityAdaptors.hh"
 
+namespace MeshFEM {
+
 // The following `tangentElasticityTensor` routines for volumetric energy
 // densities, compute the tangent elasticity tensor around a particular
 // deformation. Around the identity deformation, this should give the
@@ -49,5 +51,7 @@ ElasticityTensor<typename Psi_F::Real, Psi_F::N>
 tangentElasticityTensor(const Psi_F &/* psiIn */, const Eigen::Matrix<typename Psi_F::Real, Psi_F::N, Psi_F::N> &/* F */ = Eigen::Matrix<typename Psi_F::Real, Psi_F::N, Psi_F::N>::Identity()) {
     static_assert(Psi_F::EDType != EDensityType::Membrane, "tangentElasticityTensor not supported for membrane densities");
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TANGENTELASTICITYTENSOR_HH */

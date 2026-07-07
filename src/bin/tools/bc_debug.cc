@@ -13,10 +13,12 @@
 //  Company:  New York University
 //  Created:  12/19/2014 21:14:00
 ////////////////////////////////////////////////////////////////////////////////
-#include "../Types.hh"
+#include <MeshFEMCore/Types.hh>
 #include "../MaterialOptimization.hh"
 #include "../MSHFieldWriter.hh"
 #include <iostream>
+
+using namespace MeshFEM;
 
 using namespace std;
 

@@ -1,6 +1,8 @@
 #include "ElasticSheetBinding.hh"
 #include <MeshFEM/Elements/DihedralAngle.hh>
 
+using namespace MeshFEM;
+
 PYBIND11_MODULE(elastic_sheet, m)
 {
     py::module detail_module = m.def_submodule("detail");

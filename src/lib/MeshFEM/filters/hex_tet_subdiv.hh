@@ -15,6 +15,8 @@
 #include <map>
 #include <MeshFEM/Geometry.hh>
 
+namespace MeshFEM {
+
 // hexIdx: index of the hex from which each output tetrahedron originated
 //         This can be propagated across several subdivisions by passing the
 //         same array for each call.
@@ -106,5 +108,6 @@ void hex_tet_subdiv(const std::vector<Vertex>  &inVertices,
     }
 }
 
-#endif /* end of include guard: HEX_TET_SUBDIV_HH */
+} // namespace MeshFEM
 
+#endif /* end of include guard: HEX_TET_SUBDIV_HH */

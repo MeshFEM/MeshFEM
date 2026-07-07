@@ -12,6 +12,8 @@ namespace py = pybind11; // NOLINT (workaround clang-tidy bug)
 
 #include "CallbackWrapper.hh"
 
+using namespace MeshFEM;
+
 template<typename Real_>
 void bind(py::module &m, py::module &detail_module) {
     using EO = ElasticObject<Real_>;

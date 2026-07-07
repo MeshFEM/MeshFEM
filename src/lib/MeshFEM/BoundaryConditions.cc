@@ -8,10 +8,12 @@
 //  Company:  New York University
 //  Created:  07/09/2014 17:35:17
 ////////////////////////////////////////////////////////////////////////////////
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/BoundaryConditions.hh>
-#include <MeshFEM/Future.hh>
+#include <MeshFEMCore/Future.hh>
 #include <nlohmann/json.hpp>
+
+using namespace MeshFEM;
 
 #include <fstream>
 #include <stdexcept>
@@ -22,6 +24,8 @@
 using namespace std;
 
 using json = nlohmann::json;
+
+namespace MeshFEM {
 
 // Parse a vector from a property tree leniently: accept either 2- or 3-vectors,
 // padding with zeros if necessary.
@@ -426,3 +430,5 @@ template<size_t N>           ContactCondition<N>::          ~ContactCondition() 
 template<size_t N>   ContactElementsCondition<N>::  ~ContactElementsCondition() { }
 template<size_t N>          FractureCondition<N>::         ~FractureCondition() { }
 template<size_t N>  FractureElementsCondition<N>:: ~FractureElementsCondition() { }
+
+} // namespace MeshFEM

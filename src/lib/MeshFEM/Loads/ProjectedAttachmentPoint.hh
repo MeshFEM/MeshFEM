@@ -15,6 +15,7 @@
 #include "Springs.hh"
 #include <MeshFEM/ClosestPointProjection.hh>
 
+namespace MeshFEM {
 namespace Loads {
 
 template<typename _CoordinateType>
@@ -113,5 +114,7 @@ private:
 };
 
 } // namespace Loads
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: PROJECTEDATTACHMENTPOINT_HH */

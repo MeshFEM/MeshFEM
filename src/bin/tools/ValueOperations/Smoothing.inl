@@ -1,4 +1,7 @@
 #include <limits>
+
+namespace MeshFEM {
+
 template<class _Val>
 struct SmoothedElmFldImpl {
     using ResultType = _Val; // Dummy
@@ -37,3 +40,5 @@ struct SmoothedElmFldImpl<FieldValue<_PointValue>> {
         return result;
     }
 };
+
+} // namespace MeshFEM

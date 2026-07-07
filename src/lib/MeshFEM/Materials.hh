@@ -17,7 +17,7 @@
 #ifndef MATERIAL_HH
 #define MATERIAL_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Flattening.hh>
 #include <MeshFEM/ElasticityTensor.hh>
 #include <nlohmann/json.hpp>
@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+
 #define BOOST_PARSER 1
 #if BOOST_PARSER
 #include <boost/property_tree/ptree.hpp>
@@ -34,6 +35,8 @@
 #endif
 
 #include <MeshFEM_export.h>
+
+namespace MeshFEM {
 
 namespace Materials {
 
@@ -456,5 +459,7 @@ private:
 };
 
 } // Materials
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MATERIAL_HH */

@@ -21,6 +21,7 @@
 
 namespace po = boost::program_options;
 using namespace std;
+using namespace MeshFEM;
 
 [[ noreturn ]] void usage(int exitVal, const po::options_description &visible_opts) {
     cout << "Usage: grid CxR[xS] out.msh [options]" << endl;

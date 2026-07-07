@@ -39,6 +39,8 @@
 
 #include "Algebra.hh"
 
+namespace MeshFEM {
+
 typedef enum { FIELD_SCALAR, FIELD_VECTOR, FIELD_MATRIX} FieldType;
 enum class DomainType { PER_ELEMENT = 0, PER_NODE = 1, ANY = 3, GUESS = 3, UNKNOWN = -1};
 
@@ -518,5 +520,7 @@ private:
     size_t m_dim;
     std::vector<_Real> m_storage;
 };
+
+} // namespace MeshFEM
 
 #endif // FIELDS_HH

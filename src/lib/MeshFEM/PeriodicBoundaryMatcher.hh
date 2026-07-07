@@ -24,6 +24,7 @@
 #include <MeshFEM/CollisionGrid.hh>
 #include <MeshFEM/Geometry.hh>
 
+namespace MeshFEM {
 namespace PeriodicBoundaryMatcher {
 
 static constexpr size_t NONE = std::numeric_limits<size_t>::max();
@@ -391,5 +392,6 @@ void matchPermittingMismatch(const PointCollection &bdryPoints,
 }
 
 }
+} // namespace MeshFEM
 
 #endif /* end of include guard: PERIODICBOUNDARYMATCHER_HH */
