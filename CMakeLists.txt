@@ -35,6 +35,7 @@ set(MESHFEM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
 
 include(FetchContent)
+include(MeshFEMFetchEditableRepo)
 
 ################################################################################
 # Options
@@ -86,6 +87,8 @@ set(MESHFEMCORE_GIT_TAG "main" CACHE STRING "MeshFEMCore git revision")
 set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
 set(MESHFEMSPARSE_GIT_TAG "main" CACHE STRING "MeshFEMSparse git revision")
 
+meshfem_prepare_editable_repo(MeshFEMCore
+    "${MESHFEM_EXTERNAL}/MeshFEMCore" "${MESHFEMCORE_GIT_TAG}")
 FetchContent_Declare(MeshFEMCore
     GIT_REPOSITORY ${MESHFEMCORE_GIT_REPOSITORY}
     GIT_TAG        ${MESHFEMCORE_GIT_TAG}
@@ -153,6 +156,8 @@ if(NOT DEFINED MESHFEMSPARSE_BUILD_TESTS)
 endif()
 
 if(NOT TARGET MeshFEMSparse)
+    meshfem_prepare_editable_repo(MeshFEMSparse
+        "${MESHFEM_EXTERNAL}/MeshFEMSparse" "${MESHFEMSPARSE_GIT_TAG}")
     FetchContent_Declare(MeshFEMSparse
         GIT_REPOSITORY ${MESHFEMSPARSE_GIT_REPOSITORY}
         GIT_TAG        ${MESHFEMSPARSE_GIT_TAG}
