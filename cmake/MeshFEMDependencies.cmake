@@ -134,25 +134,20 @@ if (MESHFEM_WITH_IPC_TOOLKIT AND NOT TARGET ipc::toolkit)
     meshfem_download_ipc_toolkit()
     set(IPC_TOOLKIT_WITH_SIMD OFF)   # disable ipc_toolkit's own unreliable SIMD detection
     add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit ${CMAKE_BINARY_DIR}/3rdparty/ipc_toolkit)
-    # catamari adds -march=native as INTERFACE (CATAMARI_VECTORIZE=ON by default), which
-    # propagates to MeshFEM and sets EIGEN_MAX_ALIGN_BYTES=32 (AVX). ipc_toolkit doesn't
-    # link catamari so its TU gets EIGEN_MAX_ALIGN_BYTES=16. The mismatch causes Eigen's
-    # generic_aligned_free to read a garbage offset from memory allocated by plain malloc,
-    # crashing at destruction time ("double free or corruption").
-    # Note: CATAMARI_VECTORIZE is defined in 3rdparty/catamari/CMakeLists.txt which is
-    # processed after this file, so we can't test it here. Instead unconditionally mirror
-    # -march=native onto ipc_toolkit whenever the compiler supports it.
-    include(CheckCXXCompilerFlag)
-    check_cxx_compiler_flag(-march=native COMPILER_SUPPORTS_MARCH_NATIVE)
-    if(COMPILER_SUPPORTS_MARCH_NATIVE)
-        target_compile_options(ipc_toolkit PRIVATE -march=native)
+    if(MESHFEM_NATIVE)
+        # We hit ODR violations/alignment issues if ipc_toolkit is built with an incompatible `march` setting from MeshFEM.
+        # Specifically, we get a SEGFAULT when attempting an 32-byte aligned read from an unaligned address
+        # (copying from IPC's insufficiently aligned Eigen::MatrixXd into our aligned Eigen::MatrixXd).
+        # Note: the following flag detection variables have been set when configuring MESHFEM_NATIVE.
+        if(COMPILER_SUPPORTS_MARCH_NATIVE)
+            message(STATUS "Enabling -march=native for ipc_toolkit to match MeshFEM's MESHFEM_NATIVE option")
+            target_compile_options(ipc_toolkit PRIVATE -march=native)
+        endif()
+        if(COMPILER_SUPPORTS_MCPU_NATIVE)
+            message(STATUS "Enabling -mcpu=native for ipc_toolkit to match MeshFEM's MESHFEM_NATIVE option")
+            target_compile_options(${PROJECT_NAME} PUBLIC -mcpu=native)
+        endif()
     endif()
-    # Previous version apparently not working on AVX-512
-    # # We hit ODR violations/alignment issues if ipc_toolkit is built with an incompatible `march` setting from MeshFEM.
-    # # Specifically, we get a SEGFAULT when attempting an 32-byte aligned read from an unaligned address
-    # # (copying from IPC's insufficiently aligned Eigen::MatrixXd into our aligned Eigen::MatrixXd).
-    # set(IPC_TOOLKIT_WITH_SIMD ON)
-    # add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit ${CMAKE_BINARY_DIR}/3rdparty/ipc_toolkit)
 endif()
 
 if ((MESHFEM_WITH_TINYAD OR MESHFEM_FORCE_TINYAD_DOWNLOAD) AND (NOT TARGET TinyAD))
