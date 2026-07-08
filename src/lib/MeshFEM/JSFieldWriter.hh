@@ -18,8 +18,10 @@
 #include <vector>
 #include <map>
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/MeshIO.hh>
+
+namespace MeshFEM {
 
 template<size_t N>
 class JSFieldWriter {
@@ -158,5 +160,7 @@ private:
 
     mutable std::ofstream m_outStream;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: JSFIELDWRITER_HH */

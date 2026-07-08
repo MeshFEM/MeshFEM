@@ -45,16 +45,18 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef FUNCTIONS_HH
 #define FUNCTIONS_HH
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Simplex.hh>
-#include <MeshFEM/function_traits.hh>
-#include <MeshFEM/TemplateHacks.hh>
-#include <MeshFEM/Future.hh>
+#include <MeshFEMCore/function_traits.hh>
+#include <MeshFEMCore/TemplateHacks.hh>
+#include <MeshFEMCore/Future.hh>
 #include <vector>
 #include <array>
 #include <functional>
 #include <iostream>
 #include <type_traits>
+
+namespace MeshFEM {
 
 namespace Degree { enum { Constant = 0, Linear = 1, Quadratic = 2, Cubic = 3, Quartic = 4 }; }
 
@@ -668,5 +670,7 @@ Interpolant<_T, _K, constmax(_Deg1, _Deg2), DefaultNodalStoragePolicy> operator-
     result -= f2;
     return result;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FUNCTIONS_HH */

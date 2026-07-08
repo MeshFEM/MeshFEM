@@ -13,12 +13,14 @@
 #define POISSON_HH
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/GaussQuadrature.hh>
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/Solvers/SPSDSystem.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/SPSDSystem.hh>
 #include <MeshFEM/BoundaryConditions.hh>
 #include <vector>
 #include <array>
 #include <memory>
+
+namespace MeshFEM {
 
 typedef enum { CONSTRAINT_DIRICHLET, CONSTRAINT_NONE } ConstraintType;
 
@@ -132,5 +134,7 @@ public:
         return grads;
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: POISSON_HH */

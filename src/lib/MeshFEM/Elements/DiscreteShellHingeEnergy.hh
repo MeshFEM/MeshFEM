@@ -12,6 +12,8 @@
 
 #include <MeshFEM/Elements/HingeElement.hh>
 
+namespace MeshFEM {
+
 template<class _Real>
 struct DiscreteShellHingeEnergy {
     using Real = _Real;
@@ -56,5 +58,7 @@ private:
 
 template<class _Real>
 using DiscreteShellHingeMeshEnergy = HingeMeshEnergy<DiscreteShellHingeEnergy<_Real>>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DISCRETESHELLHINGEENERGY_HH */

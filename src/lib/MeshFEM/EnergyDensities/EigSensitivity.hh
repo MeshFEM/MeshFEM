@@ -14,6 +14,8 @@
 #include <array>
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 
+namespace MeshFEM {
+
 // 2x2 case only for now, also can be sped up.
 template<typename Real>
 struct EigSensitivity {
@@ -80,5 +82,7 @@ private:
 
     bool m_degenerate = false;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EIGSENSITIVITY_HH */

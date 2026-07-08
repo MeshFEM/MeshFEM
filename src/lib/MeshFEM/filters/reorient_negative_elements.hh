@@ -14,7 +14,9 @@
 #include <vector>
 #include <limits>
 #include <algorithm>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 template<class Vertex, class Element>
 size_t reorient_negative_elements(std::vector<Vertex>  &vertices,
@@ -55,5 +57,7 @@ size_t reorient_negative_elements(std::vector<Vertex>  &vertices,
 
     return numFlipped;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: REORIENT_NEGATIVE_ELEMENTS_HH */

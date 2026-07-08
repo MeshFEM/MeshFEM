@@ -11,7 +11,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef ELEMENTARRAYADAPTOR_HH
 #define ELEMENTARRAYADAPTOR_HH
-#include<MeshFEM/Types.hh>
+#include<MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 // Version for types conforming to std::vector interface.
 template<class ElementArray, class Enable = void>
@@ -43,5 +45,7 @@ struct ElementArrayAdaptor<EigenType, typename std::enable_if<isMatrixOfSize<Eig
     static size_t elementSize(const EigenType &/*E*/, size_t /*ei*/)   { return EigenType::RowsAtCompileTime; }
     static IndexType      get(const EigenType &E, size_t ei, size_t c) { return E(c, ei); }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELEMENTARRAYADAPTOR_HH */

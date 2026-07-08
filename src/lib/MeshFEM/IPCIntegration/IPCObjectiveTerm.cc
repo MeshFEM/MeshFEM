@@ -1,8 +1,11 @@
 #include "IPCObjectiveTerm.hh"
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
+#include <cfenv>
 
 #if MESHFEM_WITH_IPC_TOOLKIT
+
+namespace MeshFEM {
 
 template<typename _Real>
 IPCObjectiveTerm<_Real>::IPCObjectiveTerm(std::shared_ptr<NewtonVarsBase> vars, CollisionMesh cm, const ObstaclesCollection &obsts, _Real dhat)
@@ -65,9 +68,6 @@ void IPCObjectiveTerm<_Real>::accumulateHessian(Real weight, NewtonHessian &H, b
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateHessian");
     m_ipcWrapper->hessian(H, m_collisionVertexPositions, m_combinedCollisionMesh->nodeForCollisionMeshVertex, weight * m_k, projectionMask);
 }
-
-#include <cfenv>
-
 template<typename _Real>
 _Real IPCObjectiveTerm<_Real>::feasibleStepLength(const VXd &vars, const VXd &step, Real initialAlpha, Real currentObjectiveValue) const {
     BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.feasibleStepLength");
@@ -139,5 +139,7 @@ template struct IPCObjectiveTerm<double>;
 #if MESHFEM_BIND_LONG_DOUBLE
     template struct IPCObjectiveTerm<long double>;
 #endif
+
+} // namespace MeshFEM
 
 #endif // MESHFEM_WITH_IPC_TOOLKIT

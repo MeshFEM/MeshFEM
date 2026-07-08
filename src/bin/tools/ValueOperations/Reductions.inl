@@ -3,6 +3,8 @@
 #include <cmath>
 #include <stdexcept>
 
+namespace MeshFEM {
+
 struct ReductionMin : public Reduction {
     ReductionMin(const std::string &arg = "") { reset(); setArg(arg); }
     virtual void reset() { m_acc = std::numeric_limits<Real>::max(); }
@@ -269,3 +271,5 @@ std::unique_ptr<ORT<T>> applyOuterReduction(Reduction &r, const T &val) {
 [[ noreturn ]] std::unique_ptr<ORT<SValue>> applyOuterReduction(Reduction &r, const SValue &val) {
     throw std::runtime_error("Reduction of empty object");
 }
+
+} // namespace MeshFEM

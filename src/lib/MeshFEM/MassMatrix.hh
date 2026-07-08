@@ -22,11 +22,14 @@
 #ifndef MASSMATRIX_HH
 #define MASSMATRIX_HH
 
-#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/GaussQuadrature.hh>
 #include <limits>
 #include <stdexcept>
+
+namespace MeshFEM {
+
 
 namespace MassMatrix {
 
@@ -229,5 +232,7 @@ TripletMatrix<> construct_vector_valued(const _FEMMesh &mesh, Args&&... args) {
 }
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MASSMATRIX_HH */

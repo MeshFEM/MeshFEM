@@ -9,10 +9,12 @@
 #ifndef NEWTONOPTIONS_HH
 #define NEWTONOPTIONS_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include "HessianProjectionController.hh"
 #include "HessianUpdateController.hh"
-#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
+#include <MeshFEMSparse/Solvers/make_cholesky_factorizer.hh>
+
+namespace MeshFEM {
 
 struct NewtonOptimizerOptionsBase {
     Real gradTol = 2e-8,
@@ -109,5 +111,7 @@ protected:
     std::shared_ptr<HessianProjectionController> m_hessianProjectionController = std::make_shared<HessianProjectionAdaptive>();
     std::shared_ptr<HessianUpdateController>     m_hessianUpdateController     = std::make_shared<HessianUpdateAlways>();
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: NEWTONOPTIONS_HH */

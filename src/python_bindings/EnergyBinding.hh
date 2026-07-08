@@ -9,6 +9,8 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include <MeshFEM/EnergyDensities/StressToBiotStrain.hh>
 
+namespace MeshFEM {
+
 template<template<class Real_, size_t Dim> class Energy, typename... Args>
 py::object constructDimensionSpecific(size_t dimension, Args... args) {
     if (dimension == 2) return py::cast(new Energy<double, 2>(std::forward<Args>(args)...), py::return_value_policy::take_ownership);
@@ -131,5 +133,7 @@ void generateEnergyBindingsParameterless(const std::string &name, py::module &m,
     m.def(name.c_str(), [](size_t dimension) {                                                                     return constructDimensionSpecific<Psi>(dimension); }, py::arg("dimension"));
     m.def(name.c_str(), [](py::object mesh ) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecific<Psi>(dimension); }, py::arg("mesh")     );
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ENERGYBINDING_HH */

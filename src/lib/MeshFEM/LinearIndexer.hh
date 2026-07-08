@@ -12,6 +12,8 @@
 #ifndef LINEARINDEXER_HH
 #define LINEARINDEXER_HH
 
+namespace MeshFEM {
+
 template<typename T>
 struct LinearIndexerImpl;
 
@@ -43,5 +45,7 @@ struct LinearIndexerImpl {
     static const Real &index(const Real &val, size_t /*i*/) { return val; }
     static constexpr size_t size() { return 1; }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: LINEARINDEXER_HH */

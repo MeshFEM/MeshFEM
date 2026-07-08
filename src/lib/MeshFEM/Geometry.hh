@@ -11,13 +11,15 @@
 #ifndef GEOMETRY_HH
 #define GEOMETRY_HH
 
-#include <MeshFEM/Types.hh>
-#include <MeshFEM/AutomaticDifferentiation.hh>
+#include <MeshFEMCore/Types.hh>
+#include <MeshFEMCore/AutomaticDifferentiation.hh>
 #include <iostream>
 #include <vector>
 #include <array>
 #include <algorithm>
 #include <type_traits>
+
+namespace MeshFEM {
 
 template<typename _Vector>
 struct Region {
@@ -886,5 +888,7 @@ Vec3_T<Real_> parallelTransport(Vec3_T<Real_> t0, Vec3_T<Real_> t1,
     t1.normalize();
     return parallelTransportNormalized<Real_>(t0, t1, v);
 }
+
+} // namespace MeshFEM
 
 #endif // GEOMETRY_HH

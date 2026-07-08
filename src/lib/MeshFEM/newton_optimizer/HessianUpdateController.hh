@@ -17,6 +17,8 @@
 
 #include <memory>
 
+namespace MeshFEM {
+
 struct HessianUpdateController {
     virtual bool needsUpdate() const = 0;
     virtual void newHessian(bool /* isIndefinite */) { }
@@ -80,5 +82,8 @@ struct HessianUpdatePeriodic: public HessianUpdateController {
 protected:
     size_t m_counter = 0; // countdown until a new Hessian is needed.
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: HESSIANUPDATECONTROLLER_HH */

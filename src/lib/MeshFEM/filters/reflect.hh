@@ -5,6 +5,8 @@
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/ComponentMask.hh>
 
+namespace MeshFEM {
+
 inline bool isEq(Real a, Real b, Real tol = 0) {
     return std::abs(a - b) < tol;
 }
@@ -109,5 +111,6 @@ void reflect(const size_t Dim, // dimensions to reflect in (length of [x, y, z] 
     }
 }
 
+} // namespace MeshFEM
 
 #endif /* end of include guard: REFLECT_HH */

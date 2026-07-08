@@ -2,7 +2,7 @@
 # General Informations
 ################################################################################
 
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.14...3.31)
 project(MeshFEM)
 
 # CMP0063: Honor visibility properties for all target types.
@@ -26,7 +26,15 @@ endif()
 
 ################################################################################
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+list(APPEND CMAKE_MODULE_PATH
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/MeshFEMCore/cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/MeshFEMSparse/cmake
+)
+list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
+
+set(MESHFEM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
 
 set(CMAKE_CXX_FLAGS_RELWITHASSERT        "-O3" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
 set(CMAKE_C_FLAGS_RELWITHASSERT          "-O3" CACHE STRING "Flags used during RelWithAssertions builds" FORCE)
@@ -85,6 +93,7 @@ endif()
 option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
 option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" ON)
 option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
+option(MESHFEM_BUILD_TESTS           "Build MeshFEM tests"           ${MESHFEM_BUILD_BINARIES})
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
 option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   ON)
@@ -116,31 +125,31 @@ if (MESHFEM_ADDRESS_SANITIZER)
 endif()
 
 ################################################################################
-# Dependencies
-################################################################################
-
-# Download and define targets for third-party dependencies
-include(MeshFEMDependencies)
-
-################################################################################
 # Subdirectories
 ################################################################################
+# RotationOptimization consumes Eigen when it is available as a CMake target.
+# Prepare MeshFEMCore's foundational dependencies before adding this third-party
+# project so it does not configure its bundled Eigen test tree.
+include(MeshFEMCoreDependencies)
+
 add_subdirectory(3rdparty/RotationOptimization)
+
+if(MESHFEM_BUILD_TESTS)
+    include(CTest)
+endif()
+
+if(NOT DEFINED MESHFEMCORE_BUILD_TESTS)
+    set(MESHFEMCORE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMCore tests")
+endif()
+
+if(NOT DEFINED MESHFEMSPARSE_BUILD_TESTS)
+    set(MESHFEMSPARSE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMSparse tests")
+endif()
 
 add_subdirectory(src/lib)
 
 if(MESHFEM_BUILD_BINARIES)
     add_subdirectory(src/bin)
-endif()
-
-# TODO: change back from a Git submodule to a CMake project download when
-# BlockCatamari is released.
-if (MESHFEM_WITH_CATAMARI)
-    if (MESHFEM_USE_LEGACY_CATAMARI)
-        # catamari_legacy is already added by MeshFEMDependencies.cmake
-    else()
-        add_subdirectory(3rdparty/catamari)
-    endif()
 endif()
 
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python
@@ -170,9 +179,8 @@ endif()
 # Unit tests
 ################################################################################
 
-# Compile tests if we are also building the MeshFEM binaries
-if (MESHFEM_BUILD_BINARIES)
-    # Unit tests
-    enable_testing()
+# Compile tests if requested.
+if (MESHFEM_BUILD_TESTS AND BUILD_TESTING)
+    list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/Catch2/contrib)
     add_subdirectory(tests)
 endif()

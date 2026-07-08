@@ -20,6 +20,8 @@
 #include "EnergyTraits.hh"
 #include "Tensor.hh"
 
+namespace MeshFEM {
+
 template <typename _Real, size_t _Dim>
 struct IsoCRLEWithHessianProjection {
     static constexpr size_t Dimension = _Dim;
@@ -142,5 +144,7 @@ private:
     Vector m_twistEigenvalueDenominators;
     std::array<Matrix, N> m_Tsqrt2;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ISOCRLEWITHHESSIANPROJECTION_HH */

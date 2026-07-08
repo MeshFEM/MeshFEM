@@ -25,6 +25,8 @@
 #include <type_traits>
 #include <MeshFEM/Concepts.hh>
 
+namespace MeshFEM {
+
 // The default, trivial model of EdgeSoup: simply wrap point and edge
 // collections.
 template<class PointCollection, class EdgeCollection>
@@ -165,5 +167,7 @@ protected:
 template<class PolygonCollection>
 using IOElementEdgeSoupFromClosedPolygonCollection =
       EdgeSoupFromClosedPolygonCollection<PolygonCollection, MeshIO::IOElement>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EDGESOUPADAPTOR_HH */

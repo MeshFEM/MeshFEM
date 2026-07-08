@@ -68,6 +68,7 @@ compile_commands.json
 /3rdparty/triangle/
 /3rdparty/catamari/
 /3rdparty/ipc_toolkit/
+/3rdparty/TinyAD/
 
 # Mac/ntfs garbage
 .DS_Store

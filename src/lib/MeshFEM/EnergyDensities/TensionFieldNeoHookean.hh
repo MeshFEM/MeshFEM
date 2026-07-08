@@ -23,6 +23,8 @@
 #include "EigSensitivity.hh"
 #include "Tensor.hh"
 
+namespace MeshFEM {
+
 template<typename Real>
 struct IncompressibleBalloonEnergy {
     using V2d  = Eigen::Matrix<Real, 2, 1>;
@@ -293,5 +295,7 @@ struct OptionalTensionFieldEnergy : public TensionFieldEnergy<Real> {
     bool getRelaxationEnabled() const { return useTensionField; }
     void setRelaxationEnabled(bool enable) { useTensionField = enable; }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TENSIONFIELDENERGY_HH */

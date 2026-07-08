@@ -13,6 +13,8 @@
 #define VOID MESHFEM_VOID
 #define REAL MESHFEM_REAL
 
+using namespace MeshFEM;
+
 int main(int argc, const char *argv[]) {
     if (argc != 3) {
         std::cerr << "usage: triangulate_standalone in.bin flags_string" << std::endl;

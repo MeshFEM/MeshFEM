@@ -25,6 +25,8 @@
 #include "EnergyTraits.hh"
 #include <Eigen/Dense>
 
+namespace MeshFEM {
+
 template<typename _Real, size_t _Dim>
 struct FBasedEDensitySimple {
     static constexpr size_t Dimension = _Dim;
@@ -78,5 +80,8 @@ protected:
 
     virtual void m_eval(const Matrix &F, EvalLevel elevel, bool projectHessian) = 0;
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FBASEDEDENSITYSIMPLE_HH */

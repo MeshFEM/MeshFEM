@@ -21,6 +21,8 @@
 #include <set>
 #include <map>
 
+namespace MeshFEM {
+
 template<class Iterator>
 struct IteratorAddressLess {
     using result_type = bool;
@@ -34,5 +36,8 @@ using IteratorSet = std::set<Iterator, IteratorAddressLess<Iterator>>;
 
 template<class Iterator, class Value>
 using IteratorMap = std::map<Iterator, Value, IteratorAddressLess<Iterator>>;
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ITERATORMAP_HH */

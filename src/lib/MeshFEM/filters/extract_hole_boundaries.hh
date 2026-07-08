@@ -15,7 +15,10 @@
 #define EXTRACT_HOLE_BOUNDARIES_HH
 #include <vector>
 #include <queue>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
+
+
+namespace MeshFEM {
 
 template<class _Mesh>
 void extract_hole_boundaries(const _Mesh &m,
@@ -79,5 +82,8 @@ void extract_hole_boundaries(const _Mesh &m,
     }
     holeBoundaries.erase(holeBoundaries.begin() + incidentBdryIndex);
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EXTRACT_HOLE_BOUNDARIES_HH */

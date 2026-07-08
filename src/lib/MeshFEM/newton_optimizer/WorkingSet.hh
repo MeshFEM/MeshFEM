@@ -13,6 +13,8 @@
 
 #include "NewtonProblem.hh"
 
+namespace MeshFEM {
+
 struct MESHFEM_EXPORT WorkingSet {
     WorkingSet(const NewtonProblem &problem) : m_prob(problem), m_contains(problem.numBoundConstraints(), false), m_varFixed(problem.numVars(), false) { }
     WorkingSet(const WorkingSet &ws) : m_prob(ws.m_prob), m_count(ws.m_count), m_contains(ws.m_contains), m_varFixed(ws.m_varFixed) { }
@@ -118,5 +120,6 @@ inline void fixVariablesInWorkingSet(const NewtonProblem &prob, SuiteSparseMatri
     BENCHMARK_STOP_TIMER("fixVariablesInWorkingSet");
 }
 
+} // namespace MeshFEM
 
 #endif /* end of include guard: WORKINGSET_HH */

@@ -4,7 +4,10 @@
 #include <memory>
 #include "CollisionMesh.hh"
 #include "Obstacle.hh"
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
+
+namespace MeshFEM {
 
 using ObstaclesCollection = std::vector<std::shared_ptr<Obstacle>>;
 
@@ -148,8 +151,6 @@ private:
     MXd m_obstaclesVertices;
 };
 
-#include <MeshFEM/newton_optimizer/NewtonHessian.hh>
-
 // Forward declaration of struct holding all IPC state and functionality that
 // requires IPC headers
 struct IPCWrapperBase {
@@ -183,5 +184,7 @@ struct IPCWrapperBase {
 };
 
 std::unique_ptr<IPCWrapperBase> make_ipc_wrapper(const CombinedCollisionMesh<Real> &cm, const Eigen::MatrixXd &collisionVertexPositions);
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: IPCWRAPPER_HH */

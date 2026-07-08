@@ -14,6 +14,8 @@
 
 #include "BindingInstantiations.hh"
 
+namespace MeshFEM {
+
 struct ElasticSheetBinder {
     template<class ES>
     static void bind(py::module &module, py::module &detail_module) {
@@ -113,5 +115,7 @@ struct ElasticSheetBinder {
         const std::string name = NameMangler<ES>::name();
    }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELASTICSHEETBINDING_HH */

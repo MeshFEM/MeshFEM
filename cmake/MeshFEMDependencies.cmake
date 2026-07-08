@@ -1,38 +1,39 @@
-# Prepare dependencies
-#
-# For each third-party library, if the appropriate target doesn't exist yet,
-# download it via external project, and add_subdirectory to build it alongside
-# this project.
+# Prepare dependencies owned by the main MeshFEM library/application layer.
 
-### Configuration
-set(MESHFEM_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
-set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
+if(NOT DEFINED MESHFEM_ROOT)
+    get_filename_component(MESHFEM_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+endif()
 
-# Make MESHFEM_EXTERNAL path available also to parent projects.
+if(NOT DEFINED MESHFEM_EXTERNAL)
+    set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
+endif()
+
 get_directory_property(hasParent PARENT_DIRECTORY)
 if (hasParent)
+    set(MESHFEM_ROOT "${MESHFEM_ROOT}" PARENT_SCOPE)
     set(MESHFEM_EXTERNAL "${MESHFEM_EXTERNAL}" PARENT_SCOPE)
 endif()
 
-# Download and update 3rdparty libraries
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
 list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
+
 include(MeshFEMDownloadExternal)
+include(MeshFEMUtils)
+include(Warnings)
 
 ################################################################################
-# Required libraries
+# Main MeshFEM dependencies
 ################################################################################
-
-# C++11 threads
-find_package(Threads REQUIRED) # provides Threads::Threads
 
 # Boost library
-find_package(Boost 1.54 REQUIRED COMPONENTS filesystem system program_options QUIET)
+# The unit tests now use Boost::iostreams to load lzma-compressed data...
+find_package(Boost 1.54 REQUIRED COMPONENTS filesystem system iostreams program_options QUIET)
 if(NOT TARGET meshfem::boost)
     add_library(meshfem_boost INTERFACE)
-    if(TARGET Boost::filesystem AND TARGET Boost::system AND TARGET Boost::program_options)
+    if(TARGET Boost::filesystem AND TARGET Boost::system AND TARGET Boost::program_options AND TARGET Boost::iostreams)
         target_link_libraries(meshfem_boost INTERFACE
             Boost::filesystem
+            Boost::iostreams
             Boost::system
             Boost::program_options)
     else()
@@ -44,23 +45,14 @@ if(NOT TARGET meshfem::boost)
 endif()
 
 # Catch2
-if(NOT TARGET Catch2::Catch2 AND MESHFEM_BUILD_BINARIES)
+if(NOT TARGET Catch2::Catch2 AND MESHFEM_BUILD_TESTS)
     meshfem_download_catch()
-    add_subdirectory(${MESHFEM_EXTERNAL}/Catch2)
+    add_subdirectory(${MESHFEM_EXTERNAL}/Catch2 ${CMAKE_BINARY_DIR}/3rdparty/Catch2)
     list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/Catch2/contrib)
-endif()
-
-# Eigen3 library
-if(NOT TARGET Eigen3::Eigen)
-    add_library(meshfem_eigen INTERFACE)
-    meshfem_download_eigen()
-    target_include_directories(meshfem_eigen SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/eigen)
-    add_library(Eigen3::Eigen ALIAS meshfem_eigen)
 endif()
 
 # json library
 if(NOT TARGET nlohmann_json::nlohmann_json)
-    message(STATUS "Downloading nlohmann/json")
     meshfem_download_json()
     add_library(meshfem_json INTERFACE)
     target_include_directories(meshfem_json SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/json/include)
@@ -75,26 +67,6 @@ if(NOT TARGET optional::optional)
     add_library(optional_lite INTERFACE)
     target_include_directories(optional_lite SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/optional/include)
     add_library(optional::optional ALIAS optional_lite)
-endif()
-
-# TBB library
-if(NOT TARGET TBB::tbb)
-    set(TBBMALLOC_BUILD ON CACHE BOOL " " FORCE) # needed for CGAL's parallel mesher
-    set(TBBMALLOC_PROXY_BUILD OFF CACHE BOOL " " FORCE)
-    set(TBB_BUILD_TESTS OFF CACHE BOOL " " FORCE)
-
-    meshfem_download_tbb()
-    add_subdirectory(${MESHFEM_EXTERNAL}/tbb tbb EXCLUDE_FROM_ALL)
-
-    add_library(tbb_tbb INTERFACE)
-    # Note: declaring TBB as a system header results in the local `tbb` include directory being listed
-    # after other system include paths, potentially causing an incompatible system-wide version of the headers
-    # to leak in. Instead, we suppress warnings from the TBB headers using #pragmas in `Parallelism.hh`.
-    # target_include_directories(tbb_tbb SYSTEM INTERFACE ${MESHFEM_EXTERNAL}/tbb/include)
-    target_link_libraries(tbb_tbb INTERFACE tbbmalloc tbb)
-    add_library(TBB::tbb ALIAS tbb_tbb)
-
-    meshfem_target_hide_warnings(tbb_tbb)
 endif()
 
 # Triangle library
@@ -121,18 +93,16 @@ if(NOT TARGET tinyexpr::tinyexpr)
     add_library(tinyexpr::tinyexpr ALIAS meshfem_tinyexpr)
 endif()
 
-# Cholmod solver
-if (MESHFEM_WITH_CHOLMOD)
-find_package(CHOLMOD REQUIRED) # provides cholmod::cholmod
+if (MESHFEM_WITH_CHOLMOD AND NOT TARGET cholmod::cholmod)
+    find_package(CHOLMOD REQUIRED) # provides cholmod::cholmod
 endif()
 
-# UmfPack solver
-if (MESHFEM_WITH_UMFPACK)
-find_package(UMFPACK REQUIRED) # provides umfpack::umfpack
+if (MESHFEM_WITH_UMFPACK AND NOT TARGET umfpack::umfpack)
+    find_package(UMFPACK REQUIRED) # provides umfpack::umfpack
 endif()
 
 ################################################################################
-# Optional libraries
+# Optional MeshFEM dependencies
 ################################################################################
 
 # Ceres
@@ -160,7 +130,7 @@ if (MESHFEM_WITH_CERES AND NOT TARGET ceres::ceres)
             set(SUITESPARSE_INCLUDE_DIR_HINTS "$ENV{SUITESPARSE_INC}")
             set(SUITESPARSE_LIBRARY_DIR_HINTS "$ENV{SUITESPARSE_LIB}")
         endif()
-        add_subdirectory(${MESHFEM_EXTERNAL}/ceres)
+        add_subdirectory(${MESHFEM_EXTERNAL}/ceres ${CMAKE_BINARY_DIR}/3rdparty/ceres)
         add_library(ceres::ceres ALIAS ceres)
         meshfem_target_hide_warnings(ceres)
     endif()
@@ -168,20 +138,10 @@ elseif(NOT TARGET ceres::ceres)
     message(STATUS "Google's ceres-solver not found; MaterialOptimization_cli won't be built")
 endif()
 
-# if (MESHFEM_WITH_CATAMARI AND NOT TARGET catamari)
-#     meshfem_download_catamari()
-#     add_subdirectory(${MESHFEM_EXTERNAL}/catamari)
-# endif()
-
-if (MESHFEM_WITH_CATAMARI AND MESHFEM_USE_LEGACY_CATAMARI AND NOT TARGET catamari)
-    meshfem_download_catamari_legacy()
-    add_subdirectory(${MESHFEM_EXTERNAL}/catamari_legacy)
-endif()
-
 if (MESHFEM_WITH_IPC_TOOLKIT AND NOT TARGET ipc::toolkit)
     meshfem_download_ipc_toolkit()
     set(IPC_TOOLKIT_WITH_SIMD OFF)   # disable ipc_toolkit's own unreliable SIMD detection
-    add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit)
+    add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit ${CMAKE_BINARY_DIR}/3rdparty/ipc_toolkit)
     # catamari adds -march=native as INTERFACE (CATAMARI_VECTORIZE=ON by default), which
     # propagates to MeshFEM and sets EIGEN_MAX_ALIGN_BYTES=32 (AVX). ipc_toolkit doesn't
     # link catamari so its TU gets EIGEN_MAX_ALIGN_BYTES=16. The mismatch causes Eigen's
@@ -195,10 +155,20 @@ if (MESHFEM_WITH_IPC_TOOLKIT AND NOT TARGET ipc::toolkit)
     if(COMPILER_SUPPORTS_MARCH_NATIVE)
         target_compile_options(ipc_toolkit PRIVATE -march=native)
     endif()
+    # Previous version apparently not working on AVX-512
+    # # We hit ODR violations/alignment issues if ipc_toolkit is built with an incompatible `march` setting from MeshFEM.
+    # # Specifically, we get a SEGFAULT when attempting an 32-byte aligned read from an unaligned address
+    # # (copying from IPC's insufficiently aligned Eigen::MatrixXd into our aligned Eigen::MatrixXd).
+    # set(IPC_TOOLKIT_WITH_SIMD ON)
+    # add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit ${CMAKE_BINARY_DIR}/3rdparty/ipc_toolkit)
 endif()
 
-# Scotch
-if (MESHFEM_WITH_SCOTCH)
+if ((MESHFEM_WITH_TINYAD OR MESHFEM_FORCE_TINYAD_DOWNLOAD) AND (NOT TARGET TinyAD))
+    meshfem_download_tinyad()
+    add_subdirectory(${MESHFEM_EXTERNAL}/TinyAD ${CMAKE_BINARY_DIR}/3rdparty/TinyAD)
+endif()
+
+if (MESHFEM_WITH_SCOTCH AND NOT TARGET SCOTCH::scotch)
     find_package(SCOTCH QUIET)
     if (NOT TARGET SCOTCH::scotch)
         message(STATUS "Scotch not found; support will be disabled")

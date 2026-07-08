@@ -16,7 +16,9 @@
 #include <type_traits>
 #include <cassert>
 #include <vector>
-#include "../Types.hh"
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 // Collection of the handle types for a particular mesh (to be specialized).
 // Should provide, e.g:
@@ -227,5 +229,7 @@ struct SubEntityHandleRange {
 private:
     EH m_h;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: HANDLE_HH */

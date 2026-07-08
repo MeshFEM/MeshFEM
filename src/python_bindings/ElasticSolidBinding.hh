@@ -14,6 +14,8 @@ namespace py = pybind11;
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include "MeshEntities.hh"
 
+namespace MeshFEM {
+
 template<size_t NewDeg, class ES>
 py::object toDegree(const ES &es) {
     return py::cast(new ElasticSolid<ES::K, NewDeg, typename ES::EmbeddingSpace, typename ES::Energy>(es),
@@ -133,5 +135,7 @@ void generateElasticSolidBindingsForEnergy(py::module &m, py::module &detail_mod
     ElasticSolidBinder b;
     generateMeshSpecificBindings(m, detail_module, impl::ESolidMeshBinder<ElasticSolidBinder, Energy>(b));
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELASTICSOLIDBINDING_HH */

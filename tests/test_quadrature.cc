@@ -21,6 +21,7 @@
 #include <vector>
 #include <cmath>
 
+using namespace MeshFEM;
 using namespace std;
 
 typedef double Real;

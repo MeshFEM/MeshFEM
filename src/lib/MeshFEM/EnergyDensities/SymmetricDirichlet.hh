@@ -17,6 +17,8 @@
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
 
+namespace MeshFEM {
+
 template<typename _Real, size_t _Dim>
 struct SymmetricDirichlet {
     static constexpr size_t Dimension = _Dim;
@@ -224,5 +226,7 @@ private:
 
     Hessian m_d2psi;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SYMMETRICDIRICHLET_HH */

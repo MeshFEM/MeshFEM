@@ -16,6 +16,8 @@
 #include <vector>
 #include <stdexcept>
 
+namespace MeshFEM {
+
 template<class Vertex, class Element>
 void gen_grid(size_t sx, size_t sy,
               std::vector<Vertex> &vertices,
@@ -103,5 +105,8 @@ void gen_grid(const std::vector<size_t> &sizes,
     }
 }
 
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: GEN_GRID_HH */

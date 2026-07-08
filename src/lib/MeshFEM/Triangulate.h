@@ -26,6 +26,8 @@
 #include <utility>
 #include <type_traits>
 
+namespace MeshFEM {
+
 // Free the data structures passed to/from Triangle. Both input and output must
 // be handled at once because sometimes Triangle passes arrays through from
 // input to output without copying them
@@ -351,5 +353,7 @@ inline void refineTriangulation(
 
     freeIO(in, out);
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TRIANGULATE_H */

@@ -3,7 +3,9 @@
 #include <iostream>
 #include <MeshFEM/Geometry.hh>
 #include <MeshFEM/Utilities/ElementArrayAdaptor.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
+namespace MeshFEM {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructor
@@ -205,3 +207,5 @@ boundaryLoops() const {
     }
     return result;
 }
+
+} // namespace MeshFEM

@@ -1,14 +1,16 @@
 #include <MeshFEM/MeshIO.hh>
 #include <MeshFEM/Utilities/MeshConversion.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
-#include <MeshFEM/Utilities/load_dense_matrix.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMCore/Utilities/load_dense_matrix.hh>
+
+using namespace MeshFEM;
 
 #include <ipc/ipc.hpp>
 #include <ipc/collisions/collisions.hpp>
 #include <ipc/barrier/adaptive_stiffness.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
 
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/Parallelism.hh>
 
 double compute_collision_tightInclusion_stepsize(const ipc::CollisionMesh &cm, const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1, double dhat) {
     std::cout << "dhat: " << dhat << std::endl;

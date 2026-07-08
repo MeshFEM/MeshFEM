@@ -7,7 +7,9 @@
 #include <sstream>
 #include <memory>
 #include <MeshFEM/DenseCollisionGrid.hh>
-#include <MeshFEM/Future.hh>
+#include <MeshFEMCore/Future.hh>
+
+namespace MeshFEM {
 
 template<size_t N>
 struct EmbedSimplexImpl;
@@ -111,5 +113,7 @@ struct ElementSampler {
         mutable std::unique_ptr<DenseCollisionGrid<N>> m_collisionGrid;
     };
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SAMPLER_HH */

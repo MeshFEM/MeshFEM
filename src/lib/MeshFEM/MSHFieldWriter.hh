@@ -38,6 +38,8 @@
 #include <MeshFEM/Functions.hh>
 #include <MeshFEM/MeshIO.hh>
 
+namespace MeshFEM {
+
 class MSHFieldWriter {
 protected:
     MSHFieldWriter() { } // Allow subclass MSHBoundaryFieldWriter to do all the
@@ -468,5 +470,7 @@ public:
         }
     }
 };
+
+} // namespace MeshFEM
 
 #endif // MSHFIELDWRITER_HH

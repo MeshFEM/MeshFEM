@@ -15,6 +15,8 @@
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 
+namespace MeshFEM {
+
 // Implements the Neo-Hookean Energy described in the Neo-Hookean Energy section of doc/doc.pdf
 template<typename _Real, size_t _Dim, template<typename, size_t> class _Derived_T>
 struct NeoHookeanEnergyBase : public Concepts::NeoHookeanEnergy
@@ -201,7 +203,7 @@ struct NeoHookeanEnergy;
 template<typename _Real>
 struct NeoHookeanEnergy<_Real, 2> : public NeoHookeanEnergyBase<_Real, 2, NeoHookeanEnergy>
 {
-    using Base = NeoHookeanEnergyBase<_Real, 2, ::NeoHookeanEnergy>;
+    using Base = NeoHookeanEnergyBase<_Real, 2, MeshFEM::NeoHookeanEnergy>;
     using Real = _Real;
     using Matrix = typename Base::Matrix;
 
@@ -373,7 +375,7 @@ private:
 template<typename _Real>
 struct NeoHookeanEnergy<_Real, 3> : public NeoHookeanEnergyBase<_Real, 3, NeoHookeanEnergy>
 {
-    using Base = NeoHookeanEnergyBase<_Real, 3, ::NeoHookeanEnergy>;
+    using Base = NeoHookeanEnergyBase<_Real, 3, MeshFEM::NeoHookeanEnergy>;
     using Real = _Real;
     using Matrix = typename Base::Matrix;
     using Base::Base;
@@ -517,5 +519,7 @@ private:
 
 template <typename _Real>
 using IncompressibleNeoHookeanEnergy = EnergyDensityFBasedFromCBased<IncompressibleNeoHookeanEnergyCBased<_Real>>;
+
+} // namespace MeshFEM
 
 #endif

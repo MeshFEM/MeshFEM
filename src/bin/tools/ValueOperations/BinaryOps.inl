@@ -8,6 +8,9 @@
 //  Company:  New York University
 //  Created:  10/28/2015 16:00:45
 ////////////////////////////////////////////////////////////////////////////////
+
+namespace MeshFEM {
+
 struct AddOp : public BinaryOp { virtual Real operator()(Real a, Real b) const { return a + b; } };
 struct SubOp : public BinaryOp { virtual Real operator()(Real a, Real b) const { return a - b; } };
 struct MulOp : public BinaryOp { virtual Real operator()(Real a, Real b) const { return a * b; } };
@@ -186,3 +189,5 @@ UVPtr dispatchCWiseBinaryOp(const BinaryOp &op, const T1 &a, CVPtr b) {
                                           FSValue,  FVValue,  FSMValue,
                                          FISValue, FIVValue, FISMValue>(op, a, b);
 }
+
+} // namespace MeshFEM

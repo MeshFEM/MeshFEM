@@ -21,6 +21,8 @@
 #include <Eigen/Dense>
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 
+namespace MeshFEM {
+
 template<typename Real_>
 struct BarrierFuncLogSq {
     using Real = Real_;
@@ -115,5 +117,7 @@ private:
 
 template<class Real, size_t N>
 using CollapsePreventionEnergyDet = CollapsePreventionDet<BarrierFuncLogSq<Real>, N>;
+
+} // namespace MeshFEM
 
 #endif /* COLLAPSEPREVENTIONENERGY_HH */

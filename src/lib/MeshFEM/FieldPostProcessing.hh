@@ -13,6 +13,8 @@
 #include <vector>
 #include "Functions.hh"
 
+namespace MeshFEM {
+
 // Take a piecewise smooth but discontinuous interpolant field (e.g., stress)
 // defined by a function `f(ei, x)`, where `ei` is an element index and `x` is
 // a barycentric coordinate vector within the element and construct a C0
@@ -70,5 +72,7 @@ Eigen::MatrixXd vertexAveragedFieldEigen(const FEMMesh_ &m, const F &f) {
 
     return result;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FIELDPOSTPROCESSING_HH */

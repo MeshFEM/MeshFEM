@@ -15,6 +15,8 @@
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EnergyDensities/EnergyTraits.hh>
 
+namespace MeshFEM {
+
 template <typename _Real, size_t _Dimension>
 struct MetricFittingEnergy {
     static constexpr size_t Dimension = _Dimension;
@@ -63,5 +65,8 @@ struct MetricFittingEnergy {
 private:
     MNd m_C;
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: METRICFITTING_HH */

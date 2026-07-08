@@ -4,6 +4,8 @@
 #include <Eigen/Dense>
 #include <MeshFEM/MeshIO.hh>
 
+namespace MeshFEM {
+
 template<class Mesh>
 using VType = Eigen::Matrix<typename Mesh::EmbeddingSpace::Scalar,
                             Eigen::Dynamic, Mesh::EmbeddingSpace::RowsAtCompileTime>;
@@ -149,5 +151,7 @@ std::pair<std::vector<MeshIO::IOVertex>, std::vector<MeshIO::IOElement>>
 getMeshIO(const Eigen::MatrixBase<Derived1> &V, const Eigen::MatrixBase<Derived2> &F) {
     return { getMeshIOVertices(V), getMeshIOElements(F) };
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESH_CONVERSION_HH */

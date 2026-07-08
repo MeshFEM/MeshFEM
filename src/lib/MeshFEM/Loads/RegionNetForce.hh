@@ -31,6 +31,7 @@
 
 #include "BodyForce.hh"
 
+namespace MeshFEM {
 namespace Loads {
     template<class Object>
     struct RegionNetForce : public BodyForce<Object> {
@@ -127,5 +128,7 @@ namespace Loads {
     };
 
 } // namespace Loads
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: REGIONNETFORCE_HH */

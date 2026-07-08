@@ -21,10 +21,12 @@
 #ifndef TENSIONFIELDTHEORY_HH
 #define TENSIONFIELDTHEORY_HH
 #include <Eigen/Dense>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <stdexcept>
 #include <iostream>
 #include <MeshFEM/newton_optimizer/dense_newton.hh>
+
+namespace MeshFEM {
 
 template<class _Psi>
 struct IsotropicWrinkleStrainProblem {
@@ -299,5 +301,7 @@ private:
     AnisotropicWrinkleStrainProblem<Psi_C> m_anisoProb;
     bool m_relaxationEnabled = true;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TENSIONFIELDTHEORY_HH */

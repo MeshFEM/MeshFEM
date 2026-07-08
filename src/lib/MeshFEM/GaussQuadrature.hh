@@ -18,12 +18,15 @@
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef GAUSSQUADRATURE_HH
 #define GAUSSQUADRATURE_HH
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/Functions.hh>
 #include <array>
 
+
 #include <MeshFEM_export.h>
+
+namespace MeshFEM {
 
 template<size_t _K, size_t _Deg>
 struct MESHFEM_EXPORT QuadratureTable {
@@ -562,5 +565,7 @@ Eigen::Matrix<Real, Simplex::numNodes(_K, _Deg), 1>
 integratedShapeFunctions() {
     return Quadrature<_K, _Deg>::integrate([](const EvalPt<_K> &x) { return shapeFunctions<_Deg, _K>(x); });
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: GAUSSQUADRATURE_HH */

@@ -31,6 +31,8 @@
 
 #include "MeshBindings.hh"
 
+namespace MeshFEM {
+
 namespace impl {
     // MeshBinder that generates ElasticSolid bindings with a particular energy density.
     template<class ESolidBinder, template<typename, size_t> class _Energy_T>
@@ -108,5 +110,7 @@ void generateElasticObjectBindings(py::module &m, py::module &detail_module, EOB
     generateElasticSolidBindings<EOBinder>(m, detail_module, std::forward<EOBinder>(b));
     generateElasticSheetBindings<EOBinder>(m, detail_module, std::forward<EOBinder>(b));
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: BINDING_INSTANTIATIONS_HH */

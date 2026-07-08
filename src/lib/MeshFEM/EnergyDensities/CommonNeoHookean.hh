@@ -25,6 +25,8 @@
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
 #include <MeshFEM/Utilities/DensePSDDetect.hh>
 
+namespace MeshFEM {
+
 template<typename _Real, size_t _Dim>
 struct CommonNeoHookeanEnergy : public Concepts::NeoHookeanEnergy {
     static constexpr size_t Dimension = _Dim;
@@ -212,5 +214,7 @@ private:
     Real m_detF, m_logDetF;
     Hessian m_d2energy;
 };
+
+} // namespace MeshFEM
 
 #endif // COMMONNEOHOOKEAN_HH

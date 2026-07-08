@@ -17,6 +17,8 @@
 #include <MeshFEM/SimplicialMesh.hh>
 #include <MeshFEM/MeshIO.hh>
 
+namespace MeshFEM {
+
 // va, vb, barycentric coordinates--useful for sampling functions at the
 using ContourSamplePtInfo = std::tuple<size_t, size_t, double>;
 
@@ -192,5 +194,7 @@ std::enable_if_t<Mesh::K == 3, size_t> marching_tetrahedra(const Mesh &m, const 
 
     return numContourTris;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MARCHING_TETRAHEDRA_HH */

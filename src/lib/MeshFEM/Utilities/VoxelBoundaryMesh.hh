@@ -15,9 +15,11 @@
 #ifndef VOXELBOUNDARYMESH_HH
 #define VOXELBOUNDARYMESH_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include "MeshConversion.hh"
 #include <map>
+
+namespace MeshFEM {
 
 struct VoxelBoundaryMesh {
     using FType = Eigen::Matrix<uint32_t, Eigen::Dynamic, 3, Eigen::RowMajor>;
@@ -227,5 +229,7 @@ private:
         }
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: VOXELBOUNDARYMESH_HH */

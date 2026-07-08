@@ -12,7 +12,9 @@
 #ifndef DEFORMEDTRIANGLEGEOMETRY_HH
 #define DEFORMEDTRIANGLEGEOMETRY_HH
 
-#include "../Types.hh"
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 namespace elements {
 
@@ -55,5 +57,7 @@ struct DeformedTriangleGeometry {
 };
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DEFORMEDTRIANGLEGEOMETRY_HH */

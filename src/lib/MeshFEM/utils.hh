@@ -25,6 +25,8 @@
 //  @param[in]  a, b        strings to compare
 //  @return     positive if a > b, negative if a < b, 0 if a == b.
 *///////////////////////////////////////////////////////////////////////////////
+namespace MeshFEM {
+
 inline int strcmp_nat(const char *a, const char *b) {
     while ((*a != 0) || (*b != 0)) {
         int ca = tolower(*a), cb = tolower(*b);
@@ -145,5 +147,8 @@ std::vector<Real> expandRange(const std::string &range);
 *///////////////////////////////////////////////////////////////////////////////
 void spanningForest(const std::vector<std::pair<size_t, size_t> > &in_edges,
                           std::vector<std::pair<size_t, size_t> > &out_edges);
+
+
+} // namespace MeshFEM
 
 #endif // UTILS_HH

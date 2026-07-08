@@ -21,6 +21,8 @@
 
 #include "EDensityAdaptors.hh"
 
+namespace MeshFEM {
+
 // Implementation of psi(C), where C = F^T F is the Cauchy-Green deformation
 // tensor Note: the elastic object classes need to use a F-based interface, but
 // some applications (e.g., tension field theory relaxation) prefers to work
@@ -94,5 +96,7 @@ struct StVenantKirchhoffMembraneEnergy : public EnergyDensityFBasedFromCBased<St
     static constexpr EDensityType EDType = EDensityType::Membrane;
     static constexpr const char *name() { return "StVenantKirchhoffMembrane"; }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: STVENANTKIRCHHOFF_HH */

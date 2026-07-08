@@ -1,6 +1,9 @@
-#include "MeshFEM/GlobalBenchmark.hh"
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
 
 #define NORMAL_INFERENCE_PROBLEM_VERBOSITY 1
+
+namespace MeshFEM {
 
 template <class Psi_2x2>
 void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
@@ -33,7 +36,7 @@ void ElasticSheet<Psi_2x2>::setIdentityDeformation() {
 // calculate this pushed-forward fundamental form directly and then verify its
 // pullback agrees with II.
 #include <MeshFEM/newton_optimizer/NewtonProblem.hh>
-#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
 template<class ESheet>
 struct NormalInferenceProblem : public NewtonProblem {
     using Assembler = ScalarSystemAssembler;
@@ -42,8 +45,8 @@ struct NormalInferenceProblem : public NewtonProblem {
     using M3d = typename ESheet::M3d;
     NormalInferenceProblem(ESheet &sheet) : m_sheet(sheet), m_assembler(sheet.numThetas()) {
         // Build the theta-theta block of the full Elastic sheet Hessian sparsity pattern...
-        m_hessianSparsity = m_assembler.sparsityPattern(sheet.mesh().numElements(),
-                                                        [&](size_t ei) { return varsForElement(ei); });
+        m_hessianSparsity = m_assembler.blockSparsityPattern(sheet.mesh().numElements(),
+                [&](size_t ei) { return varsForElement(ei); });
 
         m_updateDeformedII();
     }
@@ -614,3 +617,5 @@ void ElasticSheet<Psi_2x2>::m_updateDeformedElements(bool positionsUpdated) {
     for (size_t ei = 0; ei < ne; ++ei)
         m_shellElements[ei].setGammas(getTriGammas(ei));
 }
+
+} // namespace MeshFEM

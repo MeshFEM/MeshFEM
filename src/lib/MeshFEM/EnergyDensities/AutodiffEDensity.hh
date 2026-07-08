@@ -15,11 +15,14 @@
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include "EnergyTraits.hh"
 
+
 #ifdef MESHFEM_WITH_TINYAD
 #include <TinyAD/Scalar.hh>
 #else // !MESHFEM_WITH_TINYAD
-#include <MeshFEM/AutomaticDifferentiation.hh>
+#include <MeshFEMCore/AutomaticDifferentiation.hh>
 #endif // MESHFEM_WITH_TINYAD
+
+namespace MeshFEM {
 
 template<class Psi, typename Real_, size_t Dim_, EDensityType EDType_ = EDensityType::FBased>
 struct AutodiffEDensity : public Psi {
@@ -222,5 +225,7 @@ struct ADFbasedEDensity {
     template<typename Real_, size_t Dim_>
     using type = AutodiffEDensity<PsiExpr, Real_, Dim_>;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: AUTODIFFEDENSITY_HH */

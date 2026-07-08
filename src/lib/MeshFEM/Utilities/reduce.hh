@@ -15,6 +15,8 @@
 #include <utility>
 
 // Generate a "SkipPredicate" for skipping the indices in list "Idxs"
+namespace MeshFEM {
+
 template<size_t... Idxs>
 struct SkipIndices {
     // Base case: no indices (used if the specialization below doesn't match)
@@ -58,5 +60,8 @@ struct Reduce<endIndex, endIndex, Job, SkipPredicate> {
     template<typename... Args>
     static result_type run(Args&&... /* args */) { return Job::initializer; }
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: REDUCE_HH */

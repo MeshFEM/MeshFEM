@@ -34,6 +34,9 @@
 #include <string>
 #include "Tensor.hh"
 #include "EnergyTraits.hh"
+#include <MeshFEM/Utilities/DensePSDDetect.hh>
+
+namespace MeshFEM {
 
 // Implement an F-based interface from a C-based interface.
 // Manually specifying EmbeddingDimension = 3 when Psi_C is a 2D energy density
@@ -412,7 +415,6 @@ auto evaluate_d2energy_dF2(const Psi_F &psi) {
 ////////////////////////////////////////////////////////////////////////////////
 // Brute-force Hessian Projection for F-based energy densities.
 ////////////////////////////////////////////////////////////////////////////////
-#include <MeshFEM/Utilities/DensePSDDetect.hh>
 template<class Psi_F, class Enable = void>
 struct AutoHessianProjection : Psi_F {
     static_assert(!implements_hessian_projection_v<Psi_F>, "Psi_F must not implement its own Hessian projection or we double-project!");
@@ -509,5 +511,7 @@ private:
     Hessian m_hessian;
     bool m_projectionMask = true; // when set to false, we disable projection regardless of `projectionEnabled` flag.
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EDENSITYADAPTORS_HH */

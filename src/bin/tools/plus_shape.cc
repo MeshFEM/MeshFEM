@@ -22,6 +22,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Triangulate.h>
 
+using namespace MeshFEM;
+
 int main(int argc, const char *argv[]) {
     if (argc != 6) {
         std::cerr << "usage: plus_shape a b h1 h2 out.msh" << std::endl;

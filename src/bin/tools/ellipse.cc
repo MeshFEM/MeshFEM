@@ -9,6 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/Triangulate.h>
 
+using namespace MeshFEM;
+
 int main(int argc, const char *argv[]) {
     if (argc != 4) {
         std::cerr << "usage: ellipse a b out.msh" << std::endl;

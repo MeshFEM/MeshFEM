@@ -6,17 +6,19 @@
 #include <ipc/barrier/adaptive_stiffness.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
 
-#include <MeshFEM/GlobalBenchmark.hh>
-#include <MeshFEM/SystemAssembler.hh>
-#include <MeshFEM/ParallelAssembly.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
+#include <MeshFEMSparse/ParallelAssembly.hh>
 
 #include <MeshFEM_export.h>
+
+namespace MeshFEM {
 
 // The dimension-specific parts of IPCWrapper.
 template<size_t N>
 struct IPCWrapper : public IPCWrapperBase {
     IPCWrapper(const MXd &collisionVertexPositions, const CombinedCollisionMesh<Real> &cm)
-        : m_assembler(cm.fullModelBlockVars), collisionMesh(collisionVertexPositions, cm.edges, cm.faces) {
+        : collisionMesh(collisionVertexPositions, cm.edges, cm.faces), m_assembler(cm.fullModelBlockVars) {
         collisionMesh.can_collide = [&cm](size_t vi, size_t vj) -> bool {
             // Obstacles cannot collide
             return !(cm.isObstacleVertex(vi) && cm.isObstacleVertex(vj));
@@ -226,5 +228,7 @@ std::unique_ptr<IPCWrapperBase> make_ipc_wrapper(const CombinedCollisionMesh<Rea
     if (N == 3) return std::make_unique<IPCWrapper<3>>(collisionVertexPositions, cm);
     throw std::runtime_error("Unexpected N");
 }
+
+} // namespace MeshFEM
 
 #endif // MESHFEM_WITH_IPC_TOOLKIT

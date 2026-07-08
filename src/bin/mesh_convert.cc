@@ -33,6 +33,7 @@
 namespace po = boost::program_options;
 
 using namespace std;
+using namespace MeshFEM;
 
 struct VertexData : public SubdivVertexData<3> { };
 struct HalfEdgeData : public SubdivHalfedgeData { };

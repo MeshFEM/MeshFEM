@@ -4,7 +4,9 @@
 #include <cmath>
 #include <stdexcept>
 
-#include <MeshFEM/Types.hh>
+using namespace MeshFEM;
+
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/Flattening.hh>
 #include <MeshFEM/ElasticityTensor.hh>
 #include <MeshFEM/MaterialOptimization.hh>

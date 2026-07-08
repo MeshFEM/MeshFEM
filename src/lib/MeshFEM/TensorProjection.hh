@@ -16,6 +16,8 @@
 
 #include "ElasticityTensor.hh"
 
+namespace MeshFEM {
+
 // Closest isotropic elasticity tensor in the Frobenius/Euclidean metric:
 // argmin_(E, nu) ||C_given - C(E, nu)||_F^2
 template<typename Real, size_t N>
@@ -74,5 +76,7 @@ ElasticityTensor<Real, N> closestIsotropicTensor(const ElasticityTensor<Real, N>
     result.setIsotropicLame(lambda, mu);
     return result;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TENSORPROJECTION_HH */

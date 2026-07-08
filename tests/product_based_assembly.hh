@@ -25,17 +25,20 @@
 #include <vector>
 #include <stdexcept>
 
+
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
-#include <MeshFEM/Types.hh>
-#include <MeshFEM/Parallelism.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/Types.hh>
+#include <MeshFEMCore/Parallelism.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 
 #include <MeshFEM/Elements/HyperelasticLagrange.hh>
 
 #if MESHFEM_WITH_MKL_PARDISO
 #include <mkl_spblas.h>
 #endif
+
+namespace MeshFEM {
 
 struct ProductBasedAssembly {
     using Real = double;
@@ -1089,5 +1092,7 @@ private:
 
 };
 #endif // MESHFEM_WITH_MKL_PARDISO
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: PRODUCT_BASED_ASSEMBLY_HH */

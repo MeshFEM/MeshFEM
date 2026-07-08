@@ -4,8 +4,9 @@
 #include <iostream>
 #include <iomanip>
 
-using namespace Simplex;
-using namespace Degree;
+using namespace MeshFEM;
+using namespace MeshFEM::Simplex;
+using namespace MeshFEM::Degree;
 using namespace std;
 
 static double randDouble() {

@@ -5,6 +5,9 @@
 #include <MeshFEM/EnergyDensities/EDensityAdaptors.hh>
 #include "ElementBase.hh"
 #include "HyperelasticLagrange.hh"
+#include "../MeshEnergy.hh"
+
+namespace MeshFEM {
 
 namespace elements {
 
@@ -152,9 +155,9 @@ struct MembraneElement : public ElementBase<MembraneElement<Deg, Psi, CustomMat_
     elements::EmbeddedMembraneEData<K, Deg, VecN_T<Real, N>> elementData;
 };
 
-#include "../MeshEnergy.hh"
-
 template<class Psi, size_t Deg = 1>
 using MembraneMeshEnergy = MeshEnergy<FEMMesh<2, Deg, Vector3D>, NodalVars<3>, ElementStencil<2, Deg, 3>, MembraneElement<Deg, Psi>>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MEMBRANEELEMENT_HH */

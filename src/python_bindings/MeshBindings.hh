@@ -5,6 +5,8 @@
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 
+namespace MeshFEM {
+
 template<class MeshBinder>
 void generateMeshSpecificBindings(py::module &m, py::module &detail_module, MeshBinder &&b) {
     using V3d = Eigen::Matrix<double, 3, 1>;
@@ -30,5 +32,7 @@ void generateMeshSpecificBindings(py::module &m, py::module &detail_module, Mesh
     b.template bind<FEMMesh<2, 2, V3ld>>(m, detail_module); // quadratic tri mesh in 3d
 #endif
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHBINDINGS_HH */

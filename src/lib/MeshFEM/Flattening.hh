@@ -18,6 +18,8 @@
 
 // Length of a flattened rank 2 tensor in "dim" dimensions.
 // This is also the row and column size of the flattened rank 4 tensor.
+namespace MeshFEM {
+
 constexpr size_t flatLen(size_t dim) { return (dim * (dim + 1)) / 2; }
 
 // Implements flattening of symmetric 2D indices into 1D indices
@@ -81,5 +83,8 @@ inline const IdxPair unflattenIndex<3>(size_t i) {
                    : ((i == 3) ? IdxPair{1, 2}
                                : ((i == 4) ? IdxPair{0, 2} : IdxPair{0, 1}));
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FLATTENING_HH */

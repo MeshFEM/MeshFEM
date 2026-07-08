@@ -25,6 +25,8 @@
 #include <MeshFEM/Simplex.hh>
 #include <MeshFEM/Functions.hh>
 
+namespace MeshFEM {
+
 template<size_t _K, size_t _Deg>
 struct MESHFEM_EXPORT CCQuadratureTable {
     static constexpr size_t numPoints = 0;
@@ -127,5 +129,7 @@ struct ClenshawCurtisQuadrature : public CCQuadratureTable<_K, _Deg> {
         return result;
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CLENSHAWCURTISQUADRATURE_HH */

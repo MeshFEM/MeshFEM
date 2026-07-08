@@ -3,7 +3,7 @@
 #include <MeshFEM/MSHFieldParser.hh>
 #include <MeshFEM/LinearElasticity.hh>
 #include <MeshFEM/Materials.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <MeshFEM/util.h>
 #include <vector>
 #include <queue>
@@ -11,6 +11,8 @@
 #include <iomanip>
 #include <memory>
 #include <cmath>
+
+using namespace MeshFEM;
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>

@@ -10,7 +10,9 @@
 #ifndef MATERIALASSIGNMENT_HH
 #define MATERIALASSIGNMENT_HH
 
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 // Mapping from each element to a material property.
 template<class Material_>
@@ -110,5 +112,7 @@ private:
 struct MaterialBase {
     virtual ~MaterialBase() { }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MATERIALASSIGNMENT_HH */

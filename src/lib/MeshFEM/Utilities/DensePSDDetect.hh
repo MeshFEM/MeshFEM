@@ -20,9 +20,11 @@
 #define DENSEPSDDETECT_HH
 
 #if MESHFEM_WITH_CATAMARI
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <catamari/dense_factorizations.hpp>
 #endif
+
+namespace MeshFEM {
 
 #if 0 // The Lapack version seems slower for small matrices than Eigen unless we crank the accuracy way down.
 extern "C" {
@@ -193,5 +195,8 @@ bool isPSDSylvester(const Eigen::Matrix<Real, 3, 3> &A) {
     if (A.determinant() <= 0) return false;
     return true;
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DENSEPSDDETECT_HH */

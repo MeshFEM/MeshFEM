@@ -19,6 +19,8 @@
 // Internal vertex coordinates are solved for using a uniform graph Laplacian
 // with Dirichlet boundary conditions given by the perturbed boundary vertex
 // positions.
+namespace MeshFEM {
+
 template<class _FEMMesh>
 void perturbedMesh(Real h, const VectorField<Real, 2> &v, const _FEMMesh &mesh,
                    std::vector<MeshIO::IOVertex>  &outVertices,
@@ -78,5 +80,8 @@ void perturbedMesh(Real h, const VectorField<Real, 2> &v, const _FEMMesh &mesh,
         }
     }
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: PERTURBMESH_HH */

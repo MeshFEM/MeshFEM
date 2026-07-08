@@ -13,6 +13,8 @@
 
 #include <vector>
 
+namespace MeshFEM {
+
 template<size_t N>
 struct SubdivVertexData {
     SubdivVertexData() { }
@@ -86,5 +88,7 @@ void subdivide(_HalfEdge &mesh, std::vector<Vertex> &subVertices,
         }
     }
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SUBDIVIDE_HH */

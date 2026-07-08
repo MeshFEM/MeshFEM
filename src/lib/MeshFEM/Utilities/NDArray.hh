@@ -23,9 +23,12 @@
 #include <cassert>
 #include <type_traits>
 #include <utility>
-#include <MeshFEM/Future.hh>
-#include <MeshFEM/function_traits.hh>
+#include <MeshFEMCore/Future.hh>
+#include <MeshFEMCore/function_traits.hh>
 #include <Eigen/Dense>
+
+
+namespace MeshFEM {
 
 template<size_t N, size_t... Dims> struct NDArrayIndexer; // ND -> 1D flattening
 template<size_t N, size_t... Dims> struct NDArrayScanner; // scanline traversal
@@ -252,5 +255,8 @@ struct NDArrayScannerCompileTime<0, Future::index_sequence<Idxs...>, 0> {
         f.template visit<Idxs...>(theArray.template get<Idxs...>());
     }
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: NDARRAY_HH */

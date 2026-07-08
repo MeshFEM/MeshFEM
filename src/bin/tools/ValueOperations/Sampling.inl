@@ -1,3 +1,5 @@
+namespace MeshFEM {
+
 // Types not supporting sampling.
 template<class T, typename>
 struct SampleImpl {
@@ -55,3 +57,5 @@ struct MultipointSampleImpl {
         return result;
     }
 };
+
+} // namespace MeshFEM

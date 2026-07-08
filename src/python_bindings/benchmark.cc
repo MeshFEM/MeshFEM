@@ -1,7 +1,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/iostream.h>
 #include <pybind11/stl.h>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
+using namespace MeshFEM;
 namespace py = pybind11;
 
 PYBIND11_MODULE(_benchmark, m) {

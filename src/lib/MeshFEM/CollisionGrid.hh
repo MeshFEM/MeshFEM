@@ -21,6 +21,8 @@
 #include <utility>
 #include <cmath>
 
+namespace MeshFEM {
+
 template<typename Real, typename Point>
 class CollisionGrid {
 public:
@@ -114,5 +116,8 @@ private:
     typedef std::vector<std::pair<Point, size_t> > Bin;
     std::map<CellIdx, Bin> m_cells;
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: COLLISIONGRID_HH */

@@ -14,6 +14,8 @@
 #define INTERPOLANTRESTRICTION_HH
 #include <MeshFEM/Functions.hh>
 
+namespace MeshFEM {
+
 ////////////////////////////////////////////////////////////////////////////////
 /*! Uses the underlying mesh, so currently interpolants of higher degree than
 //  the mesh are unsupported. This is enforced by checking that FEM simplices
@@ -102,5 +104,7 @@ auto restrictIntegrand(const F &integrand, const SubdomainHandle &sdh, const Dom
         return integrand(x_domain);
     };
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: INTERPOLANTRESTRICTION_HH */

@@ -13,8 +13,11 @@
 #define MONTECARLOINTEGRATION_H
 
 #include <MeshFEM/Simplex.hh>
-#include <MeshFEM/function_traits.hh>
+#include <MeshFEMCore/function_traits.hh>
 #include <stdexcept>
+
+
+namespace MeshFEM {
 
 namespace detail {
     template<size_t K>
@@ -96,5 +99,8 @@ auto monteCarloIntegration(const F &f, size_t ns, Real vol = 1.0) {
         result += f(detail::MonteCarloIntegration<K>::randomBarycoords());
     return result * (vol / ns);
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MONTECARLOINTEGRATION_H */

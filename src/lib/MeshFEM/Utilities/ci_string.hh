@@ -15,6 +15,8 @@
 #include <cctype>
 
 // Just inherit all the other functions that we don't need to override
+namespace MeshFEM {
+
 struct ci_char_traits : public std::char_traits<char> {
     static bool eq(char c1, char c2) { return std::toupper(c1) == std::toupper(c2); }
     static bool ne(char c1, char c2) { return std::toupper(c1) != std::toupper(c2); }
@@ -39,5 +41,8 @@ struct ci_char_traits : public std::char_traits<char> {
 };
 
 using ci_string = std::basic_string<char, ci_char_traits>;
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CI_STRING_HH */

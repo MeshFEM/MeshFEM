@@ -24,6 +24,8 @@ namespace py = pybind11;
 
 #include "MeshEntities.hh"
 
+using namespace MeshFEM;
+
 template<class Mesh>
 using MeshBindingsType = py::class_<Mesh, std::shared_ptr<Mesh>>;
 

@@ -24,6 +24,8 @@ namespace py = pybind11;
 
 #include "EnergyBinding.hh"
 
+using namespace MeshFEM;
+
 template<typename Real_, size_t Dim_>
 using CommonNeoHookeanAD = AutodiffEDensity<CommonNeoHookeanPsi, Real_, Dim_>;
 

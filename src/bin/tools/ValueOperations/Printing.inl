@@ -1,3 +1,5 @@
+namespace MeshFEM {
+
 // "Nested" bool allows us to customize printing style when the value is part
 // of a collection.
 template<bool nested>
@@ -53,3 +55,5 @@ struct PrintImpl<InterpolantValue<T>, nested> {
         os << "}";
     }
 };
+
+} // namespace MeshFEM

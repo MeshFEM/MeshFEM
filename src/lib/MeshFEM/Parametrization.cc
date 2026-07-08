@@ -3,9 +3,10 @@
 #include "UniformLaplacian.hh"
 #include "MassMatrix.hh"
 #include "Eigensolver.hh"
-#include <MeshFEM/Solvers/SPSDSystem.hh>
-#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
+#include <MeshFEMSparse/Solvers/SPSDSystem.hh>
+#include <MeshFEMSparse/Solvers/make_cholesky_factorizer.hh>
 
+namespace MeshFEM {
 namespace Parametrization {
 
 struct SPSDSystemSolver : public SPSDSystem<Real> {
@@ -367,3 +368,4 @@ TripletMatrix<> assembleMassMatrix(const Mesh &mesh) {
 }
 
 }
+} // namespace MeshFEM

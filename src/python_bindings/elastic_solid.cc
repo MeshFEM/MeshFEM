@@ -1,5 +1,7 @@
 #include "ElasticSolidBinding.hh"
 
+using namespace MeshFEM;
+
 PYBIND11_MODULE(elastic_solid, m)
 {
     py::module detail_module = m.def_submodule("detail");

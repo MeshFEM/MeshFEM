@@ -19,6 +19,8 @@
 // based on the element adjacency (dual) graph.
 // componentIndex: index of the component into which each element falls
 // componentSize:  number of elements in each component
+namespace MeshFEM {
+
 template<class Mesh>
 void get_element_components(const Mesh &m,
         std::vector<size_t> &componentIndex,
@@ -71,5 +73,8 @@ void get_element_components(
     else if (elementSize == 4) get_element_components(SimplicialMesh<3>(elements, numVertices), componentIndex, componentSize);
     else throw elTypeError;
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: GET_ELEMENT_COMPONENTS_HH */

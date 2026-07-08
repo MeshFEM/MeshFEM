@@ -1,14 +1,17 @@
 #ifndef IPCObject_HH
 #define IPCObject_HH
 
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
 #include <MeshFEM/ElasticObject.hh>
 #include <MeshFEM/DynamicSimulator.hh>
 
+
 #include <Eigen/Sparse>
 #include <MeshFEM_export.h>
 #include "IPCWrapper.hh"
+
+namespace MeshFEM {
 
 template<typename _Real>
 struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public TimestepLimiter {
@@ -171,4 +174,7 @@ protected:
     Real m_k = 1.0;                   // IPC Barrier Stiffness
     MXd  m_collisionVertexPositions;  // Cached collision vertex positions
 };
+
+} // namespace MeshFEM
+
 #endif

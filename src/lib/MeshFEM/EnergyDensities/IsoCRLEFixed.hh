@@ -20,6 +20,8 @@
 #ifndef ISOCRLEFIXED_HH
 #define ISOCRLEFIXED_HH
 
+namespace MeshFEM {
+
 template <typename _Real, size_t _Dim>
 struct IsoCRLEFixed {
     static constexpr size_t Dimension = _Dim;
@@ -193,5 +195,7 @@ private:
     std::array<Matrix, N> m_AEigenvector;
     std::array<Matrix, NumTwistEigenmodes> m_Tsqrt2, m_Lsqrt2;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ISOCRLEFIXED_HH */

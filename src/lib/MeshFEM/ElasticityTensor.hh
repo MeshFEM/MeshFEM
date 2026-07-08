@@ -39,6 +39,8 @@
 
 #include "Algebra.hh"
 
+namespace MeshFEM {
+
 // Eigenvalues/vectors are sorted in order of increasing eigenvalue.
 struct ETensorEigenDecomposition {
     Eigen::MatrixXd strains;
@@ -693,7 +695,11 @@ private:
     }
 };
 
+} // namespace MeshFEM
+
 #include "LinearIndexer.hh"
+
+namespace MeshFEM {
 
 // Index the distinct components (after accounting for symmetries).
 // Only major symmetric tensors are currently supported
@@ -721,5 +727,7 @@ struct LinearIndexerImpl<ElasticityTensor<Real, N, true>> {
         assert((ij < flatLen(N)) && (kl < flatLen(N)));
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELASTICITYTENSOR_HH */

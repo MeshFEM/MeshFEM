@@ -2,6 +2,9 @@
 #define PARAMETRIZATIONELEMENT_HH
 
 #include "MembraneElement.hh"
+#include "../MeshEnergy.hh"
+
+namespace MeshFEM {
 
 template<class Psi_2x2>
 struct ParametrizationMaterial : public MaterialBase {
@@ -52,12 +55,12 @@ struct ParametrizationElement : public ElementBase<ParametrizationElement<Deg, P
     EData elementData;
 };
 
-#include "../MeshEnergy.hh"
-
 // template<class Psi_2x2, size_t Deg = 1>
 // using ParametrizationMeshEnergy = MeshEnergy<FEMMesh<2, Deg, Vector3D>, NodalVars<2>, ElementStencil</* K = */ 2, Deg, /* N = */ 2>, ParametrizationElement<Deg, Psi_2x2>>;
 
 template<class Psi_2x2, size_t Deg = 1>
 using ParametrizationMeshEnergy = MeshEmbeddingEnergy<FEMMesh<2, Deg, Vector3D>, 2, ParametrizationElement<Deg, Psi_2x2>>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: PARAMETRIZATIONELEMENT_HH */

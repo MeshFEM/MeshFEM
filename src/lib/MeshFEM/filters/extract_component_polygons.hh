@@ -25,6 +25,8 @@
 
 #include <MeshFEM/Geometry.hh>
 
+namespace MeshFEM {
+
 struct IdxPolygon {
     // *Closed* index polylines representing the outer (`exterior`) boundary
     // and any interior hole boundaries (`holes`).
@@ -144,5 +146,7 @@ extract_component_polygons(const Mesh &m, Eigen::Ref<const Eigen::VectorXi> indi
 
     return result;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EXTRACT_COMPONENT_BOUNDARY_POLYGONS_HH */

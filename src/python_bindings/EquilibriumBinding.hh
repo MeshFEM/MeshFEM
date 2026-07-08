@@ -9,6 +9,8 @@
 #include <pybind11/iostream.h>
 namespace py = pybind11;
 
+namespace MeshFEM {
+
 // Hack around a limitation of pybind11 where we cannot specify argument passing policies and
 // pybind11 tries to make a copy if the passed instance is not already registered:
 //      https://github.com/pybind/pybind11/issues/1200
@@ -53,5 +55,7 @@ void addComputeEquilibriumBinding(PYEs &pyES) {
             py::arg("loads") = LC())
         ;
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EQUILIBRIUMBINDING_HH */

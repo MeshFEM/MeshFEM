@@ -10,10 +10,12 @@
 #include <MeshFEM/EnergyDensities/CommonNeoHookean.hh>
 #else
 #include <MeshFEM/FEMMesh.hh>
-#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
 #endif
 
 #include "product_based_assembly.hh"
+
+using namespace MeshFEM;
 
 #if MESHFEM_WITH_MKL_PARDISO
 #include <omp.h>
@@ -50,7 +52,7 @@ void execute(const std::vector<MeshIO::IOVertex> &vertices,
 #endif
 
     SystemAssembler<_N> assembler(m.numNodes());
-    auto H_gt = assembler.sparsityPatternForMesh(m);
+    NewtonHessian H_gt = assembler.blockSparsityPatternForMesh(m);
     assembler.assembleHessian(H_gt, m, He_getter);
     auto H_gt_eigen = H_gt.toEigen(/* upperTriangleOnly = */ false);
 

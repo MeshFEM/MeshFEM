@@ -25,7 +25,7 @@
 #include <boost/algorithm/string.hpp>
 #include <string>
 #include <vector>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/Types.hh>
 #include <MeshFEM/SymmetricMatrix.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/MeshIO.hh>
@@ -34,6 +34,8 @@
 #include <MeshFEM/PeriodicHomogenization.hh>
 #include <MeshFEM/OrthotropicHomogenization.hh>
 #include <MeshFEM/MSHFieldWriter.hh>
+
+using namespace MeshFEM;
 
 #include <boost/program_options.hpp>
 

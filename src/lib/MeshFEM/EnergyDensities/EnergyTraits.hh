@@ -3,6 +3,8 @@
 
 #include <MeshFEM/Concepts.hh>
 
+namespace MeshFEM {
+
 struct UninitializedDeformationTag { }; // Tag used to avoid copying cached deformation quantities when unnecessary.
 
 // Sometimes the cached quantities needed to evaluate the Hessian are expensive
@@ -45,5 +47,8 @@ struct implements_hessian_projection<T, std::void_t<decltype(T::ImplementsHessia
 // Helper variable template (C++17+)
 template <typename T>
 constexpr bool implements_hessian_projection_v = implements_hessian_projection<T>::value;
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ENERGYTRAITS_HH */

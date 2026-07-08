@@ -1,7 +1,9 @@
 #ifndef CLOSESTPOINTPROJECTION_HH
 #define CLOSESTPOINTPROJECTION_HH
 #include <memory>
-#include "Types.hh"
+#include <MeshFEMCore/Types.hh>
+
+namespace MeshFEM {
 
 namespace detail {
 
@@ -53,4 +55,7 @@ private:
 
     std::unique_ptr<AABB> m_aabb;
 };
+
+} // namespace MeshFEM
+
 #endif /* end of include guard: CLOSESTPOINTPROJECTION_HH */

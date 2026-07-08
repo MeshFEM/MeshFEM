@@ -12,6 +12,8 @@
 #define GEN_CURSOR_HH
 #include <vector>
 
+namespace MeshFEM {
+
 template<class Pt, class Vertex, class Element>
 void gen_cursor(double radius, const Pt &p,
                 std::vector<Vertex> &vertices,
@@ -31,5 +33,8 @@ void gen_cursor(double radius, const Pt &p,
     for (size_t i = 1; i <= 6; ++i)
         elements.emplace_back(offset, offset + i);
 }
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: GEN_CURSOR_HH */

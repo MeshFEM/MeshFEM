@@ -5,13 +5,15 @@
 #include <MeshFEM/GaussQuadrature.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/BoundaryConditions.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <MeshFEM/Fields.hh>
-#include <MeshFEM/SparseMatrices.hh>
-#include <MeshFEM/Solvers/SPSDSystem.hh>
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/SPSDSystem.hh>
+#include <MeshFEMCore/Parallelism.hh>
 #include <MeshFEM/Materials.hh>
 #include <MeshFEM/OneForm.hh>
+
+namespace MeshFEM {
 
 namespace LinearElasticity {
 
@@ -1664,5 +1666,7 @@ template<size_t _K, size_t _Deg>
 using HomogenousSimulator = Simulator<HomogenousMesh<_K, _Deg>>;
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: NEWLINEARELASTICITY_HH */

@@ -13,6 +13,8 @@
 
 #include <vector>
 
+namespace MeshFEM {
+
 template<class _HalfEdge, class Vertex, class Element>
 void extrude(_HalfEdge &mesh, Real dist, std::vector<Vertex>
              &outVertices, std::vector<Element> &outElements) {
@@ -60,5 +62,7 @@ void extrude(_HalfEdge &mesh, Real dist, std::vector<Vertex>
         outElements.push_back(boundaryQuad);
     }
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: EXTRUDE_HH */

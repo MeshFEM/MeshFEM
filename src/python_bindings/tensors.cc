@@ -11,6 +11,8 @@ namespace py = pybind11;
 #include <MeshFEM/VonMises.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 
+using namespace MeshFEM;
+
 template<typename _Real, size_t _Dimension>
 void bindTensors(py::module& module, py::module& detail_module) {
     constexpr size_t N = _Dimension;

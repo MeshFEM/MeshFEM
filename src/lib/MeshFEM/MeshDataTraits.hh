@@ -11,6 +11,8 @@
 #ifndef MESHDATATRAITS_HH
 #define MESHDATATRAITS_HH
 
+namespace MeshFEM {
+
 template<class Mesh>
 struct MeshDataTraits;
 
@@ -96,5 +98,7 @@ struct MeshDataTraits<FEMMesh<_K, _Deg, _EmbeddingSpace, _FEMData>> {
 
 // template<class _FEMMesh>
 // struct MeshDataTraits<BoundaryFEMMesh<_FEMMesh>> : public MeshDataTraits<_FEMMesh> { };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHDATATRAITS_HH */

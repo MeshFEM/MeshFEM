@@ -1,7 +1,9 @@
 #include "MSHFieldWriter_bindings.hh"
 #include <MeshFEM/Utilities/MeshConversion.hh>
 #include <MeshFEM/MSHFieldWriter.hh>
-#include <MeshFEM/Future.hh>
+#include <MeshFEMCore/Future.hh>
+
+using namespace MeshFEM;
 
 void bindMSHFieldWriter(py::module &m) {
     py::class_<MSHFieldWriter> field_writer(m, "MSHFieldWriter");

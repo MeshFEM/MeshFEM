@@ -14,11 +14,13 @@
 #ifndef RIGIDMOTIONPINS_HH
 #define RIGIDMOTIONPINS_HH
 
-#include "Types.hh"
-#include "AutomaticDifferentiation.hh"
+#include <MeshFEMCore/Types.hh>
+#include <MeshFEMCore/AutomaticDifferentiation.hh>
 #include <type_traits>
 #include <utility>
 #include "newton_optimizer/dense_newton.hh"
+
+namespace MeshFEM {
 
 template<class Object, typename /* enabler */ = std::true_type>
 struct RigidMotionPins;
@@ -257,5 +259,7 @@ void filterRMPinArtifacts(Object &obj, const typename RigidMotionPins<Object>::P
 
     obj.applyRigidTransform(R, -(R * c_pos));
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: RIGIDMOTIONPINS_HH */

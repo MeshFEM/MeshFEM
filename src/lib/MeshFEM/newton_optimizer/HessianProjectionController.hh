@@ -14,6 +14,8 @@
 #include <memory>
 #include <Eigen/Dense>
 
+namespace MeshFEM {
+
 struct HessianProjectionController {
     // Whether projection is currently enabled
     virtual bool shouldUseProjection() const = 0;
@@ -164,5 +166,8 @@ struct HessianProjectionAdaptive : public HessianProjectionController {
         return hpa;
     }
 };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: HESSIANPROJECTIONCONTROLLER_HH */

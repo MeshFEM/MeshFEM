@@ -7,11 +7,13 @@
 
 // #undef interface // Needed when using MSVC not in standards-compliant mode.
 
+namespace MeshFEM {
+
 namespace _TriMeshHandles {
 
 // We need to expliclty reference this enclosing scope to hack around an old
 // clang bug involving injected class names; make it less verbose
-namespace _hndl = ::_TriMeshHandles;
+namespace _hndl = ::MeshFEM::_TriMeshHandles;
 
 template<class _Mesh> using  _VData = typename MeshDataTraits<_Mesh>::VertexData;
 template<class _Mesh> using _HEData = typename MeshDataTraits<_Mesh>::HalfEdgeData;
@@ -300,5 +302,7 @@ template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::HEHandle<_Mesh>>
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles:: THandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numTris()            ; } };
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::BVHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryVertices(); } };
 template<class _Mesh> struct HandleRangeTraits<_TriMeshHandles::BEHandle<_Mesh>> { static size_t entityCount(const _Mesh &m) { return m.numBoundaryEdges()   ; } };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TRIMESHHANDLES_HH */

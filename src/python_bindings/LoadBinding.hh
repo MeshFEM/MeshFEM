@@ -17,6 +17,8 @@
 
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
+namespace MeshFEM {
+
 template<class Object>
 static void bindBodyForces(py::module &m, py::module &detail_module) {
     using Load   = Loads::Load<double>;
@@ -177,5 +179,6 @@ struct LoadBinder {
     }
 };
 
+} // namespace MeshFEM
 
 #endif /* end of include guard: LOADBINDING_HH */

@@ -11,6 +11,11 @@
 #ifndef BASECELLTYPE_HH
 #define BASECELLTYPE_HH
 
+namespace MeshFEM {
+
 enum class BaseCellType { TriplyPeriodic, Orthotropic };
+
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: BASECELLTYPE_HH */

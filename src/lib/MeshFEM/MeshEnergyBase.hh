@@ -4,6 +4,8 @@
 #include "Elements/MaterialAssignment.hh"
 #include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
 
+namespace MeshFEM {
+
 struct MeshEnergyBase : public NewtonObjectiveTerm {
     MeshEnergyBase(std::shared_ptr<NewtonVarsBase> vars)
         : NewtonObjectiveTerm(vars) { }
@@ -49,5 +51,7 @@ struct MeshEnergyBase : public NewtonObjectiveTerm {
 private:
     virtual MaterialBase &m_getMaterial(size_t ei) = 0;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHENERGYBASE_HH */

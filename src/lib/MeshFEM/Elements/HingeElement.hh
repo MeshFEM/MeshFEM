@@ -17,6 +17,8 @@
 
 #include "ElementBase.hh"
 
+namespace MeshFEM {
+
 template<class HingeEnergy>
 struct HingeElement;
 
@@ -97,5 +99,7 @@ private:
 
 template<class HingeEnergy>
 using HingeMeshEnergy = MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars<3>, TriFlapStencil, HingeElement<HingeEnergy>>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: HINGEELEMENT_HH */

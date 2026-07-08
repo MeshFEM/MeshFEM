@@ -12,6 +12,8 @@
 
 #include "MaterialAssignment.hh"
 
+namespace MeshFEM {
+
 // Traits class must define `Material` type
 template<class Derived>
 struct ElementTraits { using Material = MaterialBase; };
@@ -33,5 +35,7 @@ struct ElementBase {
 private:
     MaterialGetter m_materialGetter;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: ELEMENTBASE_HH */

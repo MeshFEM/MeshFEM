@@ -14,7 +14,9 @@
 #define SPRINGS_HH
 
 #include "Load.hh"
-#include "../Parallelism.hh"
+#include <MeshFEMCore/Parallelism.hh>
+
+namespace MeshFEM {
 
 namespace Loads {
 
@@ -242,7 +244,7 @@ struct GenericSprings : public Load<Real> {
 
     virtual NewtonHessian hessianSparsityPattern() const override {
         // Build a block sparsity pattern compatible with the variable structure of `this->getNVars()`.
-        return NewtonHessian(this->getNVars().assembler().blockSparsityPattern(numSprings(), BlockSize,
+        return this->getNVars().assembler().blockSparsityPattern(numSprings(), BlockSize,
                 [&](size_t s) {
                     std::vector<size_t> elemBlockVars;
                     auto &c1 = m_coordsA[s];
@@ -254,7 +256,7 @@ struct GenericSprings : public Load<Real> {
                     for (int i = 0; i < c2.varIndices.size(); ++i) elemBlockVars.push_back(c2.varIndices[i]);
 
                     return elemBlockVars;
-                }));
+                });
     }
 
     const APC_A &attachmentPointA(size_t s) const { return m_coordsA.at(s); }
@@ -335,5 +337,7 @@ private:
 using Springs = GenericSprings<AttachmentPointCoordinate<Real>, AttachmentPointCoordinate<Real>>;
 
 } // namespace Loads
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SPRINGS_HH */

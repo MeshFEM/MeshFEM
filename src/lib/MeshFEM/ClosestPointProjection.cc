@@ -2,6 +2,8 @@
 #include "libigl_aabb/point_simplex_squared_distance.h"
 #include "libigl_aabb/AABB.h"
 
+namespace MeshFEM {
+
 namespace detail {
 
 template<typename _CoordinateType>
@@ -103,3 +105,5 @@ template<typename CT> ClosestPointProjection<CT>::~ClosestPointProjection() { }
 ////////////////////////////////////////////////////////////////////////////////
 template struct MESHFEM_EXPORT ClosestPointProjection<VecN_T<Real, 2>>;
 template struct MESHFEM_EXPORT ClosestPointProjection<VecN_T<Real, 3>>;
+
+} // namespace MeshFEM

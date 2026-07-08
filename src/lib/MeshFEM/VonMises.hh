@@ -58,6 +58,7 @@
 #include "SymmetricMatrix.hh"
 #include "Fields.hh"
 
+namespace MeshFEM {
 
 // WARNING: in 2D, this does not actually extract the stress deviator tensor for
 // plane stress! That would require a tensor mapping a 2D stress to a 3D stress.
@@ -130,5 +131,7 @@ inline DynamicSymmetricMatrix<Real> vonMises(const DynamicSymmetricMatrix<Real> 
         return vonMisesExtractor<3>().doubleContract(dsm);
     throw std::runtime_error("Invalid matrix dimension");
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: VONMISES_HH */

@@ -11,10 +11,12 @@
 #ifndef LOADS_LOAD_HH
 #define LOADS_LOAD_HH
 
-#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include <MeshFEM/ElasticObject.hh>
-#include <MeshFEM/ParallelAssembly.hh>
+#include <MeshFEMSparse/ParallelAssembly.hh>
 #include <MeshFEM/newton_optimizer/MultiobjectiveProblem.hh>
+
+namespace MeshFEM {
 
 namespace Loads {
 
@@ -102,5 +104,7 @@ private:
 };
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: LOADS_LOAD_HH */

@@ -1,5 +1,7 @@
 #include <pybind11/pybind11.h>
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/Parallelism.hh>
+
+using namespace MeshFEM;
 namespace py = pybind11;
 
 #if MESHFEM_WITH_TBB

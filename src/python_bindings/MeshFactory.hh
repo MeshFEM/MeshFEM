@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include <type_traits>
 
+namespace MeshFEM {
+
 template<size_t K, size_t Degree, class EmbeddingSpace>
 typename std::enable_if<(K <= EmbeddingSpace::RowsAtCompileTime), py::object>::type
 MeshFactory(const std::vector<MeshIO::IOElement> &elements,
@@ -62,5 +64,7 @@ py::object MeshFactory(const std::vector<MeshIO::IOElement> &elements,
     if (embeddingDimension == 3) return MeshFactory<Eigen::Matrix<Real_, 3, 1>>(elements, vertices, simplexDimension, degree);
     else throw std::runtime_error("Unsupported embedding dimension " + std::to_string(embeddingDimension));
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHFACTORY_HH */

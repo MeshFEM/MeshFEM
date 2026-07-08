@@ -6,6 +6,8 @@
 
 using namespace std;
 
+namespace MeshFEM {
+
 namespace {
 
     template<typename T>
@@ -76,3 +78,5 @@ void EdgeFields::write(std::ostream &os) const {
         os << entry.second; // field
     }
 }
+
+} // namespace MeshFEM

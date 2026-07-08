@@ -10,7 +10,8 @@
 #ifndef IGLAABB_PARALLEL_FOR_H
 #define IGLAABB_PARALLEL_FOR_H
 
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/Parallelism.hh>
+
 
 namespace iglaabb {
 
@@ -25,7 +26,7 @@ bool parallel_for(const Index loop_size,
         return false;
     }
     else {
-        ::parallel_for_range(loop_size, func);
+        MeshFEM::parallel_for_range(loop_size, func);
         return true;
     }
 }

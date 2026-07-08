@@ -1,8 +1,10 @@
-#include "MeshFEM/Types.hh"
+#include <MeshFEMCore/Types.hh>
 #include <catch2/catch.hpp>
 #include <MeshFEM/FieldSampler.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <vector>
+
+using namespace MeshFEM;
 
 #include "EDensityTestUtils.hh"
 

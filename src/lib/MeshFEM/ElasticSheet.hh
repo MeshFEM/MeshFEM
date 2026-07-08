@@ -33,9 +33,10 @@
 
 #include "FEMMesh.hh"
 #include "GaussQuadrature.hh"
-#include "GlobalBenchmark.hh"
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include "newton_optimizer/newton_optimizer.hh"
 #include "Utilities/MeshConversion.hh"
+
 
 #include "RigidMotionPins.hh"
 #include "ElasticObject.hh"
@@ -45,7 +46,9 @@
 
 #include "MassMatrix.hh"
 
-#include "SystemAssembler.hh"
+#include <MeshFEMSparse/SystemAssembler.hh>
+
+namespace MeshFEM {
 
 // Note: anisotropic materials are supported and, for plates (sheets with
 // perfectly flat rest states), the anisotropic energy density function can be
@@ -302,7 +305,7 @@ struct MESHFEM_EXPORT ElasticSheet : public ElasticObject<typename _Psi_2x2::Rea
     }
 
     virtual NewtonHessian hessianSparsityPattern(VariableMask vmask = VariableMask::Defo) const override {
-        return assembler().sparsityPattern(mesh().numElements(), elementGetter());;
+        return assembler().blockSparsityPattern(mesh().numElements(), elementGetter());
     }
 
     // Convenience methods
@@ -753,6 +756,8 @@ private:
 
     std::unique_ptr<NewtonOptimizer> m_normalInferenceOptimizer;
 };
+
+} // namespace MeshFEM
 
 #include "ElasticSheet.inl"
 

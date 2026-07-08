@@ -12,7 +12,9 @@
 *///////////////////////////////////////////////////////////////////////////////
 #include <MeshFEM/EnergyDensities/CommonNeoHookean.hh>
 #include <MeshFEM/EnergyDensities/IsoCRLEFixed.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+
+using namespace MeshFEM;
 
 // WARNING: catch2/catch.hpp sets a BENCHMARK macro, so we must include it
 // after MeshFEM.

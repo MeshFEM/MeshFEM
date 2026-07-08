@@ -13,6 +13,7 @@
 #include "Load.hh"
 #include <MeshFEM/Simplex.hh>
 
+namespace MeshFEM {
 namespace Loads {
 
 // ∫_∂Ω 0.5 (||x||^2 - r_tgt^2)^2 dA
@@ -121,5 +122,7 @@ struct SphereFitter : public ObjectSpecificLoad<Object> {
         Real stiffness = 1.0;
     };
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SPHEREFITTER_HH */

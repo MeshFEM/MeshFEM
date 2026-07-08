@@ -1,6 +1,10 @@
 #include <catch2/catch.hpp>
 #include <MeshFEM/Flattening.hh>
 
+using MeshFEM::flatLen;
+using MeshFEM::flattenIndices;
+using MeshFEM::unflattenIndex;
+
 template<size_t _Dim>
 static void test() {
     for (size_t i = 0; i < _Dim; ++i) {

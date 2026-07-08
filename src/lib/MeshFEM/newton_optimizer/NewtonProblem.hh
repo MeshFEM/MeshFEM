@@ -9,10 +9,12 @@
 #ifndef NEWTONPROBLEM_HH
 #define NEWTONPROBLEM_HH
 
-#include <MeshFEM/SparseMatrices.hh>
+#include <MeshFEMSparse/SparseMatrices.hh>
 #include "ConvergenceReport.hh"
 #include <MeshFEM/Eigensolver.hh>
 #include "NewtonHessian.hh"
+
+namespace MeshFEM {
 
 struct MESHFEM_EXPORT NewtonProblem {
     using VXd = Eigen::VectorXd;
@@ -322,5 +324,7 @@ protected:
 
     mutable size_t m_sparsityPatternID = 0;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: NEWTONPROBLEM_HH */

@@ -14,13 +14,16 @@
 #define MESHENERGY_HH
 #include <MeshFEM/FEMMesh.hh>
 
-#include <MeshFEM/SystemAssembler.hh>
-#include <MeshFEM/ParallelAssembly.hh>
-#include "MeshFEM/Parallelism.hh"
-#include "Stencils.hh"
+
+#include <MeshFEMSparse/SystemAssembler.hh>
+#include <MeshFEMSparse/ParallelAssembly.hh>
+#include <MeshFEMCore/Parallelism.hh>
+#include <MeshFEMSparse/Stencils.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 #include "Elements/MaterialAssignment.hh"
 #include "MeshEnergyBase.hh"
+
+namespace MeshFEM {
 
 enum class MeshVarType { PER_NODE, PER_EDGE, PER_CELL };
 template<MeshVarType MVT, size_t N> struct MeshVarSpecification {
@@ -246,7 +249,7 @@ struct MeshEnergy : public MeshEnergyBase {
     }
 
     NewtonHessian hessianSparsityPattern() const override {
-        return assembler().sparsityPattern(elements.size(), [&](size_t ei) {
+        return assembler().blockSparsityPattern(elements.size(), [&](size_t ei) {
             return stencils[ei].blockVars;
         });
     }
@@ -312,5 +315,7 @@ struct MeshEmbeddingEnergy : public MeshEnergy<Mesh_, NodalVars<N>, ElementStenc
     using Base = MeshEnergy<Mesh_, NodalVars<N>, ElementStencil</* K = */ Mesh_::K, Mesh_::Deg, N>, Element_>;
     using Base::Base;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: MESHENERGY_HH */
