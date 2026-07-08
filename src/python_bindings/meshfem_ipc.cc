@@ -53,6 +53,7 @@ void bind(py::module &m, py::module &detail_module) {
         .def_property("barrierStiffness",     &IPCO::getBarrierStiffness, &IPCO::setBarrierStiffness)
         .def_property("dhat",                 &IPCO::get_dhat, &IPCO::set_dhat)
         .def_property("ccdTol",               &IPCO::get_ccdTol, &IPCO::set_ccdTol)
+        .def_property("ccdMaxIters",          &IPCO::get_ccdMaxIters, &IPCO::set_ccdMaxIters)
         .def("contactEnergy",                 &IPCO::contactPotentialEnergy)
         .def_readwrite("CCD",                 &IPCO::CCD)
         .def("contactGradient",               &IPCO::contactGradient, py::arg("includeObstVertices") = false)

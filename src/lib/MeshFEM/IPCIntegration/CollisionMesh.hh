@@ -102,9 +102,19 @@ struct CollisionMesh {
     Eigen::MatrixXd extractVectorField(const Eigen::VectorXd &vars) const {
         const size_t ncv = numCollisionVertices();
         Eigen::MatrixXd result(ncv, N);
-        for (size_t i = 0 ; i < ncv; ++i)
-            result.row(i) = vars.segment(N * nodeForCollisionMeshVertex[i], N);
+        extractVectorFieldToDst(vars, result);
         return result;
+    }
+
+    // Extract a per-vertex vector field over this collision mesh from the
+    // full simulation DoF vector `vars.`
+    template<class Derived>
+    void extractVectorFieldToDst(const Eigen::VectorXd &vars, Eigen::MatrixBase<Derived> &dst) const {
+        const size_t ncv = numCollisionVertices();
+        if ((size_t(dst.rows()) != ncv) || (size_t(dst.cols()) != N)) throw std::runtime_error("CollisionMesh.extractVectorField: dst must already be the correct size");
+        parallel_for_range(ncv, [&](size_t i) {
+            dst.row(i) = vars.segment(N * nodeForCollisionMeshVertex[i], N);
+        }, /* grain_size */ 100, /* parallelism_threshold */ 1000);
     }
 };
 

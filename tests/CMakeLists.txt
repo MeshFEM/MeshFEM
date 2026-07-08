@@ -38,8 +38,9 @@ if (NOT MESHFEM_USE_LEGACY_CATAMARI)
 endif()
 
 if (MESHFEM_WITH_IPC_TOOLKIT)
-add_executable(benchmark_ipc_toolkit benchmark_ipc_toolkit.cc)
-target_link_libraries(benchmark_ipc_toolkit MeshFEM)
+    target_sources(unit_tests PRIVATE test_ipc_simulation.cc) # also build ipc simulation tests
+    add_executable(benchmark_ipc_toolkit benchmark_ipc_toolkit.cc)
+    target_link_libraries(benchmark_ipc_toolkit MeshFEM)
 endif()
 
 add_executable(benchmark_assembly benchmark_assembly.cc)

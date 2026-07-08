@@ -44,12 +44,12 @@ struct DynamicSimulator {
     using LC = LoadCollection<Real>;
     using VXd = typename EO::VXd;
     using MXd = Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>;
-    using NewtonTermPtr = std::shared_ptr<NewtonObjectiveTermBase>;
+    using Terms = typename NewtonMultiobjectiveProblem::Terms;
 
     using TimestepCallback = std::function<bool(DynamicSimulator &, size_t)>;
     using NewtonCallback = typename NewtonMultiobjectiveProblem::CallbackFunction;
 
-    DynamicSimulator(const std::shared_ptr<EO> &eo, std::vector<NewtonTermPtr> &terms, bool useLumpedMass, double dt_)
+    DynamicSimulator(const std::shared_ptr<EO> &eo, Terms &terms, bool useLumpedMass, double dt_)
         : dt(dt_), m_obj(eo), m_noninertiaTerms(terms)
     {
         v.setZero(m_obj->numVars());
@@ -268,6 +268,8 @@ struct DynamicSimulator {
         return m_crs;
     }
 
+    std::vector<ConvergenceReport> getConvergenceReport() const { return m_crs; }
+
     std::shared_ptr<NewtonMultiobjectiveProblem> getProblem() const { return m_prob; }
 
     double dt = 0.1;  // Time step size
@@ -286,7 +288,7 @@ private:
     }
 
     std::shared_ptr<EO> m_obj;
-    std::vector<NewtonTermPtr> m_noninertiaTerms;
+    Terms m_noninertiaTerms;
     std::shared_ptr<Loads::Inertia<EO>> m_inertiaLoad;
     std::shared_ptr<NewtonMultiobjectiveProblem> m_prob;
     std::shared_ptr<NewtonOptimizer> m_opt;

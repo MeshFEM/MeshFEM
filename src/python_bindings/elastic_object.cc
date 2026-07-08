@@ -54,6 +54,7 @@ void bind(py::module &m) {
 
          .def_property("rho", &EO::getMassDensity, &EO::setMassDensity)
         ;
+
     addComputeEquilibriumBinding<EO>(pyEO);
 }
 

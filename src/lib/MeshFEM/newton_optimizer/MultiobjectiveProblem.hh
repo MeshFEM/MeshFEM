@@ -303,10 +303,11 @@ private:
 template<class TermType>
 struct MultiObjective {
     using TermPtr = std::shared_ptr<TermType>;
+    using Terms   = std::vector<TermPtr>;
 
     size_t numTerms() const { return m_terms.size(); }
 
-    void setTerms(std::vector<TermPtr> terms) {
+    void setTerms(Terms terms) {
         m_terms = terms;
         m_termsAddedOrRemoved();
         m_weights.resize(numTerms(), 1.0);
@@ -316,7 +317,7 @@ struct MultiObjective {
             m_names[i] = "Term " + std::to_string(i);
     }
 
-    const std::vector<TermPtr> &getTerms() const { return m_terms; }
+    const Terms &getTerms() const { return m_terms; }
 
     void setTermNames(std::vector<std::string> names) {
         if (names.size() != m_terms.size()) throw std::runtime_error("Term count mismatch");
@@ -368,7 +369,7 @@ struct MultiObjective {
     virtual ~MultiObjective() = default;
 
 protected:
-    std::vector<TermPtr> m_terms;
+    Terms m_terms;
     std::vector<Real> m_weights;
     std::vector<std::string> m_names;
 
@@ -385,9 +386,10 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
 
     using MO      = MultiObjective<NewtonObjectiveTermBase>;
     using TermPtr = typename MO::TermPtr;
+    using Terms   = typename MO::Terms;
     using NVMPtr  = std::shared_ptr<NewtonVarsBase>;
 
-    NewtonMultiobjectiveProblem(NVMPtr vars, std::vector<TermPtr> terms)
+    NewtonMultiobjectiveProblem(NVMPtr vars, Terms terms)
         : m_vars(vars) {
         setTerms(terms);
     }

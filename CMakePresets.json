@@ -1,0 +1,175 @@
+{
+    "version": 2,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "displayName": "Base Config",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+            }
+        },
+        {
+            "name": "continuous-multi",
+            "inherits": "base",
+            "displayName": "Continuous Config (Multi)",
+            "generator": "Ninja Multi-Config"
+        },
+        {
+            "name": "continuous-debug",
+            "inherits": "base",
+            "displayName": "Continuous Config (Debug)",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "continuous-relwithdebinfo",
+            "inherits": "base",
+            "displayName": "Continuous Config (RelWithDebInfo)",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "continuous-release",
+            "inherits": "base",
+            "displayName": "Continuous Config (Release)",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "asan-relwithdebinfo",
+            "inherits": "base",
+            "displayName": "Address Sanitizer RelWithDebInfo",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "USE_SANITIZER": "Address;Undefined"
+            }
+        },
+        {
+            "name": "asan-relwithasserts",
+            "inherits": "base",
+            "displayName": "Address Sanitizer RelWithAsserts",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithAsserts",
+                "USE_SANITIZER": "Address;Undefined"
+            }
+        },
+        {
+            "name": "tsan",
+            "inherits": "base",
+            "displayName": "Thread Sanitizer RelWithDebInfo",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "USE_SANITIZER": "Thread"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "nativeToolOptions": [
+                "-k",
+                "10"
+            ]
+        },
+        {
+            "name": "continuous-release",
+            "configurePreset": "continuous-release",
+            "inherits": "base"
+        },
+        {
+            "name": "continuous-debug",
+            "configurePreset": "continuous-debug",
+            "inherits": "base"
+        },
+        {
+            "name": "continuous-relwithdebinfo",
+            "configurePreset": "continuous-relwithdebinfo",
+            "inherits": "base"
+        },
+        {
+            "name": "continuous-multi",
+            "configurePreset": "continuous-multi",
+            "inherits": "base"
+        },
+        {
+            "name": "asan-relwithdebinfo",
+            "configurePreset": "asan-relwithdebinfo",
+            "inherits": "base"
+        },
+        {
+            "name": "asan-relwithasserts",
+            "configurePreset": "asan-relwithasserts",
+            "inherits": "base"
+        },
+        {
+            "name": "tsan",
+            "configurePreset": "tsan",
+            "inherits": "base"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "output": {
+                "verbosity": "verbose",
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "continuous-release",
+            "configurePreset": "continuous-release",
+            "inherits": "base"
+        },
+        {
+            "name": "continuous-debug",
+            "configurePreset": "continuous-debug",
+            "inherits": "base"
+        },
+        {
+            "name": "continuous-relwithdebinfo",
+            "configurePreset": "continuous-relwithdebinfo",
+            "inherits": "base"
+        },
+        {
+            "name": "continuous-multi",
+            "configurePreset": "continuous-multi",
+            "inherits": "base"
+        },
+        {
+            "name": "asan-relwithdebinfo",
+            "configurePreset": "asan-relwithdebinfo",
+            "inherits": "base"
+        },
+        {
+            "name": "asan",
+            "configurePreset": "asan-relwithasserts",
+            "inherits": "base"
+        },
+        {
+            "name": "tsan",
+            "configurePreset": "tsan",
+            "inherits": "base"
+        }
+    ]
+}

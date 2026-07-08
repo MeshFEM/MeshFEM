@@ -574,6 +574,13 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
 
     bool useXBasedProjection = false;
 
+    //////////////////////////////////////////////////////
+    // IPC Support
+    //////////////////////////////////////////////////////
+    // Get the edges and faces of the boundary mesh
+    CollisionMesh getCollisionMesh() const override { return CollisionMesh::constructForMesh(mesh()); }
+    Real volume() const override { return mesh().volume(); }
+
 private:
     void m_setDefoVars(const Eigen::Ref<const VXd> &vars) override {
         if (size_t(vars.size()) != numDefoVars())
@@ -586,13 +593,6 @@ private:
             throw std::invalid_argument("Invalid vertexPositions size");
         m_mesh->setNodePositions(Eigen::Map<const MXNd>(vars.data(), numVertices(), size_t(N)));
     }
-
-    //////////////////////////////////////////////////////
-    // IPC Support
-    //////////////////////////////////////////////////////
-    // Get the edges and faces of the boundary mesh
-    CollisionMesh getCollisionMesh() const override { return CollisionMesh::constructForMesh(mesh()); }
-    Real volume() const override { return mesh().volume(); }
 
 protected:
     std::shared_ptr<Mesh> m_mesh;
