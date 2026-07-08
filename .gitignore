@@ -58,6 +58,8 @@ compile_commands.json
 
 # Non-submodule dependencies
 /3rdparty/Catch2/
+/3rdparty/MeshFEMCore/
+/3rdparty/MeshFEMSparse/
 /3rdparty/eigen/
 /3rdparty/json/
 /3rdparty/optional/

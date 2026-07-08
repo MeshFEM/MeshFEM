@@ -28,13 +28,83 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/MeshFEMCore/cmake
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/MeshFEMSparse/cmake
 )
 list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
 
 set(MESHFEM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(MESHFEM_EXTERNAL "${MESHFEM_ROOT}/3rdparty")
+
+include(FetchContent)
+
+################################################################################
+# Options
+################################################################################
+option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
+option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
+option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   ON)
+option(MESHFEM_USE_LEGACY_CATAMARI   "Use Jack Poulson's original Catamari code for comparisons instead of our accelerated BlockCatamari"  OFF)
+option(MESHFEM_WITH_SCOTCH           "Compile MeshFEM with support for Scotch reordering, if possible" OFF)
+option(MESHFEM_WITH_MKL_PARDISO      "Compile MeshFEM with MKL Pardiso"   OFF)
+option(MESHFEM_WITH_PARDISO          "Compile MeshFEM with Pardiso"   OFF)
+option(MESHFEM_WITH_CHOLMOD          "Compile MeshFEM with CHOLMOD for LL^T factorization" ON)
+option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factorization (GPL licensed)" OFF)
+option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLEW/OpenGL or OSMesa)"    ON)
+option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
+option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
+option(MESHFEM_ADDRESS_SANITIZER     "Whether to use address sanitizer in Debug mode" OFF)
+option(MESHFEM_WITH_IPC_TOOLKIT      "Compile MeshFEM with Ipc_toolkit" ON)
+option(MESHFEM_WITH_TINYAD           "Whether to use the TinyAD `Scalar` type as the autodiff backend intead of (nested) Eigen" ON)
+
+option(MESHFEM_FORCE_TINYAD_DOWNLOAD "Whether to force the download of TinyAD (on behalf of the parent project) even when not using TinyAD for MeshFEM's autodiff" OFF)
+mark_as_advanced(MESHFEM_FORCE_TINYAD_DOWNLOAD)
+
+if (MESHFEM_WITH_PARDISO AND MESHFEM_WITH_MKL_PARDISO)
+    message( FATAL_ERROR "MESHFEM_WITH_PARDISO and MESHFEM_WITH_MKL_PARDISO are mutually exclusive.")
+endif()
+
+if (MESHFEM_ADDRESS_SANITIZER)
+    # Enable address sanitizer in debug mode.
+    set (CMAKE_C_FLAGS_DEBUG      "${CMAKE_C_FLAGS_DEBUG}      -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
+    set (CMAKE_CXX_FLAGS_DEBUG    "${CMAKE_CXX_FLAGS_DEBUG}    -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
+    set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
+endif()
+
+option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" OFF)
+option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" ON)
+option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
+option(MESHFEM_BUILD_TESTS           "Build MeshFEM tests"           ${MESHFEM_BUILD_BINARIES})
+
+# We need -fPIC when compiling our libraries and our dependencies for
+# the python bindings (shared libraries) to link.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+if(MESHFEM_BUILD_TESTS)
+    include(CTest)
+endif()
+
+if(NOT DEFINED MESHFEMCORE_BUILD_TESTS)
+    set(MESHFEMCORE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMCore tests")
+endif()
+
+# Bring in required MeshFEM components
+# TODO: change these to https once public.
+set(MESHFEMCORE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMCore.git" CACHE STRING "MeshFEMCore git repository")
+set(MESHFEMCORE_GIT_TAG "2867a326f79269660da80846d273e4440817cbe8" CACHE STRING "MeshFEMCore git revision")
+set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
+set(MESHFEMSPARSE_GIT_TAG "e07b5be0dffced1ad4eabf7c8dda359dcabb74d0" CACHE STRING "MeshFEMSparse git revision")
+
+FetchContent_Declare(MeshFEMCore
+    GIT_REPOSITORY ${MESHFEMCORE_GIT_REPOSITORY}
+    GIT_TAG        ${MESHFEMCORE_GIT_TAG}
+    SOURCE_DIR     ${MESHFEM_EXTERNAL}/MeshFEMCore
+)
+FetchContent_GetProperties(MeshFEMCore)
+if(NOT TARGET MeshFEMCore)
+    FetchContent_MakeAvailable(MeshFEMCore)
+endif()
+list(APPEND CMAKE_MODULE_PATH ${meshfemcore_SOURCE_DIR}/cmake)
+list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
+include(MeshFEMCoreDownloadExternal)
 
 set(CMAKE_CXX_FLAGS_RELWITHASSERT        "-O3" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
 set(CMAKE_C_FLAGS_RELWITHASSERT          "-O3" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
@@ -70,59 +140,10 @@ include(CMakeToolsHelpers OPTIONAL)
 # Enable more warnings
 include(Warnings)
 
-# We need -fPIC when compiling our libraries and our dependencies for
-# the python bindings (shared libraries) to link.
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
 # Helper functions
 include(MeshFEMUtils)
 
 include(sanitizers)
-
-################################################################################
-# Options
-################################################################################
-
-# By default, disable C++11 ABI on the Prince cluster
-if("$ENV{CLUSTER}" STREQUAL "PRINCE")
-    set(DISABLE_CXX11_ABI_DEFAULT ON)
-else()
-    set(DISABLE_CXX11_ABI_DEFAULT OFF)
-endif()
-
-option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" ${DISABLE_CXX11_ABI_DEFAULT})
-option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" ON)
-option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
-option(MESHFEM_BUILD_TESTS           "Build MeshFEM tests"           ${MESHFEM_BUILD_BINARIES})
-option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
-option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
-option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   ON)
-option(MESHFEM_USE_LEGACY_CATAMARI   "Use Jack Poulson's original Catamari code for comparisons instead of our accelerated BlockCatamari"  OFF)
-option(MESHFEM_WITH_SCOTCH           "Compile MeshFEM with support for Scotch reordering, if possible" OFF)
-option(MESHFEM_WITH_MKL_PARDISO      "Compile MeshFEM with MKL Pardiso"   OFF)
-option(MESHFEM_WITH_PARDISO          "Compile MeshFEM with Pardiso"   OFF)
-option(MESHFEM_WITH_CHOLMOD          "Compile MeshFEM with CHOLMOD for LL^T factorization" ON)
-option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factorization (GPL licensed)" OFF)
-option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLEW/OpenGL or OSMesa)"    ON)
-option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
-option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
-option(MESHFEM_ADDRESS_SANITIZER     "Whether to use address sanitizer in Debug mode" OFF)
-option(MESHFEM_WITH_IPC_TOOLKIT      "Compile MeshFEM with Ipc_toolkit" ON)
-option(MESHFEM_WITH_TINYAD           "Whether to use the TinyAD `Scalar` type as the autodiff backend intead of (nested) Eigen" OFF)
-
-option(MESHFEM_FORCE_TINYAD_DOWNLOAD "Whether to force the download of TinyAD (on behalf of the parent project) even when not using TinyAD for MeshFEM's autodiff" OFF)
-mark_as_advanced(MESHFEM_FORCE_TINYAD_DOWNLOAD)
-
-if (MESHFEM_WITH_PARDISO AND MESHFEM_WITH_MKL_PARDISO)
-    message( FATAL_ERROR "MESHFEM_WITH_PARDISO and MESHFEM_WITH_MKL_PARDISO are mutually exclusive.")
-endif()
-
-if (MESHFEM_ADDRESS_SANITIZER)
-    # Enable address sanitizer in debug mode.
-    set (CMAKE_C_FLAGS_DEBUG      "${CMAKE_C_FLAGS_DEBUG}      -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
-    set (CMAKE_CXX_FLAGS_DEBUG    "${CMAKE_CXX_FLAGS_DEBUG}    -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
-    set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize-recover=address")
-endif()
 
 ################################################################################
 # Subdirectories
@@ -134,18 +155,20 @@ include(MeshFEMCoreDependencies)
 
 add_subdirectory(3rdparty/RotationOptimization)
 
-if(MESHFEM_BUILD_TESTS)
-    include(CTest)
-endif()
-
-if(NOT DEFINED MESHFEMCORE_BUILD_TESTS)
-    set(MESHFEMCORE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMCore tests")
-endif()
-
 if(NOT DEFINED MESHFEMSPARSE_BUILD_TESTS)
     set(MESHFEMSPARSE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMSparse tests")
 endif()
 
+if(NOT TARGET MeshFEMSparse)
+    meshfem_download_project(MeshFEMSparse
+        GIT_REPOSITORY ${MESHFEMSPARSE_GIT_REPOSITORY}
+        GIT_TAG        ${MESHFEMSPARSE_GIT_TAG}
+        SOURCE_DIR     ${MESHFEM_EXTERNAL}/MeshFEMSparse
+    )
+    list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/MeshFEMSparse/cmake)
+    list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
+    add_subdirectory(${MESHFEM_EXTERNAL}/MeshFEMSparse ${CMAKE_BINARY_DIR}/MeshFEMSparse)
+endif()
 add_subdirectory(src/lib)
 
 if(MESHFEM_BUILD_BINARIES)
