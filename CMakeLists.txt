@@ -82,9 +82,9 @@ endif()
 # Bring in required MeshFEM components
 # TODO: change these to https once public.
 set(MESHFEMCORE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMCore.git" CACHE STRING "MeshFEMCore git repository")
-set(MESHFEMCORE_GIT_TAG "e18c64d1dbf589a94181f90584f5fd2be3b250f0" CACHE STRING "MeshFEMCore git revision")
+set(MESHFEMCORE_GIT_TAG "main" CACHE STRING "MeshFEMCore git revision")
 set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
-set(MESHFEMSPARSE_GIT_TAG "1b24e5c490e1109b31a3168b9cd6f8fa5c9e0bd5" CACHE STRING "MeshFEMSparse git revision")
+set(MESHFEMSPARSE_GIT_TAG "main" CACHE STRING "MeshFEMSparse git revision")
 
 FetchContent_Declare(MeshFEMCore
     GIT_REPOSITORY ${MESHFEMCORE_GIT_REPOSITORY}
