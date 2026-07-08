@@ -153,15 +153,14 @@ if(NOT DEFINED MESHFEMSPARSE_BUILD_TESTS)
 endif()
 
 if(NOT TARGET MeshFEMSparse)
-    meshfem_download_project(MeshFEMSparse
+    FetchContent_Declare(MeshFEMSparse
         GIT_REPOSITORY ${MESHFEMSPARSE_GIT_REPOSITORY}
         GIT_TAG        ${MESHFEMSPARSE_GIT_TAG}
         SOURCE_DIR     ${MESHFEM_EXTERNAL}/MeshFEMSparse
     )
-    list(APPEND CMAKE_MODULE_PATH ${MESHFEM_EXTERNAL}/MeshFEMSparse/cmake)
-    list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
-    add_subdirectory(${MESHFEM_EXTERNAL}/MeshFEMSparse ${CMAKE_BINARY_DIR}/MeshFEMSparse)
+    FetchContent_MakeAvailable(MeshFEMSparse)
 endif()
+
 add_subdirectory(src/lib)
 
 if(MESHFEM_BUILD_BINARIES)
