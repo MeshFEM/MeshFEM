@@ -189,45 +189,6 @@ if(MESHFEM_DISABLE_CXX11_ABI_GCC)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 
-if(MESHFEM_ENABLE_BENCHMARKING)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DBENCHMARK)
-endif()
-
-if(MESHFEM_WITH_UMFPACK)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_UMFPACK)
-endif()
-
-if(MESHFEM_WITH_CHOLMOD)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_CHOLMOD)
-    target_link_libraries(${PROJECT_NAME} PUBLIC cholmod::cholmod)
-endif()
-
-if (MESHFEM_WITH_CATAMARI)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_CATAMARI)
-    target_link_libraries(${PROJECT_NAME} PUBLIC catamari)
-    if (MESHFEM_USE_LEGACY_CATAMARI)
-        target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_USE_LEGACY_CATAMARI)
-    endif()
-endif()
-
-if (MESHFEM_WITH_SCOTCH)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_SCOTCH)
-    target_link_libraries(${PROJECT_NAME} PUBLIC SCOTCH::scotch SCOTCH::scotcherrexit)
-endif()
-
-if (MESHFEM_WITH_MKL_PARDISO)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_MKL_PARDISO)
-endif()
-
-if (MESHFEM_WITH_PARDISO)
-    set(MKLROOT /opt/intel/mkl)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_PARDISO)
-    target_link_libraries(${PROJECT_NAME} PUBLIC
-        /home/jpanetta/software/pardiso/libpardiso600-GNU800-X86-64.so
-         -L${MKLROOT}/lib/intel64 -lmkl_rt -Wl,--no-as-needed -lpthread -lm -ldl -lgomp
-        -lgfortran)
-endif()
-
 if(MESHFEM_WITH_IPC_TOOLKIT)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_IPC_TOOLKIT)
     target_link_libraries(${PROJECT_NAME} PUBLIC ipc::toolkit)

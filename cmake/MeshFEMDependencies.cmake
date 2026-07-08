@@ -93,14 +93,6 @@ if(NOT TARGET tinyexpr::tinyexpr)
     add_library(tinyexpr::tinyexpr ALIAS meshfem_tinyexpr)
 endif()
 
-if (MESHFEM_WITH_CHOLMOD AND NOT TARGET cholmod::cholmod)
-    find_package(CHOLMOD REQUIRED) # provides cholmod::cholmod
-endif()
-
-if (MESHFEM_WITH_UMFPACK AND NOT TARGET umfpack::umfpack)
-    find_package(UMFPACK REQUIRED) # provides umfpack::umfpack
-endif()
-
 ################################################################################
 # Optional MeshFEM dependencies
 ################################################################################
@@ -166,12 +158,4 @@ endif()
 if ((MESHFEM_WITH_TINYAD OR MESHFEM_FORCE_TINYAD_DOWNLOAD) AND (NOT TARGET TinyAD))
     meshfem_download_tinyad()
     add_subdirectory(${MESHFEM_EXTERNAL}/TinyAD ${CMAKE_BINARY_DIR}/3rdparty/TinyAD)
-endif()
-
-if (MESHFEM_WITH_SCOTCH AND NOT TARGET SCOTCH::scotch)
-    find_package(SCOTCH QUIET)
-    if (NOT TARGET SCOTCH::scotch)
-        message(STATUS "Scotch not found; support will be disabled")
-        set(MESHFEM_WITH_SCOTCH OFF)
-    endif()
 endif()

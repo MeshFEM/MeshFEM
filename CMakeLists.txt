@@ -39,21 +39,14 @@ include(FetchContent)
 ################################################################################
 # Options
 ################################################################################
-option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
-option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
-option(MESHFEM_WITH_CATAMARI         "Compile MeshFEM with Catamari"   ON)
-option(MESHFEM_USE_LEGACY_CATAMARI   "Use Jack Poulson's original Catamari code for comparisons instead of our accelerated BlockCatamari"  OFF)
-option(MESHFEM_WITH_SCOTCH           "Compile MeshFEM with support for Scotch reordering, if possible" OFF)
-option(MESHFEM_WITH_MKL_PARDISO      "Compile MeshFEM with MKL Pardiso"   OFF)
-option(MESHFEM_WITH_PARDISO          "Compile MeshFEM with Pardiso"   OFF)
-option(MESHFEM_WITH_CHOLMOD          "Compile MeshFEM with CHOLMOD for LL^T factorization" ON)
-option(MESHFEM_WITH_UMFPACK          "Compile MeshFEM with UMFPACK for LU factorization (GPL licensed)" OFF)
 option(MESHFEM_WITH_OFFSCREEN_RENDER "Build the offscreen renderer (Requires GLEW/OpenGL or OSMesa)"    ON)
+option(MESHFEM_WITH_CERES            "Compile MeshFEM with Ceres"   OFF)
 option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if one is already found on the system"   ON)
 option(MESHFEM_VECTORIZE             "Add march=native and ffast-math flags to encourage generation of SIMD instructions. These options will propagate to code linking against MeshFEM"   OFF)
 option(MESHFEM_ADDRESS_SANITIZER     "Whether to use address sanitizer in Debug mode" OFF)
 option(MESHFEM_WITH_IPC_TOOLKIT      "Compile MeshFEM with Ipc_toolkit" ON)
 option(MESHFEM_WITH_TINYAD           "Whether to use the TinyAD `Scalar` type as the autodiff backend intead of (nested) Eigen" ON)
+option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
 
 option(MESHFEM_FORCE_TINYAD_DOWNLOAD "Whether to force the download of TinyAD (on behalf of the parent project) even when not using TinyAD for MeshFEM's autodiff" OFF)
 mark_as_advanced(MESHFEM_FORCE_TINYAD_DOWNLOAD)
@@ -70,7 +63,6 @@ if (MESHFEM_ADDRESS_SANITIZER)
 endif()
 
 option(MESHFEM_DISABLE_CXX11_ABI_GCC "Don't use GCC's new C++11 ABI; needed to prevent linker errors with libraries compiled with the old ABI" OFF)
-option(MESHFEM_ENABLE_BENCHMARKING   "Enable the benchmarking code" ON)
 option(MESHFEM_BUILD_BINARIES        "Build executable programs"    ${MESHFEM_TOPLEVEL_PROJECT})
 option(MESHFEM_BUILD_TESTS           "Build MeshFEM tests"           ${MESHFEM_BUILD_BINARIES})
 
@@ -89,9 +81,9 @@ endif()
 # Bring in required MeshFEM components
 # TODO: change these to https once public.
 set(MESHFEMCORE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMCore.git" CACHE STRING "MeshFEMCore git repository")
-set(MESHFEMCORE_GIT_TAG "2867a326f79269660da80846d273e4440817cbe8" CACHE STRING "MeshFEMCore git revision")
+set(MESHFEMCORE_GIT_TAG "e18c64d1dbf589a94181f90584f5fd2be3b250f0" CACHE STRING "MeshFEMCore git revision")
 set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
-set(MESHFEMSPARSE_GIT_TAG "e07b5be0dffced1ad4eabf7c8dda359dcabb74d0" CACHE STRING "MeshFEMSparse git revision")
+set(MESHFEMSPARSE_GIT_TAG "1b24e5c490e1109b31a3168b9cd6f8fa5c9e0bd5" CACHE STRING "MeshFEMSparse git revision")
 
 FetchContent_Declare(MeshFEMCore
     GIT_REPOSITORY ${MESHFEMCORE_GIT_REPOSITORY}
