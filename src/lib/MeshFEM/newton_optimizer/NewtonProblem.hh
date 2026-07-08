@@ -261,7 +261,7 @@ struct MESHFEM_EXPORT NewtonProblem {
 
     // Allow subclasses to impose an upper bound on the step size (e.g., to
     // enforce interpenetration-free steps).
-    virtual Real customFeasibleStepLength(const VXd &vars, const VXd &step) const { return std::numeric_limits<Real>::max(); }
+    virtual Real customFeasibleStepLength(const VXd &/* vars */, const VXd &/* step */) const { return std::numeric_limits<Real>::max(); }
 
     // End of line search notification
     virtual void lineSearchBegan(const VXd &step, double directionalDerivative) {

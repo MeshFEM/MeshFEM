@@ -31,7 +31,7 @@ struct ElementBase {
     const Derived &derived() const { return static_cast<const Derived &>(*this); }
           Derived &derived()       { return static_cast<Derived &>(*this); }
 
-    const size_t elementIndex() const { return m_materialGetter.elementIndex(); }
+    size_t elementIndex() const { return m_materialGetter.elementIndex(); }
 private:
     MaterialGetter m_materialGetter;
 };

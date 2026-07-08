@@ -120,7 +120,7 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     virtual void accumulateGradient(Real weight, VXd &g, bool updatedParametrization, VariableMask vmask) const = 0;
     virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask, VariableMask vmask) const = 0;
     virtual NewtonHessian hessianSparsityPattern(VariableMask vmask) const = 0;
-    virtual VXd contract_d2E_dXdx(const VXd &y) const { throw std::runtime_error("Unimplemented!"); }
+    virtual VXd contract_d2E_dXdx(const VXd &/* y */) const { throw std::runtime_error("Unimplemented!"); }
 
     using NewtonObjectiveTermBase::gradient; // prevent hiding
     // Convenience method

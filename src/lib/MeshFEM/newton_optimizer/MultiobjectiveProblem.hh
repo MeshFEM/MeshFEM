@@ -200,7 +200,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     enum class SparsityUpdateFrequency { NEVER, ALWAYS, SOMETIMES };
 
     virtual Real objective() const = 0;
-    virtual Real objectiveAtVars(const Eigen::Ref<const VXd> &x) const { throw std::runtime_error("objectiveAtVars not implemented by" + std::string(typeid(*this).name())); }
+    virtual Real objectiveAtVars(const Eigen::Ref<const VXd> &/* x */) const { throw std::runtime_error("objectiveAtVars not implemented by" + std::string(typeid(*this).name())); }
     virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const = 0;
     virtual void accumulateHessian(Real weight, NewtonHessian &result, bool projectionMask = false) const = 0;
 
@@ -209,7 +209,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
 
     // Sensitivity analysis support
     // Accumulate the matvec: result_accum += weight * (d2E / dpdx) * adjoint_state
-    virtual void contract_d2E_dpdx(Real weight, const VXd &adjoint_state, VXd &result_accum) const { throw std::runtime_error("contract_d2E_dpdx unimplemented"); }
+    virtual void contract_d2E_dpdx(Real /* weight */, const VXd &/* adjoint_state */, VXd &/* result_accum */) const { throw std::runtime_error("contract_d2E_dpdx unimplemented"); }
 
     // Allow subclasses to impose an upper bound on the step size `alpha`
     // before starting the line search (e.g., to enforce interpenetration-free steps).
@@ -262,7 +262,7 @@ struct MESHFEM_EXPORT NewtonObjectiveTermBase {
     // (unless it does so automatically on each variable change).
     // To help the term detect changes, it is passed the current sparsity
     // pattern that the multiobjective problem has on file.
-    virtual bool detectSparsityPatternChange(const NewtonHessian &oldHsp) const { return sparsityPatternChanged; }
+    virtual bool detectSparsityPatternChange(const NewtonHessian &/* oldHsp */) const { return sparsityPatternChanged; }
 
     mutable SparsityPatternChangeFlag sparsityPatternChanged;
 };
@@ -515,7 +515,7 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
         return m_sparsityLRU.get();
     }
 
-    VXd dirichletSensitivityTerm(const VXd &dJ_dx, const VXd &adjoint_state) const { throw std::runtime_error("Unimplemented"); }
+    VXd dirichletSensitivityTerm(const VXd &/* dJ_dx */, const VXd &/* adjoint_state */) const { throw std::runtime_error("Unimplemented"); }
 
     virtual ~NewtonMultiobjectiveProblem();
 
@@ -672,7 +672,7 @@ private:
             term(ti).accumulateHessian(weight(ti), result, projectionMask);
     }
 
-    virtual void m_evalMetric(SuiteSparseMatrix &result) const override {
+    virtual void m_evalMetric(SuiteSparseMatrix &/* result */) const override {
         throw std::runtime_error("No metric implemented for this problem.");
     }
 

@@ -38,7 +38,7 @@ struct MESHFEM_EXPORT IPCObjectiveTerm : public NewtonObjectiveTerm, public Time
         return m_k * contactPotentialEnergy();
     }
 
-    virtual void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
+    virtual void accumulateGradient(Real weight, VXd &g, bool /* freshIterate */ = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("IPC.accumulateGradient");
         // Add contact potential gradient computed by IPC
         const VXd &dB_dCV = contactPotentialGradient();

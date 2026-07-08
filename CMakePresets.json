@@ -15,33 +15,42 @@
             }
         },
         {
-            "name": "continuous-multi",
+            "name": "multi",
             "inherits": "base",
-            "displayName": "Continuous Config (Multi)",
+            "displayName": "Config (Multi)",
             "generator": "Ninja Multi-Config"
         },
         {
-            "name": "continuous-debug",
+            "name": "relwithassert",
             "inherits": "base",
-            "displayName": "Continuous Config (Debug)",
+            "displayName": "Config (RelWithAssert)",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithAssert"
+            }
+        },
+        {
+            "name": "debug",
+            "inherits": "base",
+            "displayName": "Config (Debug)",
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
-            "name": "continuous-relwithdebinfo",
+            "name": "relwithdebinfo",
             "inherits": "base",
-            "displayName": "Continuous Config (RelWithDebInfo)",
+            "displayName": "Config (RelWithDebInfo)",
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
         },
         {
-            "name": "continuous-release",
+            "name": "release",
             "inherits": "base",
-            "displayName": "Continuous Config (Release)",
+            "displayName": "Config (Release)",
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
@@ -58,12 +67,12 @@
             }
         },
         {
-            "name": "asan-relwithasserts",
+            "name": "asan-relwithassert",
             "inherits": "base",
-            "displayName": "Address Sanitizer RelWithAsserts",
+            "displayName": "Address Sanitizer RelWithAssert",
             "generator": "Ninja",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithAsserts",
+                "CMAKE_BUILD_TYPE": "RelWithAssert",
                 "USE_SANITIZER": "Address;Undefined"
             }
         },
@@ -88,23 +97,28 @@
             ]
         },
         {
-            "name": "continuous-release",
-            "configurePreset": "continuous-release",
+            "name": "release",
+            "configurePreset": "release",
             "inherits": "base"
         },
         {
-            "name": "continuous-debug",
-            "configurePreset": "continuous-debug",
+            "name": "relwithassert",
+            "configurePreset": "relwithassert",
             "inherits": "base"
         },
         {
-            "name": "continuous-relwithdebinfo",
-            "configurePreset": "continuous-relwithdebinfo",
+            "name": "debug",
+            "configurePreset": "debug",
             "inherits": "base"
         },
         {
-            "name": "continuous-multi",
-            "configurePreset": "continuous-multi",
+            "name": "relwithdebinfo",
+            "configurePreset": "relwithdebinfo",
+            "inherits": "base"
+        },
+        {
+            "name": "multi",
+            "configurePreset": "multi",
             "inherits": "base"
         },
         {
@@ -113,8 +127,8 @@
             "inherits": "base"
         },
         {
-            "name": "asan-relwithasserts",
-            "configurePreset": "asan-relwithasserts",
+            "name": "asan-relwithassert",
+            "configurePreset": "asan-relwithassert",
             "inherits": "base"
         },
         {
@@ -137,23 +151,28 @@
             }
         },
         {
-            "name": "continuous-release",
-            "configurePreset": "continuous-release",
+            "name": "relwithassert",
+            "configurePreset": "relwithassert",
             "inherits": "base"
         },
         {
-            "name": "continuous-debug",
-            "configurePreset": "continuous-debug",
+            "name": "release",
+            "configurePreset": "release",
             "inherits": "base"
         },
         {
-            "name": "continuous-relwithdebinfo",
-            "configurePreset": "continuous-relwithdebinfo",
+            "name": "debug",
+            "configurePreset": "debug",
             "inherits": "base"
         },
         {
-            "name": "continuous-multi",
-            "configurePreset": "continuous-multi",
+            "name": "relwithdebinfo",
+            "configurePreset": "relwithdebinfo",
+            "inherits": "base"
+        },
+        {
+            "name": "multi",
+            "configurePreset": "multi",
             "inherits": "base"
         },
         {
@@ -163,7 +182,7 @@
         },
         {
             "name": "asan",
-            "configurePreset": "asan-relwithasserts",
+            "configurePreset": "asan-relwithassert",
             "inherits": "base"
         },
         {

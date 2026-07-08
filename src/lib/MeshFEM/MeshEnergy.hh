@@ -177,7 +177,7 @@ struct MeshEnergy : public MeshEnergyBase {
 
     const auto &assembler() const { return m_vars.assembler(); }
 
-    void accumulateGradient(Real weight, VXd &g, bool freshIterate = false) const override {
+    void accumulateGradient(Real weight, VXd &g, bool /* freshIterate */ = false) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".accumulateGradient");
         if constexpr (Element::CachesDeformedQuantities) {
             assembler().assembleGradientConditionalGather(g, elements.size(), [&](size_t ei) {
@@ -241,7 +241,7 @@ struct MeshEnergy : public MeshEnergyBase {
         BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian" + (projectionMask ? " (projected)" : ""));
         if (!projectionMask || !hasPerElementHessianProjectionMasks()) {
             // No per-element projection mask customization.
-            accumulateHessianImpl(weight, H, [projectionMask](size_t ei) { return projectionMask; });
+            accumulateHessianImpl(weight, H, [projectionMask](size_t /* ei */) { return projectionMask; });
         }
         else {
             accumulateHessianImpl(weight, H, [this](size_t ei) { return elementHessianProjectionMasks[ei]; });

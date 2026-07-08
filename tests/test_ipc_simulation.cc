@@ -93,7 +93,6 @@ void run_test() {
     DynamicSimulator<double> ds(es, terms, /*useLumpedMass = */ true, dt);
 
     ds.setFixedVars(getBBoxVarsMinY(*m, GROUND_TOL));
-    std::cout << "Num fixed vars: " << ds.fixedVars().size() << std::endl;
 
     ds.method = TimesteppingMethod::BackwardEuler;
     ds.getOptimizer().options.verbose = 0;
@@ -116,6 +115,6 @@ TEST_CASE("IPC Simulation", "[ipc_simulation]" ) {
     SECTION("3D, Deg 1") { run_test<3, 1>(); }
 }
 
-TEST_CASE("IPC Simulation Slow (Skipped by Default)", "[][ipc_simulation_slow]" ) {
+TEST_CASE("IPC Simulation Slow (Skipped by Default)", "[.][ipc_simulation_slow]" ) {
     SECTION("3D, Deg 2") { run_test<3, 2>(); }
 }

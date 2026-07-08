@@ -123,7 +123,7 @@ struct StencilFactory<TriFlapStencil> {
     static std::vector<TriFlapStencil> build(const Mesh &m, const VarForVtx &var) {
         static_assert(Mesh::K == 2, "Hinge stencil only supports triangle meshes");
         std::vector<TriFlapStencil> result;
-        m.visitInteriorEdges([&](const auto &he, size_t ei) {
+        m.visitInteriorEdges([&](const auto &he, size_t /* ei */) {
             result.emplace_back(he, var);
         });
 

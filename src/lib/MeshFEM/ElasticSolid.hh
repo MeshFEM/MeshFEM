@@ -79,8 +79,8 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         Eigen::HouseholderQR<VecN_T<Real, numNodesPerElement>> qr(VecN_T<Real, numNodesPerElement>::Ones());
         auto Q = (qr.householderQ() * Eigen::Matrix<Real, numNodesPerElement, numNodesPerElement>::Identity()).eval();
         m_translationOrthogonalComplementBasisCompressed = Q.template rightCols<numNodesPerElement - 1>().eval();
-        for (int j = 0; j < numNodesPerElement - 1; ++j)
-            for (int i = 0; i < numNodesPerElement; ++i)
+        for (int j = 0; j < (int)(numNodesPerElement - 1); ++j)
+            for (int i = 0; i < (int)numNodesPerElement; ++i)
                 m_translationOrthogonalComplementBasis.template block<N, N>(i * N, j * N) = Eigen::Matrix<Real, N, N>::Identity() * m_translationOrthogonalComplementBasisCompressed(i, j);
     }
 
@@ -183,7 +183,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
     }
 
     VXd contract_d2E_dXdx(const VXd &y) const override {
-        if (y.size() != numNodes() * N) throw std::runtime_error("Invalid size of y");
+        if (y.size() != (Eigen::Index)(numNodes() * N)) throw std::runtime_error("Invalid size of y");
         MXNd y_mat = Eigen::Map<const MXNd>(y.data(), numNodes(), size_t(N));
 
         const auto &m = mesh();
@@ -332,7 +332,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return assembler().blockSparsityPatternForMesh(mesh());
     }
 
-    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false, VariableMask vmask = VariableMask::Defo) const override {
+    virtual void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false, VariableMask /* vmask */ = VariableMask::Defo) const override {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ElasticSolid.accumulateHessian" + std::string(projectionMask ? " (projected)" : ""));
         assembler().assembleHessian(H, mesh(), [this, projectionMask, weight](size_t ei) {
             return elementHessian(ei, !projectionMask, weight);
@@ -428,7 +428,7 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
         return getDeformationGradient(ei, mesh().element(ei)->gradPhis(x));
     }
 
-    MNd getDeformationGradient(size_t ei, Eigen::Ref<const GradPhis> gradPhis, const NodePositions &nodalValues) const {
+    MNd getDeformationGradient(size_t /* ei */, Eigen::Ref<const GradPhis> gradPhis, const NodePositions &nodalValues) const {
         return (gradPhis * nodalValues).transpose();
     }
 

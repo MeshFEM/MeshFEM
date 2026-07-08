@@ -33,7 +33,7 @@ struct Load : public NewtonObjectiveTerm {
     // Wrapers adapting to the NewtonObjectiveTerm interface
     ////////////////////////////////////////////////////////////////////////////
     Real objective() const override { return energy(); }
-    virtual void accumulateGradient(Real w, VXd &g, bool freshIterate = false) const override {
+    virtual void accumulateGradient(Real w, VXd &g, bool /* freshIterate */ = false) const override {
         if (w == 1.0) g +=     grad_x();
         else          g += w * grad_x();
     }
@@ -53,7 +53,7 @@ struct Load : public NewtonObjectiveTerm {
 
     virtual void m_stateUpdated(VM /* vmask */) { /* NOP */ }
 
-    virtual VXd contract_d2E_dXdx(const VXd &dx) const { throw std::runtime_error("Unimplemented"); }
+    virtual VXd contract_d2E_dXdx(const VXd &/* dx */) const { throw std::runtime_error("Unimplemented"); }
 
     virtual ~Load() { }
 };

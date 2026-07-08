@@ -138,7 +138,7 @@ struct BodyForce : public ObjectSpecificLoad<Object> {
     virtual VXd grad_X() const override { throw std::runtime_error("Unimplemented"); }
 
     // Potential is linear with respect to the deformed state
-    virtual void accumulateHessian(Real weight, NewtonHessian & /* H */, bool /* projectionMask */ = true) const override { }
+    virtual void accumulateHessian(Real /* weight */, NewtonHessian & /* H */, bool /* projectionMask */ = true) const override { }
     virtual NewtonHessian hessianSparsityPattern() const override { return NewtonHessian(); }
 
     virtual VXd contract_d2E_dXdx(const VXd &dx) const override {
@@ -149,8 +149,8 @@ struct BodyForce : public ObjectSpecificLoad<Object> {
     void setNodalForceDensity(MXd f /* pass-by-value due to copy inside */) {
         const auto &o = getObj();
         size_t nn = o.numNodes();
-        if ((f.size() != 2 * nn) && (f.size() != 3 * nn)) throw std::runtime_error("Invalid size of nodal force density: should be a 2D or 3D vector per node");
-        if ((f.cols() != 1) && (f.rows() != nn))          throw std::runtime_error("Invalid shape of nodal force density: should be a column vector or an (numNodes x N) matrix");
+        if ((f.size() != (Eigen::Index)(2 * nn)) && (f.size() != (Eigen::Index)(3 * nn))) throw std::runtime_error("Invalid size of nodal force density: should be a 2D or 3D vector per node");
+        if ((f.cols() != 1) && (f.rows() != (Eigen::Index)nn))                            throw std::runtime_error("Invalid shape of nodal force density: should be a column vector or an (numNodes x N) matrix");
         m_nodalForceDensity = f;
         m_updateCache();
     }

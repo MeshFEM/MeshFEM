@@ -28,7 +28,7 @@ using LoadCollection = std::vector<std::shared_ptr<Loads::Load<_Real>>>;
 // Base class for terms that can limit the timestep (e.g., `IPCObjectiveTerm`).
 struct MESHFEM_EXPORT TimestepLimiter {
     TimestepLimiter() { };
-    virtual double getTimestepLength (double t, double dt) { return 1.0; }
+    virtual double getTimestepLength (double /* t */, double /* dt */) { return 1.0; }
     virtual void initialBarrierStiffness(double w, const Eigen::VectorXd &primaryPotentialGradient, double primaryObjectMass) = 0;
     virtual ~TimestepLimiter() { };
     void setAdaptiveTimestep(bool flag) { if (flag) throw std::runtime_error("Adaptive timestep is disabled until further testing"); m_useAdaptiveTimestep = flag; }
