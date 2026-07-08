@@ -22,6 +22,8 @@
 #include "ParametrizationBinding.hh"
 #include <MeshFEM/Elements/ParametrizationElement.hh>
 
+namespace MeshFEM {
+
 // Bind instantiations of Elastic Solid, Sheet, and parametrization objects
 // for a given energy density.
 struct CustomEnergyInstantiationsBinder {
@@ -76,5 +78,7 @@ private:
     py::module m_e, m_e_d, m_l, m_l_d, m_es, m_es_d, m_esh, m_esh_d, m_param, m_param_d; // submodules
 
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CUSTOMENERGYINSTANTIATIONSBINDER_HH */
