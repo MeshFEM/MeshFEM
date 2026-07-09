@@ -182,15 +182,16 @@ struct MeshEnergy : public MeshEnergyBase {
         if constexpr (Element::CachesDeformedQuantities) {
             assembler().assembleGradientConditionalGather(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight);
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
+            }, [this](size_t ei) { return stencils[ei].blockVars; }, m_gatherCache);
         }
         else {
             const auto &vs = m_vars.varStructure();
             assembler().assembleGradientConditionalGather(g, elements.size(), [&](size_t ei) {
                 return elements[ei].gradient(weight, extractLocalVars(ei, m_vars.globalVars(), vs));
-            }, [this](size_t ei) { return stencils[ei].blockVars; });
+            }, [this](size_t ei) { return stencils[ei].blockVars; }, m_gatherCache);
         }
     }
+    mutable std::unique_ptr<typename Assembler::GatherCache> m_gatherCache;
 
     using ElementHessian = typename Element::Hessian;
     ElementHessian elementHessian(size_t ei, Real weight, bool projectionMask) const {
