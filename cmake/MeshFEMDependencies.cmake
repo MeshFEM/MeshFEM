@@ -127,20 +127,26 @@ endif()
 
 if (MESHFEM_WITH_IPC_TOOLKIT AND NOT TARGET ipc::toolkit)
     meshfem_download_ipc_toolkit()
-    set(IPC_TOOLKIT_WITH_SIMD OFF)   # disable ipc_toolkit's own unreliable SIMD detection
+
+    # We hit ODR violations/alignment issues if ipc_toolkit is built with an incompatible `march` setting from MeshFEM.
+    # Specifically, we get a SEGFAULT when attempting an 32-byte aligned read from an unaligned address
+    # (copying from IPC's insufficiently aligned Eigen::MatrixXd into our aligned Eigen::MatrixXd).
+    # We therefore force a configuration that is compatible.
+    set(IPC_TOOLKIT_WITH_SIMD OFF) # Note that `ipc_toolkit`'s autodetect feature seems to apply different flags on AVX-512 systems...
     add_subdirectory(${MESHFEM_EXTERNAL}/ipc_toolkit ${CMAKE_BINARY_DIR}/3rdparty/ipc_toolkit)
+
     if(MESHFEM_NATIVE)
-        # We hit ODR violations/alignment issues if ipc_toolkit is built with an incompatible `march` setting from MeshFEM.
-        # Specifically, we get a SEGFAULT when attempting an 32-byte aligned read from an unaligned address
-        # (copying from IPC's insufficiently aligned Eigen::MatrixXd into our aligned Eigen::MatrixXd).
-        # Note: the following flag detection variables have been set when configuring MESHFEM_NATIVE.
+        include(CheckCXXCompilerFlag)
+        check_cxx_compiler_flag(-march=native COMPILER_SUPPORTS_MARCH_NATIVE)
         if(COMPILER_SUPPORTS_MARCH_NATIVE)
             message(STATUS "Enabling -march=native for ipc_toolkit to match MeshFEM's MESHFEM_NATIVE option")
             target_compile_options(ipc_toolkit PRIVATE -march=native)
-        endif()
-        if(COMPILER_SUPPORTS_MCPU_NATIVE)
-            message(STATUS "Enabling -mcpu=native for ipc_toolkit to match MeshFEM's MESHFEM_NATIVE option")
-            target_compile_options(${PROJECT_NAME} PUBLIC -mcpu=native)
+        else()
+            check_cxx_compiler_flag(-mcpu=native COMPILER_SUPPORTS_MCPU_NATIVE)
+            if(COMPILER_SUPPORTS_MCPU_NATIVE)
+                message(STATUS "Enabling -mcpu=native for ipc_toolkit to match MeshFEM's MESHFEM_NATIVE option")
+                target_compile_options(ipc_toolkit PRIVATE -mcpu=native)
+            endif()
         endif()
     endif()
 endif()

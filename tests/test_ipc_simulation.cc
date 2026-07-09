@@ -15,6 +15,7 @@
 #include <MeshFEM/IPCIntegration/IPCObjectiveTerm.hh>
 #include <MeshFEM/DynamicSimulator.hh>
 #include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMCore/Parallelism.hh>
 
 // WARNING: catch2/catch.hpp sets a BENCHMARK macro, so we must include it
 // after MeshFEM.
@@ -56,6 +57,9 @@ std::vector<size_t> getBBoxVarsMinY(const Mesh &mesh, double tol = 1e-8) {
 
 template<size_t N, size_t  Deg>
 void run_test() {
+    if (get_max_num_tbb_threads() > 16)
+        set_max_num_tbb_threads(16);
+
     using VNd    = VecN_T<double, N>;
     using Mesh   = FEMMesh<N, Deg, VNd>;
     using Energy = CommonNeoHookeanEnergy<double, N>;
@@ -107,6 +111,8 @@ void run_test() {
     in.push(bio::file_source(ground_truth_file, std::ios_base::binary));
     auto x_gt = load_matrix_from_stream<double>(in, es->numVars(), 1);
     REQUIRE((es->getVars() - x_gt).norm() < SOLUTION_TOLERANCE * x_gt.norm());
+
+    unset_max_num_tbb_threads();
 }
 
 TEST_CASE("IPC Simulation", "[ipc_simulation]" ) {

@@ -155,30 +155,8 @@ target_link_libraries(${PROJECT_NAME}
         warnings::all
 )
 
-if (MESHFEM_WITH_UMFPACK)
-    target_link_libraries(${PROJECT_NAME} PUBLIC umfpack::umfpack)
-endif()
-
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_TBB -DNOMINMAX -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_USE_MATH_DEFINES)
 target_compile_options(${PROJECT_NAME} PUBLIC -fvisibility=hidden)
-if(MESHFEM_NATIVE)
-    CHECK_CXX_COMPILER_FLAG(-march=native COMPILER_SUPPORTS_MARCH_NATIVE)
-    if(COMPILER_SUPPORTS_MARCH_NATIVE)
-        target_compile_options(${PROJECT_NAME} PUBLIC -march=native)
-    else()
-        CHECK_CXX_COMPILER_FLAG(-mcpu=native COMPILER_SUPPORTS_MCPU_NATIVE)
-        if(COMPILER_SUPPORTS_MCPU_NATIVE)
-            target_compile_options(${PROJECT_NAME} PUBLIC -mcpu=native)
-        else()
-            message(WARNING "The compiler ${CMAKE_CXX_COMPILER} does not support -march=native or -mcpu=native. The option MESHFEM_NATIVE will be ignored.")
-        endif()
-    endif()
-endif()
-
-if(MESHFEM_FAST_MATH)
-    target_compile_options(${PROJECT_NAME} PUBLIC -ffast-math)
-endif()
-
 # Generate MeshFEM_export.h which provides the MESHFEM_EXPORT macro
 # for making our public API symbols visible.
 include(GenerateExportHeader)
@@ -188,11 +166,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_BINARY_DIR}/exports)
 ################################################################################
 # Configure manual compiler flags based on CMake options
 ################################################################################
-
-if(MESHFEM_DISABLE_CXX11_ABI_GCC)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
-
 if(MESHFEM_WITH_IPC_TOOLKIT)
     target_compile_definitions(${PROJECT_NAME} PUBLIC -DMESHFEM_WITH_IPC_TOOLKIT)
     target_link_libraries(${PROJECT_NAME} PUBLIC ipc::toolkit)
