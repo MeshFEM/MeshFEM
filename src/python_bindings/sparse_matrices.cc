@@ -14,6 +14,14 @@ namespace py = pybind11;
 #include <MeshFEMSparse/Solvers/CatamariFactorizer.hh>
 #endif
 
+#if __APPLE__
+#include <MeshFEMSparse/Solvers/AccelerateFactorizer.hh>
+#endif
+
+#if MESHFEM_WITH_PARDISO || MESHFEM_WITH_MKL_PARDISO
+#include <MeshFEMSparse/Solvers/PardisoFactorizer.hh>
+#endif
+
 using namespace MeshFEM;
 
 PYBIND11_MODULE(sparse_matrices, m) {
@@ -254,6 +262,49 @@ PYBIND11_MODULE(sparse_matrices, m) {
           .def("setCollectIndefinitenessStats", &CatF::setCollectIndefinitenessStats, py::arg("collect") = true)
           .def("writeSupernodeStats", &CatF::writeSupernodeStats, py::arg("path"));
           ;
+    py::enum_<CatF::OrderingMethod>(pyCatF, "OrderingMethod")
+        .value("Catamari",             CatF::OrderingMethod::Catamari)
+        .value("CholmodNesdis",        CatF::OrderingMethod::CholmodNesdis)
+        .value("Metis",                CatF::OrderingMethod::Metis)
+        .value("AMD",                  CatF::OrderingMethod::AMD)
+        .value("Adaptive",             CatF::OrderingMethod::Adaptive)
+        .value("Scotch",               CatF::OrderingMethod::Scotch)
+        .value("AccelerateMetis",      CatF::OrderingMethod::AccelerateMetis)
+        .value("PardisoMetis",         CatF::OrderingMethod::PardisoMetis)
+        .value("PardisoParallelMetis", CatF::OrderingMethod::PardisoParallelMetis)
+        ;
+    pyCatF.def_readwrite("orderingMethod", &CatF::orderingMethod);
+#endif
+
+#if __APPLE__
+    using AF = AccelerateFactorizer;
+    py::class_<AF, CFB> pyAF(detail_module, "AccelerateFactorizer");
+    pyAF.def("getUseBlockAccel", &AF::getUseBlockAccel)
+        .def("setUseBlockAccel", &AF::setUseBlockAccel, py::arg("useBlockAccel"))
+        ;
+    py::enum_<AF::OrderingMethod>(pyAF, "OrderingMethod")
+        .value("Metis",      AF::OrderingMethod::Metis)
+        .value("AMD",        AF::OrderingMethod::AMD)
+        .value("Nesdis",     AF::OrderingMethod::Nesdis)
+        .value("CholmodAMD", AF::OrderingMethod::CholmodAMD)
+        ;
+    pyAF.def_readwrite("orderingMethod", &AF::orderingMethod);
+#endif
+
+#if MESHFEM_WITH_MKL_PARDISO || MESHFEM_WITH_PARDISO
+    using PF = PardisoFactorizer;
+    py::class_<PF, CFB> pyPF(detail_module, "PardisoFactorizer");
+    pyAF.def("getUseBlockAccel", &PF::getUseBlockAccel)
+        .def("setUseBlockAccel", &PF::setUseBlockAccel, py::arg("useBlockAccel"))
+        ;
+    py::enum_<PF::OrderingMethod>(pyPF, "OrderingMethod")
+        .value("Metis",         PF::OrderingMethod::Metis)
+        .value("AMD",           PF::OrderingMethod::AMD)
+        .value("ParallelMetis", PF::OrderingMethod::ParallelMetis)
+        .value("CholmodNesdis", PF::OrderingMethod::CholmodNesdis)
+        .value("CholmodAMD",    PF::OrderingMethod::CholmodAMD)
+        ;
+    pyPF.def_readwrite("orderingMethod", &PF::orderingMethod);
 #endif
 
     m.def("CholeskyFactorizer", [](CholeskyProvider p) { return make_cholesky_factorizer(p); }, py::arg("provider") = get_default_cholesky_provider());
