@@ -294,7 +294,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
 #if MESHFEM_WITH_MKL_PARDISO || MESHFEM_WITH_PARDISO
     using PF = PardisoFactorizer;
     py::class_<PF, CFB> pyPF(detail_module, "PardisoFactorizer");
-    pyAF.def("getUseBlockAccel", &PF::getUseBlockAccel)
+    pyPF.def("getUseBlockAccel", &PF::getUseBlockAccel)
         .def("setUseBlockAccel", &PF::setUseBlockAccel, py::arg("useBlockAccel"))
         ;
     py::enum_<PF::OrderingMethod>(pyPF, "OrderingMethod")
