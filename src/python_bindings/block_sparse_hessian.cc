@@ -66,7 +66,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
         .def("hasContiguousBlocks", &BlockCSCHessianBase::hasContiguousBlocks, "Whether the blocks are stored contiguously in memory")
 
         .def("clone", [](const BlockCSCHessianBase &H) -> std::shared_ptr<BlockCSCHessianBase> { return H.clone(); })
-        .def("mergeSparsityPattern", &BlockCSCHessianBase::mergeSparsityPattern, py::arg("other"))
+        .def("mergeSparsityPattern", [](BlockCSCHessianBase &H, const BlockCSCHessianBase &other) { H.mergeSparsityPattern(other); }, py::arg("other"))
 
         .def("setIdentity", &BlockCSCHessianBase::setIdentity, py::arg("preserveSparsity"))
 
