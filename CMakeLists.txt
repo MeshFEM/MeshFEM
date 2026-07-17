@@ -82,6 +82,10 @@ set(MESHFEMCORE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMCore.git" CACHE ST
 set(MESHFEMCORE_GIT_TAG "main" CACHE STRING "MeshFEMCore git revision")
 set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
 set(MESHFEMSPARSE_GIT_TAG "main" CACHE STRING "MeshFEMSparse git revision")
+set(ROTATIONOPTIMIZATION_GIT_REPOSITORY "https://github.com/EPFL-LGG/RotationOptimization.git" CACHE STRING "RotationOptimization git repository")
+set(ROTATIONOPTIMIZATION_GIT_TAG "b75f269e57cec86e40d8c9ab2fadecaad392774b" CACHE STRING "RotationOptimization git revision")
+set(OFFSCREENRENDERER_GIT_REPOSITORY "https://github.com/MeshFEM/OffscreenRenderer.git" CACHE STRING "OffscreenRenderer git repository")
+set(OFFSCREENRENDERER_GIT_TAG "e60c3e731fb41253bbe6291b9c233d907c8f0e9e" CACHE STRING "OffscreenRenderer git revision")
 
 meshfem_prepare_editable_repo(MeshFEMCore
     "${MESHFEM_EXTERNAL}/MeshFEMCore" "${MESHFEMCORE_GIT_TAG}")
@@ -145,7 +149,16 @@ include(sanitizers)
 # project so it does not configure its bundled Eigen test tree.
 include(MeshFEMCoreDependencies)
 
-add_subdirectory(3rdparty/RotationOptimization)
+if(NOT TARGET RotationOptimization)
+    meshfem_prepare_editable_repo(RotationOptimization
+        "${MESHFEM_EXTERNAL}/RotationOptimization" "${ROTATIONOPTIMIZATION_GIT_TAG}")
+    FetchContent_Declare(RotationOptimization
+        GIT_REPOSITORY ${ROTATIONOPTIMIZATION_GIT_REPOSITORY}
+        GIT_TAG        ${ROTATIONOPTIMIZATION_GIT_TAG}
+        SOURCE_DIR     ${MESHFEM_EXTERNAL}/RotationOptimization
+    )
+    FetchContent_MakeAvailable(RotationOptimization)
+endif()
 
 if(NOT DEFINED MESHFEMSPARSE_BUILD_TESTS)
     set(MESHFEMSPARSE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMSparse tests")
@@ -188,7 +201,14 @@ endif()
 add_subdirectory(src/python_bindings)
 
 if(MESHFEM_WITH_OFFSCREEN_RENDER)
-    add_subdirectory(3rdparty/OffscreenRenderer)
+    meshfem_prepare_editable_repo(OffscreenRenderer
+        "${MESHFEM_EXTERNAL}/OffscreenRenderer" "${OFFSCREENRENDERER_GIT_TAG}")
+    FetchContent_Declare(OffscreenRenderer
+        GIT_REPOSITORY ${OFFSCREENRENDERER_GIT_REPOSITORY}
+        GIT_TAG        ${OFFSCREENRENDERER_GIT_TAG}
+        SOURCE_DIR     ${MESHFEM_EXTERNAL}/OffscreenRenderer
+    )
+    FetchContent_MakeAvailable(OffscreenRenderer)
 endif()
 
 ################################################################################

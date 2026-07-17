@@ -60,6 +60,8 @@ compile_commands.json
 /3rdparty/Catch2/
 /3rdparty/MeshFEMCore/
 /3rdparty/MeshFEMSparse/
+/3rdparty/OffscreenRenderer/
+/3rdparty/RotationOptimization/
 /3rdparty/eigen/
 /3rdparty/json/
 /3rdparty/optional/

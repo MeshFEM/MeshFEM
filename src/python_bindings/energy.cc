@@ -20,14 +20,10 @@ namespace py = pybind11;
 #include <MeshFEM/EnergyDensities/MetricFitting.hh>
 #include <MeshFEM/EnergyDensities/CollapsePreventionEnergy.hh>
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
-#include <MeshFEM/EnergyDensities/IsotropicAutodiffEDensity.hh>
 
 #include "EnergyBinding.hh"
 
 using namespace MeshFEM;
-
-template<typename Real_, size_t Dim_>
-using CommonNeoHookeanAD = AutodiffEDensity<CommonNeoHookeanPsi, Real_, Dim_>;
 
 template<class WSP>
 py::class_<WSP>
