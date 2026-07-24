@@ -125,7 +125,7 @@ struct MESHFEM_EXPORT ElasticObject : public NewtonObjectiveTermBase, public New
     using NewtonObjectiveTermBase::gradient; // prevent hiding
     // Convenience method
     VXd gradient(bool updatedParametrization, VariableMask vmask = VariableMask::Defo) const {
-        VXd g = VXd::Zero(numVars());
+        VXd g = VXd::Zero(numVars(vmask));
         accumulateGradient(1.0, g, updatedParametrization, vmask);
         return g;
     }

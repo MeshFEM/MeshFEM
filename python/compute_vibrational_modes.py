@@ -10,18 +10,25 @@ class MassMatrixType(enum.Enum):
     FULL = 2
     LUMPED = 3
 
+def _to_scalar(A):
+    # Accept both the block `NewtonHessian` (which provides `toScalar`) and an
+    # already-scalar `SuiteSparseMatrix` (returned by objects whose own
+    # `hessian`/`massMatrix` bindings shadow the `ElasticObject` base bindings
+    # with the legacy scalar interface).
+    return A.toScalar() if hasattr(A, "toScalar") else A
+
 def compute_vibrational_modes(obj, fixedVars = [], mtype = MassMatrixType.FULL, n = 7, sigma=-0.001, updatedParametrization=True):
     """
     Compute the vibrational modes of an elastic object `obj`
     """
-    H = obj.hessian().toScalar()
+    H = _to_scalar(obj.hessian())
     M = None
 
     if (mtype != MassMatrixType.IDENTITY):
         objectMethods = dir(obj)
         if (mtype == MassMatrixType.FULL):
             if ("massMatrix" in objectMethods):
-                M = evalWithCustomArgs(obj.massMatrix, {'updatedParametrization': updatedParametrization}).toScalar()
+                M = _to_scalar(evalWithCustomArgs(obj.massMatrix, {'updatedParametrization': updatedParametrization}))
             else:
                 print("WARNING: object does not implement `massMatrix`; falling back to identity metric")
         elif (mtype == MassMatrixType.LUMPED):
@@ -43,17 +50,23 @@ def compute_vibrational_modes_from_matrices(H, fixedVars, n, sigma, M = None):
     (removing these rows/columns of the input matrices).
     """
     hasFixedVars = len(fixedVars) > 0
-    if hasFixedVars:
-        original_size = H.m
-        H.rowColRemoval(fixedVars)
-        if (isinstance(M, np.ndarray)): M = np.delete(M, fixedVars) # Lumped case
-        elif (M is not None):           M.rowColRemoval(fixedVars)
+    original_size = H.m
 
-    H_scipy = H.toSymmetryMode(sparse_matrices.SymmetryMode.NONE).toSciPy()
+    def to_scipy_full(A):
+        if isinstance(A, sparse_matrices.TripletMatrix):
+            A.reflectUpperTriangle()
+            if hasFixedVars: A.rowColRemoval(fixedVars)
+            return A.compressedColumn()
+        if hasFixedVars: A.rowColRemoval(fixedVars)
+        return A.toSymmetryMode(sparse_matrices.SymmetryMode.NONE).toSciPy()
+
+    H_scipy = to_scipy_full(H)
     M_scipy = None
     if (M is not None):
-        if (isinstance(M, np.ndarray)): M_scipy = scipy.sparse.diags(M) # Lumped case
-        else:                           M_scipy = M.toSymmetryMode(sparse_matrices.SymmetryMode.NONE).toSciPy()
+        if (isinstance(M, np.ndarray)): # Lumped case
+            M_scipy = scipy.sparse.diags(np.delete(M, fixedVars) if hasFixedVars else M)
+        else:
+            M_scipy = to_scipy_full(M)
 
     if (M_scipy is None): lambdas, modes = eigsh(H_scipy, n,            sigma=sigma, which='LM')
     else:                 lambdas, modes = eigsh(H_scipy, n, M=M_scipy, sigma=sigma, which='LM')

@@ -764,7 +764,8 @@ std::vector<Real> signedCurvature(const Curve &c) {
 // Get an arbitrary vector in the plane perpendicular to "t"
 template<typename Real_>
 Vec3_T<Real_> getPerpendicularVector(const Vec3_T<Real_> &t) {
-    if (std::abs(t[0]) < std::abs(t[1]))
+    using std::abs; // Unqualified call so ADL can find `abs` for autodiff scalar types.
+    if (abs(t[0]) < abs(t[1]))
         return Vec3_T<Real_>(1, 0, 0).cross(t).normalized();
     return Vec3_T<Real_>(0, 1, 0).cross(t).normalized();
 }
