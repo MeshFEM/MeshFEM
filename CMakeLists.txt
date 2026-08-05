@@ -80,8 +80,10 @@ endif()
 # TODO: change these to https once public.
 set(MESHFEMCORE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMCore.git" CACHE STRING "MeshFEMCore git repository")
 set(MESHFEMCORE_GIT_TAG "main" CACHE STRING "MeshFEMCore git revision")
-set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
-set(MESHFEMSPARSE_GIT_TAG "main" CACHE STRING "MeshFEMSparse git revision")
+# Temporarily points at the fork carrying the `autodiff-and-parallel-assembly-fixes`
+# branch; switch back to git@github.com:MeshFEM/MeshFEMSparse.git once merged upstream.
+set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:SamaraRen/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
+set(MESHFEMSPARSE_GIT_TAG "6ca0a0c48d9e09d12a4cb6452e19e6ce4265d4b5" CACHE STRING "MeshFEMSparse git revision")
 set(ROTATIONOPTIMIZATION_GIT_REPOSITORY "https://github.com/EPFL-LGG/RotationOptimization.git" CACHE STRING "RotationOptimization git repository")
 set(ROTATIONOPTIMIZATION_GIT_TAG "b75f269e57cec86e40d8c9ab2fadecaad392774b" CACHE STRING "RotationOptimization git revision")
 set(OFFSCREENRENDERER_GIT_REPOSITORY "https://github.com/MeshFEM/OffscreenRenderer.git" CACHE STRING "OffscreenRenderer git repository")
