@@ -41,7 +41,7 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
         F0 << e.node(1)->p - e.node(0)->p,
               e.node(2)->p - e.node(0)->p;
 
-        Eigen::JacobiSVD<M32> svd(F0, Eigen::ComputeThinV);
+        Eigen::JacobiSVD<M32> svd(F0, Eigen::ComputeFullV);
         auto referenceSigma = svd.singularValues();
         area = 0.5 * referenceSigma.prod();
         auto referenceSigmaInv = (1.0 / referenceSigma.array()).matrix();
@@ -103,29 +103,34 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
         return result;
     }
 
+    void updateInterpolatedReferenceCache(const LocalVars &x) {
+        auto F = computeJacobian(x, F0Inv);
+        Eigen::JacobiSVD<M2d> svd(F, Eigen::ComputeFullV); // Post-rotation `U` factor is irrelevant!
+        F0InvInterpDivSigma = F0Inv * svd.matrixV();
+        sigma = svd.singularValues();
+        bool needsFlip = svd.matrixV().determinant() < 0; // Since we ignored the U factor, we need to worry about the case det(V) = -1
+        if (needsFlip) {
+            F0InvInterpDivSigma.col(0).swap(F0InvInterpDivSigma.col(1));
+            std::swap(sigma[0], sigma[1]);
+        }
+
+        log_sigma = sigma.array().log().matrix();
+    }
+
     template<typename Real2 = Real> // Support autodiff wrt lambda
     Mat2_T<Real2> computeInterpolatedReference(Real2 lambda, const LocalVars &x) {
-        if (sigma[0] == -1) { // no cache
-            auto F = computeJacobian(x, F0Inv);
-            Eigen::JacobiSVD<M2d> svd(F, Eigen::ComputeFullV); // Post-rotation `U` factor is irrelevant!
-            F0InvInterpDivSigma = F0Inv * svd.matrixV();
-            sigma = svd.singularValues();
-            // M2d F_interp_inverse = svd.matrixV() * svd.singularValues().array().pow(lambda - 1).matrix().asDiagonal();
-            // F0InvInterp = F0Inv * F_interp_inverse;
-            bool needsFlip = svd.matrixV().determinant() < 0; // Since we ignored the U factor, we need to worry about the case det(V) = -1
-            if (needsFlip) {
-                F0InvInterpDivSigma.col(0).swap(F0InvInterpDivSigma.col(1));
-                std::swap(sigma[0], sigma[1]);
-            }
-
-            log_sigma = sigma.array().log().matrix();
-        }
+        if (sigma[0] == -1) // no cache
+            updateInterpolatedReferenceCache(x);
 
         return computeInterpolatedReference(lambda);
     }
 
     void setInterpolatedReference(NonADReal lambda, const LocalVars &x) { F0InvInterp = computeInterpolatedReference(lambda, x); }
     void setInterpolatedReference(NonADReal lambda)                     { F0InvInterp = computeInterpolatedReference(lambda); } // Can only be called after the previous overload was called.
+    void rebaseInterpolatedReference(Real lambda, const LocalVars &x) {
+        updateInterpolatedReferenceCache(x);
+        F0InvInterp = computeInterpolatedReference(lambda);
+    }
 
     Real energy(const LocalVars &x) const {
         M2d F = computeJacobian(x);
@@ -435,6 +440,14 @@ struct ContinuationParamMeshEnergy : public SDPME {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ContinuationParamMeshEnergy.setInterpolatedReference");
         parallel_for_range(elements.size(),
             [&](size_t i) { elements[i].setInterpolatedReference(lambda, extractLocalVars(i, x)); },
+            /* grain_size = */ 100, /* parallelism_threshold = */ 1000);
+        m_lambda = lambda;
+    }
+
+    void rebaseInterpolatedReference(Real lambda, const VXd &x) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ContinuationParamMeshEnergy.rebaseInterpolatedReference");
+        parallel_for_range(elements.size(),
+            [&](size_t i) { elements[i].rebaseInterpolatedReference(lambda, extractLocalVars(i, x)); },
             /* grain_size = */ 100, /* parallelism_threshold = */ 1000);
         m_lambda = lambda;
     }
