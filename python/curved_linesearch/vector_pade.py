@@ -16,6 +16,26 @@ def _polyval_vector_desc(coeff_desc, t):
         y = y * t + c
     return y
 
+def _powers_desc_cumprod(deg, t):
+    """Return [t**deg, t**(deg - 1), ..., t, 1] using cumulative products."""
+    powers_asc = np.empty(deg + 1)
+    powers_asc[0] = 1.0
+    if deg > 0:
+        powers_asc[1:] = t
+        np.cumprod(powers_asc, out=powers_asc)
+    return powers_asc[::-1]
+
+def _polyval_scalar_desc_dot(coeff_desc, t):
+    coeff_desc = np.asarray(coeff_desc)
+    powers = _powers_desc_cumprod(len(coeff_desc) - 1, t)
+    return coeff_desc @ powers
+
+
+def _polyval_vector_desc_dot(coeff_desc, t):
+    coeff_desc = np.asarray(coeff_desc)
+    powers = _powers_desc_cumprod(coeff_desc.shape[0] - 1, t)
+    return powers @ coeff_desc
+
 @benchmark.benchmarkit
 def hermite_pade_ls(
     x_coeffs: np.ndarray,
@@ -24,6 +44,8 @@ def hermite_pade_ls(
     proj_rank = None,
     basis = None,
     rcond = None,
+    accurate_proj = False,
+    rho = 1.0
 ):
     """
     Least-squares 'type II' shared-denominator rational approximant for a vector Taylor series.
@@ -45,11 +67,13 @@ def hermite_pade_ls(
         Denominator degree (q has degree <= m, with q(0)=1).
     proj_rank : int | None
         If set, solve LS in a reduced subspace of dimension proj_rank using an SVD basis.
-        Recommended for large n.
-    basis : (n, r) array | None
-        Optional orthonormal basis U to project onto; overrides proj_rank if provided.
     rcond : float | None
         Passed to np.linalg.lstsq.
+    accurate_proj : bool
+        If True, do the initial projection to an orthonormal basis via a QR an eigendecomposition the Gram matrix.
+        This is more accurate but slower.
+    rho : float
+        Optional reweighting factor for blow rows of the LS system. Default 1.0 (no reweighting).
 
     Returns
     -------
@@ -70,75 +94,93 @@ def hermite_pade_ls(
     if p + m > K:
         raise ValueError(f"Need K >= p+m. Got K={K}, p+m={p+m}.")
 
-    # Choose projection basis U (n x r), r <= n.
-    if basis is not None:
-        U = np.asarray(basis)
-        if U.ndim != 2 or U.shape[0] != n:
-            raise ValueError("basis must have shape (n, r).")
-        r = U.shape[1]
-    elif proj_rank is not None and proj_rank < n:
-        # Build basis from SVD of coefficient matrix (columns span typical coefficient subspace).
-        # Using economy SVD on (K+1) x n; for large n this is still usually OK because K is modest.
-        # If K is huge, consider providing a basis yourself.
-        X = x_coeffs  # (K+1, n)
-        # SVD of X: X = Ux S Vt; take Vt[:r].T as basis in R^n.
-        _, _, Vt = np.linalg.svd(X, full_matrices=False)
-        r = int(proj_rank)
-        U = Vt[:r].T  # (n, r), orthonormal
-    else:
-        U = None
-        r = n
+    # For efficiency, we first construct an orthonormal basis for the (K + 1)-dimensional
+    # space spanned by `x_coeffs` and do subsequent computations on coefficients in that basis.
+    # This is fastest to do by an eigendecomposition of `x_coeffs @ x_coeffs.T`, though
+    # though this is less accurate due to squaring the condition number.
+    # If `accurate_proj` is True, we do a QR of `x_coeffs.T` instead.
+    with benchmark.ScopedTimer('Initial projection'):
+        if accurate_proj:
+            x_coeffs_proj = np.linalg.qr(x_coeffs.T, mode='r').T
+        else:
+            er = np.linalg.eigh(x_coeffs @ x_coeffs.T)
+            x_coeffs_proj = er.eigenvectors * np.sqrt(np.maximum(er.eigenvalues, 0))[np.newaxis, :]
 
-    # Project coefficients: y_k = U^T x_k if U provided, else y_k=x_k.
-    if U is None:
-        y_coeffs = x_coeffs
+    # The user may have requested a further projection to a lower-dimensional
+    # subspace of dimension `proj_rank` using an SVD basis...
+    if proj_rank is not None and proj_rank < x_coeffs_proj.shape[1]:
+        benchmark.start_timer_section(f'svd {x_coeffs_proj.shape}')
+        _, _, Vt = np.linalg.svd(x_coeffs_proj, full_matrices=False)
+        benchmark.stop_timer_section(f'svd {x_coeffs_proj.shape}')
+        r = int(proj_rank)
+        y_coeffs = x_coeffs_proj @ Vt[:r].T
     else:
-        y_coeffs = x_coeffs @ U  # (K+1, r)
+        y_coeffs = x_coeffs_proj
 
     # Assemble LS system: for k=p+1..p+m, enforce c_k(q)=0 in LS sense
     # where c_k(q) = x_k + sum_{j=1}^m q_j x_{k-j}.
-    #
-    # Move x_k to RHS: sum_{j=1}^m q_j x_{k-j} ≈ -x_k.
-    rows = []
-    rhs = []
-    for kk in range(p + 1, p + m + 1):
-        # Build block row: [x_{kk-1}, x_{kk-2}, ..., x_{kk-m}] (each is r-dim)
-        # so that sum_j q_j x_{kk-j}.
-        row_blocks = []
-        for j in range(1, m + 1):
-            row_blocks.append(y_coeffs[kk - j])  # (r,)
-        rows.append(np.stack(row_blocks, axis=1))  # (r, m)
-        rhs.append(-y_coeffs[kk])                  # (r,)
+    # Move x_k to RHS: sum_{j=1}^m q_j x_{k-j} \approx -x_k.
+    # TODO: try a more robust SVD approach analogous to the robust scale Padé algorithm
+    # of [Gonnet, Guttel, and Trefethen, 2013] (the only difference for the vector
+    # valued version is that each row of the `C` matrix constructed in the scalar
+    # algorithm becomes block row of size `r = proj_rank`.)
+    with benchmark.ScopedTimer('build sys'):
+        rows = []
+        rhs = []
+        for kk in range(p + 1, p + m + 1):
+            scale = rho ** kk # match reweighted version from Bonizzoni et al.
+            # Build block row: [x_{kk-1}, x_{kk-2}, ..., x_{kk-m}] (each is r-dim)
+            # so that sum_j q_j x_{kk-j}.
+            row_blocks = []
+            for j in range(1, m + 1):
+                row_blocks.append(scale * y_coeffs[kk - j]) # (r,)
+            rows.append(np.stack(row_blocks, axis=1))       # (r, m)
+            rhs.append(-scale * y_coeffs[kk])               # (r,)
 
-    A = np.concatenate(rows, axis=0)  # (m*r, m)
-    b = np.concatenate(rhs, axis=0)   # (m*r,)
+        A = np.concatenate(rows, axis=0)  # (m*r, m)
+        b = np.concatenate(rhs, axis=0)   # (m*r,)
 
-    q_tail, *_ = lstsq(A, b, rcond=rcond)  # (m,)
-    q = np.empty(m + 1, dtype=x_coeffs.dtype)
-    q[0] = 1
-    q[1:] = q_tail
+    with benchmark.ScopedTimer('lstsq'):
+        q_tail, *_ = lstsq(A, b, rcond=rcond)  # (m,)
 
-    # Compute numerator coefficients a_k = c_k(q) for k=0..p using original (unprojected) x_coeffs.
-    a = np.zeros((p + 1, n), dtype=x_coeffs.dtype)
-    for k in range(0, p + 1):
-        acc = x_coeffs[k].copy()  # q0 * x_k
-        jmax = min(m, k)
-        for j in range(1, jmax + 1):
-            acc += q[j] * x_coeffs[k - j]
-        a[k] = acc
+        q = np.empty(m + 1, dtype=x_coeffs.dtype)
+        q[0] = 1
+        q[1:] = q_tail
+        q_desc = q[::-1]  # (m+1,) descending
 
-    # Provide evaluation function using Horner.
-    # Convert coefficients to descending order for Horner.
-    q_desc = q[::-1]  # (m+1,) descending
-    a_desc = a[::-1]  # (p+1, n) descending
+    # Construct the high-dimensional numerator coefficients a_k.
+    # Note: when the number of evaluations will be small (fewer than p)
+    # it is better to do the underlying evaluation in terms of coefficients wrt
+    # the small `x_coeffs` basis and then combine the `x_coeffs` at the end.
+    with benchmark.ScopedTimer('postprocess'):
+        # Compute numerator coefficients a_k = c_k(q) for k=0..p using original (unprojected) x_coeffs.
+        if True:
+            a_components = np.zeros((p + 1, x_coeffs.shape[0]), dtype=x_coeffs.dtype)
+            for k in range(0, p + 1):
+                j_max = min(k, m)
+                a_components[k, (k - j_max):(k + 1)] = q_desc[(m - j_max):]
+            a = a_components @ x_coeffs # one big matrix multiply to get a_k in original basis (albeit with a bunch of zeros in a_components)
+        else:
+            a = np.empty((p + 1, n), dtype=x_coeffs.dtype)
+            for k in range(0, p + 1):
+                # acc = x_coeffs[k].copy()  # q0 * x_k
+                # for j in range(1, min(k, m) + 1):
+                #     acc += q[j] * x_coeffs[k - j]
+                # a[k] = acc
+                j_max = min(k, m)
+                a[k] = x_coeffs[(k - j_max):(k + 1)].T @ q_desc[(m - j_max):]  # vectorized version
 
-    def eval_fn(t: float):
-        denom = _polyval_scalar_desc(q_desc, t)
-        if denom == 0:
-            # Return inf in a predictable way.
-            return np.full((n,), np.inf, dtype=a.dtype)
-        numer = _polyval_vector_desc(a_desc, t)
-        return numer / denom
+        # Provide evaluation function using Horner.
+        # Convert coefficients to descending order for Horner.
+        a_desc = a[::-1]  # (p+1, n) descending
+
+        def eval_fn(t: float):
+            denom = _polyval_scalar_desc(q_desc, t)
+            if denom == 0:
+                # Return inf in a predictable way.
+                return np.full((n,), np.inf, dtype=a.dtype)
+            numer = _polyval_vector_desc_dot(a_desc, t)
+            return numer / denom
 
     return q, a, eval_fn
 

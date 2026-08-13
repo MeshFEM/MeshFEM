@@ -28,16 +28,35 @@ def ground_truth_flow(optimizer, step_size, grad_tol = 1e-6, x_init = None, max_
     prob.setVars(x_init)
     return np.array([fv.reshape(-1, 2) for fv in flow_vertices])
 
+# def eval_trajectory_taylor(x_0, coeffs, alphas):
+#     result = []
+#     degree = len(coeffs)
+#     # print([np.linalg.norm(c) for c in coeffs])
+#     for a in alphas:
+#         x = x_0.copy()
+#         for i in range(degree):
+#             x += coeffs[i] * a**(i + 1)
+#         result.append(x.reshape(-1, 2))
+#     return np.array(result)
+
 def eval_trajectory_taylor(x_0, coeffs, alphas):
-    result = []
-    degree = len(coeffs)
-    # print([np.linalg.norm(c) for c in coeffs])
-    for a in alphas:
-        x = x_0.copy()
-        for i in range(degree):
-            x += coeffs[i] * a**(i + 1)
-        result.append(x.reshape(-1, 2))
-    return np.array(result)
+    """
+    Evaluate x_0 + sum_i coeffs[i] * alpha**(i + 1) for each alpha.
+    x_0:    shape (n,)
+    coeffs: shape (degree, n)
+    alphas: shape (m,)
+    returns: shape (m, n // 2, 2)
+    """
+    x_0 = np.asarray(x_0)
+    coeffs = np.asarray(coeffs)
+    alphas = np.asarray(alphas)
+    if (len(coeffs) == 0): return [x_0.copy() for a in alphas]
+
+    degree = coeffs.shape[0]
+    powers = alphas[:, None] ** np.arange(1, degree + 1)
+
+    x = x_0 + powers @ coeffs
+    return x.reshape(len(alphas), -1, 2)
 
 def eval_trajectory_logspiral(x_0, coeffs, alphas):
     degree = len(coeffs)
@@ -113,12 +132,12 @@ def eval_trajectory_componentwise_pade(x_0, coeffs, alphas):
     return np.transpose(result, (2, 0, 1))
 
 import vector_pade
-def eval_trajectory_vector_pade(x_0, coeffs, alphas):
+def eval_trajectory_vector_pade(x_0, coeffs, alphas, proj_rank=11, rho=1.75):
     degree = len(coeffs)
     if (degree < 2):
         return np.array([(x_0 + coeffs[0] * a).reshape(-1, 2) for a in alphas])
     an = np.vstack([x_0.ravel(), coeffs])
     deg_q = degree // 2
     deg_p = degree - deg_q
-    dc, nc, f = vector_pade.hermite_pade_ls(an, deg_p, deg_q)
+    dc, nc, f = vector_pade.hermite_pade_ls(an, deg_p, deg_q, proj_rank=proj_rank, rho=rho)
     return np.array([f(a).reshape(-1, 2) for a in alphas])
