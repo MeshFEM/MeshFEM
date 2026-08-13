@@ -120,6 +120,7 @@ PYBIND11_MODULE(continuation_parametrization, m)
 
     bindMeshEnergy<ContinuationParamMeshEnergy>("symmetric_dirichlet_param", m, detail)
         .def("setInterpolatedReference", &ContinuationParamMeshEnergy::setInterpolatedReference, py::arg("lambda"), py::arg("x"))
+        .def("rebaseInterpolatedReference", &ContinuationParamMeshEnergy::rebaseInterpolatedReference, py::arg("lambda"), py::arg("x"))
         .def("computeTaylorCoefficients", &ContinuationParamMeshEnergy::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6)
         .def("computeTaylorCoefficientsArclen", &ContinuationParamMeshEnergy::computeTaylorCoefficientsArclen, py::arg("hessianFactorization"), py::arg("degree") = 6)
         ;
