@@ -419,15 +419,15 @@ struct ContinuationParamMeshEnergy : public SDPME {
 
         // std::cout << "new rigidTrans: " << rhs.colwise().mean() << std::endl;
 
-        // Remove rigid rotation.
-        VXd x = getNVars().getVars();
-        auto pos = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(x.data(), nv, 2);
+        // // Remove rigid rotation.
+        // VXd x = getNVars().getVars();
+        // auto pos = Eigen::Map<Eigen::Matrix<Real, Eigen::Dynamic, 2, Eigen::RowMajor>>(x.data(), nv, 2);
 
-        VXd rigidRotMode(x.size());
-        for (int i = 0; i < nv; ++i) {
-            rigidRotMode.segment<2>(2 * i) << -pos(i, 1), pos(i, 0);
-        }
-        g -= rigidRotMode * (rigidRotMode.dot(g) / rigidRotMode.squaredNorm());
+        // VXd rigidRotMode(x.size());
+        // for (int i = 0; i < nv; ++i) {
+        //     rigidRotMode.segment<2>(2 * i) << -pos(i, 1), pos(i, 0);
+        // }
+        // g -= rigidRotMode * (rigidRotMode.dot(g) / rigidRotMode.squaredNorm());
 #endif
     }
 
