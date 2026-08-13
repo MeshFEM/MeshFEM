@@ -19,7 +19,7 @@ import extra_utils
 @benchmark.benchmarkit
 def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, post_step_cb = None,
                       grad_tol=1e-6, newton_step_tol=1e-5, max_iters=200, 
-                      x_init = None, verbose=False, max_extraNewton_stop_counter=None):
+                      x_init = None, verbose=False, max_extraNewton_stop_counter=np.inf):
     prob = opt.get_problem()
     flow_vertices = []
 
@@ -38,9 +38,8 @@ def newton_extrapolate(opt, extrapolator, linesearch_func, pre_step_cb = None, p
         if np.linalg.norm(g) < grad_tol:
             break
         # stop extrapolation
-        if max_extraNewton_stop_counter is not None:
-            if newton_extra_stop_count > max_extraNewton_stop_counter:
-                break
+        if newton_extra_stop_count > max_extraNewton_stop_counter:
+            break
         
         if pre_step_cb is not None and not firstTime: 
             with benchmark.ScopedTimer('Callback'):
@@ -118,7 +117,7 @@ class LineSearchBase:
             max_alpha = min(max_alpha, self.step_limiter.eval(x, d))
         return self._linesearch_impl(f, max_alpha, f0, df0)
 
-    def _linesearch_impl(self, f, max_alpha, f0):
+    def _linesearch_impl(self, f, max_alpha, f0, df0):
         raise Exception('_linesearch_impl must be implemented in derived class')
 
 class BruteForceLinesearch(LineSearchBase):
@@ -154,7 +153,7 @@ class ExpLinesearch(LineSearchBase):
         self.max_doublings = int(max_doublings)
         self.max_bin_iters = int(max_bin_iters)
 
-    def _linesearch_impl(self, f, max_alpha):
+    def _linesearch_impl(self, f, max_alpha, f0, df0):
         max_alpha = float(max_alpha)
         step = self.alpha_step_size
         if max_alpha <= 0:

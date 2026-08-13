@@ -8,6 +8,34 @@ def get_ax(ax=None):
     ax.set_axis_off()
     return ax
 
+@benchmark.benchmarkit
+def plot_boundary_edges(V, E, edge_color=[0.5, 0.5, 0.5], lw=0.5, alpha=1.0, zorder=1, ax=None):
+    """
+    Draw only boundary edges of a planar mesh.
+
+    Parameters
+    ----------
+    V : (n, d) array
+        Vertex positions. Only the first two columns are used.
+    E : (m, 2) int array
+        Indexed edge list.
+    """
+    ax = get_ax(ax)
+
+    segments = V[np.asarray(E), :2]
+    lc = matplotlib.collections.LineCollection(
+        segments,
+        colors=[edge_color],
+        linewidths=lw,
+        alpha=alpha,
+        zorder=zorder,
+    )
+    ax.add_collection(lc)
+    ax.autoscale_view()
+    ax.set_aspect("equal")
+    return ax
+
+@benchmark.benchmarkit
 def plot_mesh(V, F, face_color=[0.9, 0.9, 0.9], edge_color=[0.5, 0.5, 0.5], lw=0.05, alpha=1.0, zorder=0, ax=None):
     pc = matplotlib.collections.PolyCollection(
         V[F, 0:2], facecolors=face_color, edgecolors=edge_color, lw=lw, alpha=alpha, zorder=zorder)
@@ -119,7 +147,7 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     elements = nf.mesh.elements()
     
 #     fig, axs = plt.subplots(1, 2, figsize=(10, 5), gridspec_kw={'width_ratios': [1, 1]})
-    fig = plt.figure(figsize=(10, 5))
+    fig = plt.figure(figsize=(12, 6))
 
     # [left, bottom, width, height] in figure coordinates
     ax_left  = fig.add_axes([0.08, 0.15, 0.40, 0.75])
@@ -128,7 +156,8 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     
     plt.sca(axs[0])
     # plot_mesh(fv[0].reshape(-1,2), elements, zorder=-1, face_color='white', ax=axs[0])
-    plot_mesh(fv[frame].reshape(-1,2), elements, ax=axs[0])
+    # plot_mesh(fv[frame].reshape(-1,2), elements, ax=axs[0])
+    plot_boundary_edges(fv[frame], nf.mesh.boundaryElements(), ax=axs[0])
     trajectory_slice = slice(None)
     if corners_only:
         trajectory_slice = detect_corners(fv[-1], elements)
@@ -159,7 +188,7 @@ def flow_frame(frame, optimizer, flow_uvs, extrapolation_dist, constant_speed,
     else:
         d_coeffs = nf.computeTaylorCoefficients(opt.hessian_factorization, max_degree, proj)
         
-    alphas = np.linspace(0, extrapolation_dist, 100)
+    alphas = np.linspace(0, extrapolation_dist, 50)
     trajectories, labels = [], []
     if extrapolation_method_list is None:
         for deg in degree_list:

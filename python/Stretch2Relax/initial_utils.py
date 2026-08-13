@@ -40,8 +40,9 @@ def initialization_scale(m, uv, param, method):
     if (method == 'psd'):
         # Solve for the scale factor that makes all per-element Symmetric Dirichlet Hessians PSD
         s = 1
+        ej = param.elementJacobians()
         for i in range(param.numElements()):
-            F = param.elementJacobian(i)
+            F = ej[i]
             I3 = np.linalg.det(F) # scales like s^2
             I2 = F.ravel().dot(F.ravel()) # scales like s^2
             I3Sq = I3 * I3
