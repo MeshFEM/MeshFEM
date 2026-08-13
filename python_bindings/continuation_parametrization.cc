@@ -18,5 +18,6 @@ PYBIND11_MODULE(continuation_parametrization, m)
         .def("setInterpolatedReference", &ContinuationParamMeshEnergy::setInterpolatedReference, py::arg("lambda"), py::arg("x"))
         .def("computeTaylorCoefficients", &ContinuationParamMeshEnergy::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6)
         .def("computeTaylorCoefficientsArclen", &ContinuationParamMeshEnergy::computeTaylorCoefficientsArclen, py::arg("hessianFactorization"), py::arg("degree") = 6)
+        .def("elementJacobians", &ContinuationParamMeshEnergy::elementJacobians);
         ;
 }

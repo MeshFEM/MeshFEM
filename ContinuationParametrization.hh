@@ -149,28 +149,6 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
         return result;
     }
 
-    template<typename Real2, typename Real3> // Support autodiff
-    auto gradient(const TriCornerUVs<Real2> &x, const Vec2_T<Real3> &coeff, double area) const {
-        Mat2_T<Real2> FDivSigma = computeJacobian(x, F0InvInterpDivSigma);
-        Mat2_T<Real3> F;
-        F(0, 0) = FDivSigma.coeffRef(0, 0) * coeff[0];
-        F(1, 0) = FDivSigma.coeffRef(1, 0) * coeff[0];
-        F(0, 1) = FDivSigma.coeffRef(0, 1) * coeff[1];
-        F(1, 1) = FDivSigma.coeffRef(1, 1) * coeff[1];
-
-        auto F0Inv_ = F0InvInterp * coeff.asDiagonal();
-
-        using ADType = typename decltype(F)::Scalar;
-        Mat2_T<ADType> Finv = F.inverse();
-        Mat2_T<ADType> gradF = (F - Finv.transpose() * (Finv * Finv.transpose()).eval()) * area;
-
-        VecN_T<ADType, 6> result;
-        Eigen::Map<Eigen::Matrix<ADType, 2, 3>> gradCornerUVs(result.data());
-        gradCornerUVs.template rightCols<2>() = gradF * F0Inv_.transpose(); // grad wrt edge vecs
-        gradCornerUVs.col(0) = -(gradCornerUVs.col(1) + gradCornerUVs.col(2));
-        return result;
-    }
-
     Gradient gradient(Real w, const LocalVars &x) const { return gradient(x, F0InvInterp, w * area); }
 
     M2d delta_denergy(const M2d &Finv, const M2d &FinvT_Finv, const M2d &Finv_FinvT, const M2d &dF) const{
@@ -474,6 +452,15 @@ struct ContinuationParamMeshEnergy : public SDPME {
         g += result;
     }
 #endif
+
+    using M2d = Eigen::Matrix<Real, 2, 2>;
+    std::vector<M2d> elementJacobians() const {
+        std::vector<M2d> result(elements.size());
+        parallel_for_range(elements.size(),
+            [&](size_t i) { result[i] = elements[i].computeJacobian(extractLocalVars(i)); },
+            /* grain_size = */ 100, /* parallelism_threshold = */ 1000);
+        return result;
+    }
 
 private:
     Real m_lambda = 1.0;
