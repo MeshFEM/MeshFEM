@@ -91,7 +91,8 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
         return result;
     }
 
-    // Assumes that `V` and `sigma` are already initialized...
+    // Assumes that `sigma` and `F0InvInterpDivSigma` are already initialized
+    // (`computeInterpolatedReference(lambda, x)` must be called first).
     template<typename Real2 = Real> // Support autodiff wrt lambda
     Mat2_T<Real2> computeInterpolatedReference(Real2 lambda) const {
         auto coeff = interpolatedReferenceScaleFactors(lambda);
@@ -103,7 +104,14 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
         return result;
     }
 
-    void updateInterpolatedReferenceCache(const LocalVars &x) {
+    // Interpolate each element's rest configuration between the current
+    // configuration corresponding to `x` (at `lambda = 0`) and the
+    // input mesh element shapes (corresponding to `lambda = 1`).
+    // After this method runs, the faster `computeInterpolatedReference(lambda)`
+    // overload can be called to evaluate other points along the same
+    // interpolation path.
+    template<typename Real2 = Real> // Support autodiff wrt lambda
+    Mat2_T<Real2> computeInterpolatedReference(Real2 lambda, const LocalVars &x) {
         auto F = computeJacobian(x, F0Inv);
         Eigen::JacobiSVD<M2d> svd(F, Eigen::ComputeFullV); // Post-rotation `U` factor is irrelevant!
         F0InvInterpDivSigma = F0Inv * svd.matrixV();
@@ -115,22 +123,12 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
         }
 
         log_sigma = sigma.array().log().matrix();
-    }
-
-    template<typename Real2 = Real> // Support autodiff wrt lambda
-    Mat2_T<Real2> computeInterpolatedReference(Real2 lambda, const LocalVars &x) {
-        if (sigma[0] == -1) // no cache
-            updateInterpolatedReferenceCache(x);
 
         return computeInterpolatedReference(lambda);
     }
 
     void setInterpolatedReference(NonADReal lambda, const LocalVars &x) { F0InvInterp = computeInterpolatedReference(lambda, x); }
     void setInterpolatedReference(NonADReal lambda)                     { F0InvInterp = computeInterpolatedReference(lambda); } // Can only be called after the previous overload was called.
-    void rebaseInterpolatedReference(Real lambda, const LocalVars &x) {
-        updateInterpolatedReferenceCache(x);
-        F0InvInterp = computeInterpolatedReference(lambda);
-    }
 
     Real energy(const LocalVars &x) const {
         M2d F = computeJacobian(x);
@@ -436,6 +434,12 @@ struct ContinuationParamMeshEnergy : public SDPME {
 #endif
     }
 
+    // Interpolate each element's rest configuration between the current
+    // configuration corresponding to `x` (at `lambda = 0`) and the
+    // input mesh element shapes (corresponding to `lambda = 1`).
+    // After this method runs, the faster `setInterpolatedReference(lambda)`
+    // overload can be called to evaluate other points along the same
+    // interpolation path.
     void setInterpolatedReference(Real lambda, const VXd &x) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("ContinuationParamMeshEnergy.setInterpolatedReference");
         parallel_for_range(elements.size(),
@@ -444,10 +448,10 @@ struct ContinuationParamMeshEnergy : public SDPME {
         m_lambda = lambda;
     }
 
-    void rebaseInterpolatedReference(Real lambda, const VXd &x) {
-        BENCHMARK_SCOPED_TIMER_SECTION timer("ContinuationParamMeshEnergy.rebaseInterpolatedReference");
+    void setInterpolatedReference(Real lambda) {
+        BENCHMARK_SCOPED_TIMER_SECTION timer("ContinuationParamMeshEnergy.setInterpolatedReference");
         parallel_for_range(elements.size(),
-            [&](size_t i) { elements[i].rebaseInterpolatedReference(lambda, extractLocalVars(i, x)); },
+            [&](size_t i) { elements[i].setInterpolatedReference(lambda); },
             /* grain_size = */ 100, /* parallelism_threshold = */ 1000);
         m_lambda = lambda;
     }

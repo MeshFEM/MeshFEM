@@ -119,8 +119,8 @@ PYBIND11_MODULE(continuation_parametrization, m)
     bindAttenuatedSymmetricDirichlet<APADIsotropicEDensity_Sigma<AttenuatedSymmetricDirichlet>>(energy, energyDetail, parametrization, parametrizationDetail);
 
     bindMeshEnergy<ContinuationParamMeshEnergy>("symmetric_dirichlet_param", m, detail)
-        .def("setInterpolatedReference", &ContinuationParamMeshEnergy::setInterpolatedReference, py::arg("lambda"), py::arg("x"))
-        .def("rebaseInterpolatedReference", &ContinuationParamMeshEnergy::rebaseInterpolatedReference, py::arg("lambda"), py::arg("x"))
+        .def("setInterpolatedReference", [](ContinuationParamMeshEnergy &cpme, double lambda, const Eigen::VectorXd &x) { cpme.setInterpolatedReference(lambda, x); }, py::arg("lambda"), py::arg("x"))
+        .def("setInterpolatedReference", [](ContinuationParamMeshEnergy &cpme, double lambda                          ) { cpme.setInterpolatedReference(lambda   ); }, py::arg("lambda"))
         .def("computeTaylorCoefficients", &ContinuationParamMeshEnergy::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6)
         .def("computeTaylorCoefficientsArclen", &ContinuationParamMeshEnergy::computeTaylorCoefficientsArclen, py::arg("hessianFactorization"), py::arg("degree") = 6)
         .def("elementJacobians", &ContinuationParamMeshEnergy::elementJacobians);
