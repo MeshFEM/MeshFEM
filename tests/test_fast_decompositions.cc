@@ -84,6 +84,25 @@ void test_eigs() {
     //     std::cout << "Problematic Q: " << std::endl << Q << std::endl << std::endl;
     // }
 
+    // Exactly diagonal inputs, in both orderings: the eigenvectors must be permuted to
+    // match the sorted eigenvalues, so a descending diagonal cannot pair with the identity.
+    {
+        const double vals[] = {3.0, -1.0, 0.0, 2.5, -4.25, 1e-13, -1e-13};
+        for (double d0 : vals) {
+            for (double d1 : vals) {
+                MNd A = MNd::Zero();
+                for (size_t j = 0; j < N; ++j) A(j, j) = (j == 0) ? d0 : d1;
+                MNd Q;
+                VNd lambda;
+                fast_decompositions::sym_eigensolver(A, lambda, Q);
+                REQUIRE((Q.transpose() * Q - MNd::Identity()).norm() < tol);
+                const double Anorm = A.norm();
+                REQUIRE((Q * lambda.asDiagonal() * Q.transpose() - A).norm() <= tol * std::max(Anorm, 1.0));
+                for (size_t j = 1; j < N; ++j) REQUIRE(lambda[j] >= lambda[j - 1]); // ascending, as documented
+            }
+        }
+    }
+
     static constexpr size_t numTests = 1e7; // increase this for more exhaustive but slower testing; has been tested at 1e9.
     for (size_t i = 0; i < numTests; ++i) {
         MNd A = MNd::Random();

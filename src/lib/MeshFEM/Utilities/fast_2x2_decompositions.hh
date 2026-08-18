@@ -53,7 +53,7 @@ bool sym_eigensolver(const Mat2_T<Real> &A, Vec2_T<Real> &lambda, Mat2_T<Real> &
 
     Vec2_T<Real> q0(-2 * b, a_minus_c + sqrt_d);
     Real q0_norm = q0.norm();
-    if ((b == 0) || (q0_norm == 0)) { Q.setIdentity(); return false; } // A is diagonal or the zero matrix...
+    if (q0_norm == 0) { Q.setIdentity(); return false; } // A is diagonal with A(0, 0) <= A(1, 1), or the zero matrix...
     q0 /= q0_norm;
     Q.col(0) = q0;
     Q.col(1) << -q0[1], q0[0];

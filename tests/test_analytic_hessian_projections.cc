@@ -35,7 +35,9 @@ void run_tests() {
 
         Real E = 1.0, nu;
         Real alpha = double(rand()) / RAND_MAX;
-        nu = (1 - alpha) * -0.99 + alpha * ((N == 3) ? 0.499 : 1);
+        // Note: both upper bounds stay strictly below the singularity of `lambdaFromENu`,
+        // which divides by (1 - 2 nu) in 3D and by (1 - nu^2) in 2D.
+        nu = (1 - alpha) * -0.99 + alpha * ((N == 3) ? 0.499 : 0.999);
         Real lambda = lambdaFromENu(E, nu, N == 3);
         Real mu     = muFromENu(E, nu);
 
