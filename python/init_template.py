@@ -5,6 +5,12 @@ import sys as _sys
 _sys.path.insert(0, '@PROJECT_SOURCE_DIR@/python')
 _sys.path.insert(0, '@PROJECT_SOURCE_DIR@/3rdparty/OffscreenRenderer/python')
 
+import os as _os
+if hasattr(_os, 'add_dll_directory'):
+    for _d in ['@PROJECT_SOURCE_DIR@/python']:
+        if _os.path.isdir(_d):
+            _os.add_dll_directory(_d)
+
 import sparse_matrices
 import energy
 import mesh

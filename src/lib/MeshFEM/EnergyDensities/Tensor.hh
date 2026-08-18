@@ -231,7 +231,8 @@ bool arePastEndIndices(size_t row, size_t col) {
 // will also allow more efficient contraction operations.
 template<int D, class GradType>
 struct VectorizedShapeFunctionJacobian {
-    static constexpr int N = GradType::RowsAtCompileTime;
+    enum : int { NGrad = GradType::RowsAtCompileTime };
+    static constexpr int N = NGrad;
 
     // Emulate part of Eigen's interface.
     // This also allows VectorizedShapeFunctionJacobian to

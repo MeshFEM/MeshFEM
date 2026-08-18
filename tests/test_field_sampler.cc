@@ -2,6 +2,7 @@
 #include <catch2/catch.hpp>
 #include <MeshFEM/FieldSampler.hh>
 #include <MeshFEM/FEMMesh.hh>
+#include <cstdlib>
 #include <vector>
 
 using namespace MeshFEM;
@@ -25,14 +26,14 @@ struct QueryPoint {
     // and codim = 2 corresponds to a query point on a vertex).
     template<class Mesh>
     void regenerate(const Mesh &m, size_t codim = 0) {
-        eidx = random() % m.numElements();
+        eidx = rand() % m.numElements();
 
         // Generate a barycentric coordinates of a random interior point
         bc = BaryCoords::Random().cwiseAbs();
 
         if (codim > 0) {
             assert(codim <= K);
-            size_t offset = size_t(random()) % (K + 1);
+            size_t offset = size_t(rand()) % (K + 1);
 
             for (size_t i = 0; i < codim; ++i)
                 bc[(offset + i) % (K + 1)] = 0;
@@ -56,7 +57,7 @@ struct TestPolynomial {
 
     using VNd = VectorND<N>;
     TestPolynomial() {
-        c = Real(random()) / RAND_MAX;
+        c = Real(rand()) / RAND_MAX;
         b.setRandom();
         if (Deg == 2) A.setRandom();
     }
@@ -152,7 +153,7 @@ void testBarycoords() {
     struct InteriorEdgePt {
         InteriorEdgePt(const Mesh::HEHandle<Mesh> &he) {
             const double margin = 1e-3;
-            double alpha = margin + (1 - 2 * margin) * (double(random()) / RAND_MAX);
+            double alpha = margin + (1 - 2 * margin) * (double(rand()) / RAND_MAX);
             p = (1 - alpha) * he.tail().node()->p + alpha * he.tip().node()->p;
             bc[(he.localIndex() + 1) % 3] = (1 - alpha); // tail BC
             bc[(he.localIndex() + 2) % 3] = alpha;       // tip  BC
@@ -168,7 +169,7 @@ void testBarycoords() {
             // Pick a random interior halfedge
             int hei = -1;
             while (hei == -1) {
-                hei = random() % m.numHalfEdges();
+                hei = rand() % m.numHalfEdges();
                 if (m.halfEdge(hei).isBoundary()) hei = -1;
             }
 
@@ -222,7 +223,7 @@ void testBarycoords() {
     // Barycoords test for points away from boundary edges
     {
         for (size_t t = 0; t < ntests; ++t) {
-            size_t bei = size_t(random()) % m.numBoundaryEdges();
+            size_t bei = size_t(rand()) % m.numBoundaryEdges();
             auto he = m.halfEdge(m.boundaryEdge(bei).volumeHalfEdge().index());
 
             InteriorEdgePt q(he);
@@ -253,7 +254,7 @@ void testBarycoords() {
             VNd n;
             size_t vi;
             while (true) {
-                vi = size_t(random()) % m.numVertices();
+                vi = size_t(rand()) % m.numVertices();
                 auto v = m.vertex(vi);
                 // Compute a "curvature normal" with a uniform Laplacian,
                 // averaging all the edge vectors. Then check that the one-ring

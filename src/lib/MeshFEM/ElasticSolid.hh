@@ -270,9 +270,10 @@ struct MESHFEM_EXPORT ElasticSolid : public ElasticObject<typename _EmbeddingSpa
             PerElementHessian H_e = elementHessian(ei, /* disableProjection = */ true);
             H_e.template triangularView<Eigen::Lower>() = H_e.transpose();
 
-            auto H_red = (m_translationOrthogonalComplementBasis.transpose() * H_e * m_translationOrthogonalComplementBasis).eval();
+            using HRed = Eigen::Matrix<Real, numElementLocalVars - N, numElementLocalVars - N>;
+            HRed H_red = m_translationOrthogonalComplementBasis.transpose() * H_e * m_translationOrthogonalComplementBasis;
 
-            Eigen::SelfAdjointEigenSolver<decltype(H_red)> Hes(H_red);
+            Eigen::SelfAdjointEigenSolver<HRed> Hes(H_red);
             result[ei] = Hes.eigenvalues()[0];
         }, 128, 256);
         return result;

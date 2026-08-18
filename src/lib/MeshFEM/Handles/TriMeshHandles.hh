@@ -5,8 +5,6 @@
 #include "Handle.hh"
 #include "Circulator.hh"
 
-// #undef interface // Needed when using MSVC not in standards-compliant mode.
-
 namespace MeshFEM {
 
 namespace _TriMeshHandles {

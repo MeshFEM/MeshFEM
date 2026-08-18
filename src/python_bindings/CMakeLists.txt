@@ -109,10 +109,56 @@ target_link_libraries(integration PUBLIC MeshFEM intel_pybind_14_hack)
 pybind11_add_module(mesh_energy NO_EXTRAS mesh_energy.cc)
 set_target_properties(mesh_energy PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(mesh_energy PUBLIC MeshFEM intel_pybind_14_hack)
-target_compile_options(mesh_energy PRIVATE -ftemplate-backtrace-limit=0)
+target_compile_options(mesh_energy PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-ftemplate-backtrace-limit=0>)
 
 # Create a `MeshFEM` python module that just sets the correct paths for
 # importing MeshFEM's individual pybind11 modules
 set(PYTHON_DEPLOY_DIR "${CMAKE_SOURCE_DIR}/python/MeshFEM")
 file(MAKE_DIRECTORY "${PYTHON_DEPLOY_DIR}")
 configure_file(${PROJECT_SOURCE_DIR}/python/init_template.py "${PYTHON_DEPLOY_DIR}/__init__.py")
+
+if(WIN32)
+    set(MESHFEM_PY_EXTRA_DLLS "")
+
+    if(BLAS_LIBRARIES MATCHES "mkl")
+        list(GET BLAS_LIBRARIES 0 _meshfem_blas_implib)
+        get_filename_component(_meshfem_blas_libdir "${_meshfem_blas_implib}" DIRECTORY)
+        get_filename_component(_meshfem_blas_prefix "${_meshfem_blas_libdir}" DIRECTORY)
+        # mkl_rt demand-loads a threading layer and an ISA kernel by name, so every
+        # candidate has to be here: MKL_THREADING_LAYER=SEQUENTIAL/TBB otherwise aborts at
+        # the first BLAS call. VML and the MPI/cluster layers are unreachable from here.
+        file(GLOB _meshfem_mkl_dlls
+            "${_meshfem_blas_prefix}/bin/mkl_*.dll"
+            "${_meshfem_blas_prefix}/bin/libiomp5md.dll")
+        list(FILTER _meshfem_mkl_dlls EXCLUDE REGEX "mkl_(blacs|scalapack|cdft|vml)")
+        if(NOT _meshfem_mkl_dlls MATCHES "mkl_rt")
+            message(FATAL_ERROR
+                "Found no mkl_rt*.dll under ${_meshfem_blas_prefix}/bin, deduced from "
+                "BLAS_LIBRARIES='${BLAS_LIBRARIES}'. MeshFEM.dll imports mkl_rt, so the "
+                "python modules would fail to import.")
+        endif()
+        list(APPEND MESHFEM_PY_EXTRA_DLLS ${_meshfem_mkl_dlls})
+    endif()
+
+    if(TARGET mimalloc)
+        get_target_property(_meshfem_mi_dir mimalloc BINARY_DIR)
+        if(_meshfem_mi_dir AND EXISTS "${_meshfem_mi_dir}/mimalloc-redirect.dll")
+            list(APPEND MESHFEM_PY_EXTRA_DLLS "${_meshfem_mi_dir}/mimalloc-redirect.dll")
+        else()
+            message(WARNING
+                "mimalloc-redirect.dll was not found next to the mimalloc target "
+                "(looked in '${_meshfem_mi_dir}'). mimalloc-relwithassert.dll normally "
+                "imports it, and if it does, the MeshFEM python modules will fail to "
+                "import with \"DLL load failed while importing <module>\". If the import "
+                "does fail, check this first.")
+        endif()
+    endif()
+
+    if(MESHFEM_PY_EXTRA_DLLS)
+        add_custom_command(TARGET mesh POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${MESHFEM_PY_EXTRA_DLLS} "${PROJECT_SOURCE_DIR}/python"
+            COMMAND_EXPAND_LISTS
+            COMMENT "Copying the MKL runtime next to the MeshFEM python modules")
+    endif()
+endif()

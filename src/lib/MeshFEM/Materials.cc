@@ -376,6 +376,14 @@ void Bounds::setFromJson(const nlohmann::json &config) {
 // Has the nice side-effect that only code using valid dimensions 2 and 3 links.
 ////////////////////////////////////////////////////////////////////////////////
 
+// g_bounds is shared by every material of a given type, so it is defined here and
+// exported rather than instantiated per module.
+template<size_t _N> typename   Isotropic<_N>::  IsotropicBounds   Isotropic<_N>::g_bounds;
+template<size_t _N> typename Orthotropic<_N>::OrthotropicBounds Orthotropic<_N>::g_bounds;
+
+template struct Isotropic<2>;
+template struct Isotropic<3>;
+
 template struct Orthotropic<2>;
 template struct Orthotropic<3>;
 

@@ -15,7 +15,7 @@ using namespace MeshFEM;
 
 template<typename _Real, size_t _Dimension>
 void bindTensors(py::module& module, py::module& detail_module) {
-    constexpr size_t N = _Dimension;
+    static constexpr size_t N = _Dimension;
     using ETensor = ElasticityTensor    <_Real, N>;
     using SMValue = SymmetricMatrixValue<_Real, N>;
     using SMF     = SymmetricMatrixField<_Real, N>;

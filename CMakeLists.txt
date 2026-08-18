@@ -13,6 +13,9 @@ if(POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
 endif()
 
+# Export compile flags (used for autocompletion of the C++ code)
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -77,10 +80,9 @@ if(NOT DEFINED MESHFEMCORE_BUILD_TESTS)
 endif()
 
 # Bring in required MeshFEM components
-# TODO: change these to https once public.
-set(MESHFEMCORE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMCore.git" CACHE STRING "MeshFEMCore git repository")
+set(MESHFEMCORE_GIT_REPOSITORY "https://github.com/MeshFEM/MeshFEMCore.git" CACHE STRING "MeshFEMCore git repository")
 set(MESHFEMCORE_GIT_TAG "main" CACHE STRING "MeshFEMCore git revision")
-set(MESHFEMSPARSE_GIT_REPOSITORY "git@github.com:MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
+set(MESHFEMSPARSE_GIT_REPOSITORY "https://github.com/MeshFEM/MeshFEMSparse.git" CACHE STRING "MeshFEMSparse git repository")
 set(MESHFEMSPARSE_GIT_TAG "main" CACHE STRING "MeshFEMSparse git revision")
 set(ROTATIONOPTIMIZATION_GIT_REPOSITORY "https://github.com/EPFL-LGG/RotationOptimization.git" CACHE STRING "RotationOptimization git repository")
 set(ROTATIONOPTIMIZATION_GIT_TAG "b75f269e57cec86e40d8c9ab2fadecaad392774b" CACHE STRING "RotationOptimization git revision")
@@ -102,8 +104,17 @@ list(APPEND CMAKE_MODULE_PATH ${meshfemcore_SOURCE_DIR}/cmake)
 list(REMOVE_DUPLICATES CMAKE_MODULE_PATH)
 include(MeshFEMCoreDownloadExternal)
 
-set(CMAKE_CXX_FLAGS_RELWITHASSERT        "-O3" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
-set(CMAKE_C_FLAGS_RELWITHASSERT          "-O3" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
+if(MSVC)
+    set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHASSERT Release RelWithDebInfo NoConfig None "")
+endif()
+
+if (MSVC)
+    set(MESHFEM_RELWITHASSERT_OPT "/O2")
+else()
+    set(MESHFEM_RELWITHASSERT_OPT "-O3")
+endif()
+set(CMAKE_CXX_FLAGS_RELWITHASSERT "${MESHFEM_RELWITHASSERT_OPT}" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
+set(CMAKE_C_FLAGS_RELWITHASSERT   "${MESHFEM_RELWITHASSERT_OPT}" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS_RELWITHASSERT    "" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
 set(CMAKE_SHARED_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
 set(CMAKE_MODULE_LINKER_FLAGS_RELWITHASSERT "" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
@@ -126,9 +137,6 @@ set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING "Choose the type of buil
 
 # Color output
 include(UseColors)
-
-# Export compile flags (used for autocompletion of the C++ code)
-set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 # CMake plugin for vscode
 include(CMakeToolsHelpers OPTIONAL)
@@ -160,6 +168,10 @@ if(NOT TARGET RotationOptimization)
     FetchContent_MakeAvailable(RotationOptimization)
 endif()
 
+# RotationOptimization FORCEs these back to -O3, so re-assert them after it.
+set(CMAKE_CXX_FLAGS_RELWITHASSERT "${MESHFEM_RELWITHASSERT_OPT}" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
+set(CMAKE_C_FLAGS_RELWITHASSERT   "${MESHFEM_RELWITHASSERT_OPT}" CACHE STRING "Flags used during RelWithAssert builds" FORCE)
+
 if(NOT DEFINED MESHFEMSPARSE_BUILD_TESTS)
     set(MESHFEMSPARSE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMSparse tests")
 endif()
@@ -184,8 +196,15 @@ endif()
 # Allow the user's PYTHON_EXECUTABLE environment variable influence the python
 # we compile for (without making them pass `-DPYTHON_EXECUTABLE=...` to `cmake`
 if (DEFINED ENV{PYTHON_EXECUTABLE})
-    set(PYTHON_EXECUTABLE "$ENV{PYTHON_EXECUTABLE}" CACHE INTERNAL "Python executable for which to build pybind11 bindings")
-    #message("Set python executable to ${PYTHON_EXECUTABLE}")
+    file(TO_CMAKE_PATH "$ENV{PYTHON_EXECUTABLE}" MESHFEM_ENV_PYTHON)
+    set(PYTHON_EXECUTABLE "${MESHFEM_ENV_PYTHON}" CACHE INTERNAL "Python executable for which to build pybind11 bindings")
+    if (NOT DEFINED Python_EXECUTABLE)
+        set(Python_EXECUTABLE "${MESHFEM_ENV_PYTHON}" CACHE FILEPATH "Python executable for pybind11 bindings")
+    endif()
+    if (NOT DEFINED Python3_EXECUTABLE)
+        set(Python3_EXECUTABLE "${MESHFEM_ENV_PYTHON}" CACHE FILEPATH "Python executable for pybind11 bindings")
+    endif()
+    unset(MESHFEM_ENV_PYTHON)
 endif()
 
 # Download pybind dependency when pybind11 is missing

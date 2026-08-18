@@ -64,7 +64,7 @@ private:
 
 // Base class for variable materials
 template<size_t _N, template<size_t> class _Mat, size_t _NVars>
-struct MESHFEM_EXPORT VariableMaterial {
+struct VariableMaterial {
     typedef ElasticityTensor<Real, _N> ETensor;
     static constexpr size_t numVars = _NVars;
 
@@ -102,7 +102,7 @@ struct MESHFEM_EXPORT VariableMaterial {
 
 // Var 0: Young's modulus, var 1: Poisson ratio
 template<size_t _N>
-struct MESHFEM_EXPORT Isotropic : public VariableMaterial<_N, Isotropic, 2> {
+struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     static constexpr size_t N = _N;
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
@@ -257,12 +257,9 @@ struct MESHFEM_EXPORT Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     };
 private:
     friend Base;
-    static IsotropicBounds g_bounds;
+    static MESHFEM_EXPORT_DATA IsotropicBounds g_bounds;
 };
 
-// Static variable needs to be explicitly defined...
-template<size_t _N>
-typename Isotropic<_N>::IsotropicBounds Isotropic<_N>::g_bounds;
 
 // Axis-aligned orthotropic material.
 // 2D: 4 variables
@@ -275,7 +272,7 @@ typename Isotropic<_N>::IsotropicBounds Isotropic<_N>::g_bounds;
 // Vars 6..8: Shear ratios   (YZ, ZX, XY)
 size_t constexpr nOrthotropicVars(size_t n) { return (n == 3) ? 9 : 4; }
 template<size_t _N>
-struct MESHFEM_EXPORT Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_N)> {
+struct Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_N)> {
     static constexpr size_t N = _N;
     typedef ElasticityTensor<Real, _N> ETensor;
     typedef Eigen::Matrix<Real, flatLen(_N), 1> FlattenedSymmetricMatrix;
@@ -395,12 +392,9 @@ struct MESHFEM_EXPORT Orthotropic : public VariableMaterial<_N, Orthotropic, nOr
     };
 private:
     friend Base;
-    static OrthotropicBounds g_bounds;
+    static MESHFEM_EXPORT_DATA OrthotropicBounds g_bounds;
 };
 
-// Static variable needs to be explicitly defined...
-template<size_t _N>
-typename Orthotropic<_N>::OrthotropicBounds Orthotropic<_N>::g_bounds;
 
 template<size_t _N>
 struct MESHFEM_EXPORT Constant {
