@@ -8,7 +8,9 @@ template<class A, class B>
 void requireApproxEqual(const A &a, const B &b) {
     for (int i = 0; i < a.rows(); i++) {
         for (int j = 0; j < a.cols(); j++) {
-            REQUIRE(a(i, j) == Approx(b(i, j)).epsilon(1e-4));
+            // Note: the margin is needed for entries that are analytically zero, where the
+            // relative epsilon alone degenerates into a test for exact equality.
+            REQUIRE(a(i, j) == Approx(b(i, j)).epsilon(1e-4).margin(1e-10));
         }
     }
 }

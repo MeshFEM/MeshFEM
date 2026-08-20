@@ -61,6 +61,7 @@
 
 #include <cmath>
 #include <MeshFEMCore/Types.hh>
+#include <MeshFEMSparse/Utilities/argsort.hh>
 
 namespace MeshFEM {
 
@@ -195,6 +196,16 @@ void sym_evecs_from_evals(const Mat3_T<Real> &M, const Vec3_T<Real> &evals, Mat3
     Q.col(third_idx) = q_0.cross(q_1);
 }
 
+// (lambda, Q) for a matrix that is already (numerically) diagonal, with the eigenvalues
+// sorted as the general path sorts them and Q permuted to match.
+template<bool Descending, typename Real>
+void diagonal_eigendecomposition(const Mat3_T<Real> &A, Vec3_T<Real> &lambda, Mat3_T<Real> &Q) {
+    std::array<Real, 3> diag = { A(0, 0), A(1, 1), A(2, 2) };
+    auto order = argsort<Descending>(diag);
+    Q.setZero();
+    for (int k = 0; k < 3; ++k) { lambda[k] = diag[order[k]]; Q(order[k], k) = 1; }
+}
+
 #if 1
 #include "fast_acos.hh"
 // Solve a symmetric 3x3 eigenvalue problem, sorting the eigenvalues in ascending order.
@@ -210,7 +221,7 @@ bool sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda
         Real odiag_max_mag = std::max(std::max(std::abs(A(1, 0)), std::abs(A(2, 0))), std::abs(A(2, 1)));
         Real  diag_max_mag = std::max(std::max(std::abs(A(0, 0)), std::abs(A(1, 1))), std::abs(A(2, 2)));
         const bool is_numerically_diagonal = (odiag_max_mag <= std::numeric_limits<Real>::epsilon() * diag_max_mag); // also catches the zero matrix!
-        if (is_numerically_diagonal) { lambda = A.diagonal(); Q.setIdentity(); return false; } // Short-circuit in the diagonal case.
+        if (is_numerically_diagonal) { diagonal_eigendecomposition<Descending>(A, lambda, Q); return false; } // Short-circuit in the diagonal case.
 
         max_mag = std::max(odiag_max_mag, diag_max_mag);
         A *= 1.0 / max_mag; // scale to mitigate underflow/overflow
@@ -218,7 +229,7 @@ bool sym_eigensolver(Mat3_T<Real> A /* intentional copy */, Vec3_T<Real> &lambda
     else {
         UNUSED(max_mag);
         // Short-circuit in the diagonal case.
-        if ((A(1, 0) == 0) && (A(2, 0) == 0) && (A(2, 1) == 0)) { lambda = A.diagonal(); Q.setIdentity(); return false; }
+        if ((A(1, 0) == 0) && (A(2, 0) == 0) && (A(2, 1) == 0)) { diagonal_eigendecomposition<Descending>(A, lambda, Q); return false; }
     }
 
     // Shift the matrix to have trace 0 (so one eigenvalue is guaranteed to be of a different sign from the other two).
