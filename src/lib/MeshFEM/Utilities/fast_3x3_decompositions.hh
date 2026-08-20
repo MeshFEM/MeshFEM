@@ -61,6 +61,7 @@
 
 #include <cmath>
 #include <MeshFEMCore/Types.hh>
+#include <MeshFEMSparse/Utilities/argsort.hh>
 
 namespace MeshFEM {
 
@@ -199,15 +200,10 @@ void sym_evecs_from_evals(const Mat3_T<Real> &M, const Vec3_T<Real> &evals, Mat3
 // sorted as the general path sorts them and Q permuted to match.
 template<bool Descending, typename Real>
 void diagonal_eigendecomposition(const Mat3_T<Real> &A, Vec3_T<Real> &lambda, Mat3_T<Real> &Q) {
-    int idx[3] = {0, 1, 2};
-    auto before = [&A](int a, int b) { return Descending ? (A(a, a) > A(b, b)) : (A(a, a) < A(b, b)); };
-    for (int i = 1; i < 3; ++i)                                     // insertion sort, 3 elements
-        for (int j = i; (j > 0) && before(idx[j], idx[j - 1]); --j)
-            std::swap(idx[j], idx[j - 1]);
-
+    std::array<Real, 3> diag = { A(0, 0), A(1, 1), A(2, 2) };
+    auto order = argsort<Descending>(diag);
     Q.setZero();
-    for (int k = 0; k < 3; ++k) { lambda[k] = A(idx[k], idx[k]); Q(idx[k], k) = 1; }
-    if (Q.determinant() < 0) Q.col(2) *= -1; // keep Q a rotation
+    for (int k = 0; k < 3; ++k) { lambda[k] = diag[order[k]]; Q(order[k], k) = 1; }
 }
 
 #if 1
