@@ -604,7 +604,51 @@ class ParabolaFitSearch(LineSearchBase):
         eval_f(alpha_star)
         return best_cached_alpha()
 
-## Linesearch Routines
+
+class BacktrackArmijoLineSearch(LineSearchBase):
+    def __init__(
+        self,
+        backoff_factor: float = 0.95,
+        backtrack_factor: float = 0.5,
+        armijo_c: float = 0.2,
+        min_alpha: float = 1e-12,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        if not (0.0 < backoff_factor < 1.0):
+            raise ValueError("backoff_factor must be in (0, 1)")
+        if not (0.0 < backtrack_factor < 1.0):
+            raise ValueError("backtrack_factor must be in (0, 1)")
+        if not (0.0 < armijo_c < 1.0):
+            raise ValueError("armijo_c must be in (0, 1)")
+        if min_alpha <= 0.0:
+            raise ValueError("min_alpha must be > 0")
+        
+        self.backoff_factor = float(backoff_factor)
+        self.backtrack_factor = float(backtrack_factor)
+        self.armijo_c = float(armijo_c)
+        self.min_alpha = float(min_alpha)
+
+    def _linesearch_impl(self, f, max_alpha, f0, df0):
+        max_alpha = float(max_alpha)
+        if max_alpha <= 0.0:
+            return 0.0    
+        
+        step = self.backoff_factor * max_alpha
+        if df0 >= 0.0:
+            raise RuntimeError(f'Directional derivative df0:{df0} >= 0.')
+        
+        curr_energy = f(step)
+        while curr_energy > (f0 + step * self.armijo_c * df0):
+            if step < self.min_alpha:
+                raise RuntimeError(f'current alpha reaches minimum: {step:.3e}.')
+            step *= self.backtrack_factor
+            curr_energy = f(step)
+        
+        return step 
+    
+    
+## OLD Linesearch Routines
 
 def brute_force_linesearch(f, alpha_step_size=0.01, max_alpha=5):
     """
