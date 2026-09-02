@@ -30,9 +30,6 @@ target_link_libraries(unit_tests PUBLIC
 )
 
 if (NOT MESHFEM_USE_LEGACY_CATAMARI)
-    add_executable(benchmark_dense_linalg benchmark_dense_linalg.cc)
-    target_link_libraries(benchmark_dense_linalg MeshFEM)
-
     add_executable(benchmark_dense_psd_detect benchmark_dense_psd_detect.cc)
     target_link_libraries(benchmark_dense_psd_detect MeshFEM)
 endif()

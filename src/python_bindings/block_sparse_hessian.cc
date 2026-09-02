@@ -87,7 +87,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
     using NH = NewtonHessian;
     py::class_<NH>(m, "NewtonHessian")
         .def(py::init([](const std::string &path) { return NH::load(path); }), py::arg("path"))
-        .def(py::init([](const SuiteSparseMatrix &A) { return NH::fromSuiteSparse(A); }), py::arg("A"))
+        .def(py::init([](const SuiteSparseMatrix &A, int blockSize) { return NH::fromSuiteSparse(A, blockSize); }), py::arg("A"), py::arg("blockSize") = 1)
         .def_property_readonly("H_ss", [](const NH &H) -> const BlockCSCHessianBase * { return H.H_ss.get(); }, py::return_value_policy::reference_internal)
 
         .def_readwrite("H_sd", &NH::H_sd)
@@ -124,6 +124,8 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
                 s.solve(b, x);
                 return x;
             }, py::arg("b"))
+
+        .def("updateNumericFactorization", &BSF::updateNumericFactorization, py::arg("H"))
 
         .def_readwrite("B", &BSF::B)
         .def_readwrite("H_ss_inv_B", &BSF::H_ss_inv_B)
