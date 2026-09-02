@@ -394,23 +394,26 @@ vector<CondPtr<_N> > readBoundaryConditions(istream &is,
 ////////////////////////////////////////////////////////////////////////////////
 // Instantiations
 ////////////////////////////////////////////////////////////////////////////////
-template void writeBoundaryConditions<3>(const string &cpath,
-                           const vector<ConstCondPtr<3> > &conds);
-template void writeBoundaryConditions<3>(ostream &os,
-                           const vector<ConstCondPtr<3> > &conds);
-template vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
-template vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
-template vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &);
-template vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &);
+template struct MESHFEM_EXPORT BoundaryCondition<2>;
+template struct MESHFEM_EXPORT BoundaryCondition<3>;
 
-template void writeBoundaryConditions<2>(const string &cpath,
+template MESHFEM_EXPORT void writeBoundaryConditions<3>(const string &cpath,
+                           const vector<ConstCondPtr<3> > &conds);
+template MESHFEM_EXPORT void writeBoundaryConditions<3>(ostream &os,
+                           const vector<ConstCondPtr<3> > &conds);
+template MESHFEM_EXPORT vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
+template MESHFEM_EXPORT vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &, std::vector<PeriodicPairDirichletCondition<3>> &, ComponentMask &);
+template MESHFEM_EXPORT vector<CondPtr<3> > readBoundaryConditions<3>(const string &, const BBox<VectorND<3>> &, bool &);
+template MESHFEM_EXPORT vector<CondPtr<3> > readBoundaryConditions<3>(istream &,      const BBox<VectorND<3>> &, bool &);
+
+template MESHFEM_EXPORT void writeBoundaryConditions<2>(const string &cpath,
                            const vector<ConstCondPtr<2> > &conds);
-template void writeBoundaryConditions<2>(ostream &os,
+template MESHFEM_EXPORT void writeBoundaryConditions<2>(ostream &os,
                            const vector<ConstCondPtr<2> > &conds);
-template vector<CondPtr<2> > readBoundaryConditions<2>(const std::string &, const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
-template vector<CondPtr<2> > readBoundaryConditions<2>(std::istream &,      const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
-template vector<CondPtr<2> > readBoundaryConditions<2>(const std::string &, const BBox<VectorND<2> > &, bool &);
-template vector<CondPtr<2> > readBoundaryConditions<2>(std::istream &,      const BBox<VectorND<2> > &, bool &);
+template MESHFEM_EXPORT vector<CondPtr<2> > readBoundaryConditions<2>(const std::string &, const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
+template MESHFEM_EXPORT vector<CondPtr<2> > readBoundaryConditions<2>(std::istream &,      const BBox<VectorND<2> > &, bool &, std::vector<PeriodicPairDirichletCondition<2>> &, ComponentMask &);
+template MESHFEM_EXPORT vector<CondPtr<2> > readBoundaryConditions<2>(const std::string &, const BBox<VectorND<2> > &, bool &);
+template MESHFEM_EXPORT vector<CondPtr<2> > readBoundaryConditions<2>(std::istream &,      const BBox<VectorND<2> > &, bool &);
 
 // Note: the following out-of-line "key functions" are needed in some versions
 // of clang/llvm to enable RTTI/dynamic_cast across module boundaries

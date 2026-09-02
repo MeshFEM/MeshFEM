@@ -435,6 +435,7 @@ struct AutoHessianProjection : Psi_F {
     using ESolver  = Eigen::SelfAdjointEigenSolver<Hessian>;
 
     using Base::Base;
+    AutoHessianProjection() = default;
     AutoHessianProjection(const Base &b) : Base(b) { }
 
     AutoHessianProjection(const AutoHessianProjection &b, UninitializedDeformationTag &&)

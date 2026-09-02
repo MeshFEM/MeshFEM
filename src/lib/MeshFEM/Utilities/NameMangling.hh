@@ -144,9 +144,21 @@ std::string get_name_of_type() {
     return name.substr(start, end - start);
 #elif defined(_MSC_VER)
     std::string name = __FUNCSIG__;
-    auto start = name.find("type_name<") + 10;
-    auto end = name.find(">(void)", start);
-    return name.substr(start, end - start);
+    const std::string marker = "get_name_of_type<";
+    auto start = name.find(marker);
+    if (start == std::string::npos) throw std::runtime_error("Could not parse __FUNCSIG__");
+    start += marker.size();
+    auto end = name.rfind(">(void)");
+    if ((end == std::string::npos) || (end < start)) throw std::runtime_error("Could not parse __FUNCSIG__");
+    std::string result = name.substr(start, end - start);
+    for (const char *kw : {"struct ", "class ", "enum ", "union "}) {
+        const std::string keyword(kw);
+        if (result.compare(0, keyword.size(), keyword) == 0) {
+            result.erase(0, keyword.size());
+            break;
+        }
+    }
+    return result;
 #else
     throw std::runtime_error("Unsupported compiler for type_name");
 #endif

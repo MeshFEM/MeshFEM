@@ -14,6 +14,7 @@
 *.so
 *.dylib
 *.dll
+*.pyd
 
 # Fortran module files
 *.mod
@@ -80,5 +81,8 @@ compile_commands.json
 
 # Auto-generated python stuff
 python/MeshFEM/__init__.py
+/python/MeshFEM/
+
+CMakeUserPresets.json
 
 TODO

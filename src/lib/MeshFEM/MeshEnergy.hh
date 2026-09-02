@@ -14,6 +14,7 @@
 #define MESHENERGY_HH
 #include <MeshFEM/FEMMesh.hh>
 
+#include <MeshFEM_export.h>
 
 #include <MeshFEMSparse/SystemAssembler.hh>
 #include <MeshFEMSparse/ParallelAssembly.hh>

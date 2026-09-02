@@ -88,8 +88,11 @@ endif()
 # TinyExpr library
 if(NOT TARGET tinyexpr::tinyexpr)
     meshfem_download_tinyexpr()
-    add_library(meshfem_tinyexpr ${MESHFEM_EXTERNAL}/tinyexpr/tinyexpr.c)
+    add_library(meshfem_tinyexpr STATIC ${MESHFEM_EXTERNAL}/tinyexpr/tinyexpr.c)
     target_include_directories(meshfem_tinyexpr SYSTEM PUBLIC ${MESHFEM_EXTERNAL}/tinyexpr)
+    # UCRT's ceil/floor are dllimport intrinsics, so under /Oi their addresses are not link-time
+    # constants and tinyexpr's builtin table is rejected (C2099). Do not patch tinyexpr instead.
+    target_compile_options(meshfem_tinyexpr PRIVATE $<$<C_COMPILER_ID:MSVC>:/Oi->)
     add_library(tinyexpr::tinyexpr ALIAS meshfem_tinyexpr)
 endif()
 

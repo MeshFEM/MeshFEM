@@ -239,7 +239,8 @@ template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 2> {
     static constexpr size_t numPoints = 3;
 
-    static constexpr double c0 = 2 / 3.0, c1 = 1 / 6.0;
+    static constexpr double c0 = 2 / 3.0;
+    static constexpr double c1 = 1 / 6.0;
     inline static constexpr std::array<EvalPt<Simplex::Triangle>, numPoints> points{{
         {{c0, c1, c1}},
         {{c1, c0, c1}},
@@ -287,10 +288,10 @@ template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 4> {
     static constexpr size_t numPoints = 6;
 
-    static constexpr double c0_0 = 0.10810301816807022736,
-                            c1_0 = 0.44594849091596488632,
-                            c0_1 = 0.81684757298045851308,
-                            c1_1 = 0.09157621350977074346;
+    static constexpr double c0_0 = 0.10810301816807022736;
+    static constexpr double c1_0 = 0.44594849091596488632;
+    static constexpr double c0_1 = 0.81684757298045851308;
+    static constexpr double c1_1 = 0.09157621350977074346;
 
     inline static constexpr std::array<EvalPt<Simplex::Triangle>, numPoints> points{{
         {{c0_0, c1_0, c1_0}},
@@ -310,10 +311,10 @@ template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Triangle, 5> {
     static constexpr size_t numPoints = 7;
 
-    static constexpr double c0_0 = 0.79742698535308732240,
-                            c1_0 = 0.10128650732345633880,
-                            c0_1 = 0.059715871789769820459,
-                            c1_1 = 0.47014206410511508977;
+    static constexpr double c0_0 = 0.79742698535308732240;
+    static constexpr double c1_0 = 0.10128650732345633880;
+    static constexpr double c0_1 = 0.059715871789769820459;
+    static constexpr double c1_1 = 0.47014206410511508977;
 
     inline static constexpr std::array<EvalPt<Simplex::Triangle>, numPoints> points{{
         {{c0_0, c1_0, c1_0}},
@@ -447,8 +448,8 @@ struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 1> : public Quadratu
 template<>
 struct MESHFEM_EXPORT QuadratureTable<Simplex::Tetrahedron, 2> {
     static constexpr size_t numPoints = 4;
-    static constexpr double c0 = 0.58541019662496845446, // (5 + 3 sqrt(5)) / 20
-                            c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
+    static constexpr double c0 = 0.58541019662496845446; // (5 + 3 sqrt(5)) / 20
+    static constexpr double c1 = 0.13819660112501051518; // (5 -   sqrt(5)) / 20
     inline static constexpr std::array<EvalPt<Simplex::Tetrahedron>, numPoints> points{{
         {{c0, c1, c1, c1}},
         {{c1, c0, c1, c1}},
