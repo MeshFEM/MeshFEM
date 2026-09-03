@@ -452,6 +452,12 @@ private:
     ETensor m_E;
 };
 
+extern template Isotropic<2>::IsotropicBounds Isotropic<2>::g_bounds;
+extern template Isotropic<3>::IsotropicBounds Isotropic<3>::g_bounds;
+
+extern template Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds;
+extern template Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds;
+
 } // Materials
 
 } // namespace MeshFEM
