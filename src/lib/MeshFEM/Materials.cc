@@ -390,6 +390,11 @@ template struct Orthotropic<3>;
 template struct Constant<2>;
 template struct Constant<3>;
 
+template   Isotropic<2>::  IsotropicBounds   Isotropic<2>::g_bounds;
+template   Isotropic<3>::  IsotropicBounds   Isotropic<3>::g_bounds;
+template Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds;
+template Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds;
+
 }
 
 } // namespace MeshFEM
