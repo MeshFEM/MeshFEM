@@ -36,19 +36,24 @@ A_NH = block_sparse_hessian.NewtonHessian(A, int(blockSize))
 fixedVars = []
 
 cfacs = {'Catamari': sparse_matrices.CholeskyFactorizer(sparse_matrices.CholeskyProvider.Catamari)}
+try: cfacs['Catamari float'] = sparse_matrices.CholeskyFactorizer(sparse_matrices.CholeskyProvider.Catamari, singlePrecision=True)
+except ValueError: pass  # Legacy Catamari builds are double-only.
 try: cfacs['Accelerate'] = sparse_matrices.CholeskyFactorizer(sparse_matrices.CholeskyProvider.Accelerate)
+except: pass
+try: cfacs['Accelerate float'] = sparse_matrices.CholeskyFactorizer(sparse_matrices.CholeskyProvider.Accelerate, singlePrecision=True)
 except: pass
 try: cfacs['Pardiso'] = sparse_matrices.CholeskyFactorizer(sparse_matrices.CholeskyProvider.PARDISO)
 except: pass
 
-ordering_methods = ['AMD', 'Nesdis', 'ParallelMetis']
+ordering_methods = ['AMD', 'Nesdis', 'ParallelMetis', 'CholmodNesdisParallel']
+# ordering_methods = ['CholmodNesdisParallel']
 
 runs = 1
 numeric_run_factor = 5
 
 for name, cf in cfacs.items():
-    try: # Note: ordering selection may fail if not relevant to the factorizer.
-        for om in ordering_methods:
+    for om in ordering_methods:
+        try: # Note: ordering selection may fail if not relevant to the factorizer.
             # print(name, om)
             select_ordering_method(cf, om)
             # untimed warmup
@@ -66,6 +71,6 @@ for name, cf in cfacs.items():
             timings = [benchmark.totalTimePerInvocation('Symbolic$', default=0), benchmark.totalTimePerInvocation('Numeric$', default=0), benchmark.totalTimePerInvocation('CholeskyFactorizerBase.solve$', default=0)]
             print(f'{name} {om}:', '\t'.join(f'{float(t):0.3}s' for t in timings))
             # benchmark.report()
-    except Exception as e:
-        # print(f"Error with {name}: {e}")
-        pass
+        except Exception as e:
+            # print(f"Error with {name}: {e}")
+            pass

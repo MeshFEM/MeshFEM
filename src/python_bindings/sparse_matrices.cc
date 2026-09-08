@@ -201,6 +201,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
 #if MESHFEM_WITH_CATAMARI
         .value("Catamari",         CholeskyProvider::Catamari)
         .value("CatamariNesdis",   CholeskyProvider::CatamariNesdis)
+        .value("CatamariNesdisParallel", CholeskyProvider::CatamariNesdisParallel)
         .value("CatamariMetis",    CholeskyProvider::CatamariMetis)
         .value("CatamariAMD",      CholeskyProvider::CatamariAMD)
 #if MESHFEM_WITH_SCOTCH
@@ -265,6 +266,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
     py::enum_<CatF::OrderingMethod>(pyCatF, "OrderingMethod")
         .value("Catamari",             CatF::OrderingMethod::Catamari)
         .value("CholmodNesdis",        CatF::OrderingMethod::CholmodNesdis)
+        .value("CholmodNesdisParallel", CatF::OrderingMethod::CholmodNesdisParallel)
         .value("Metis",                CatF::OrderingMethod::Metis)
         .value("AMD",                  CatF::OrderingMethod::AMD)
         .value("Adaptive",             CatF::OrderingMethod::Adaptive)
@@ -307,7 +309,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
     pyPF.def_readwrite("orderingMethod", &PF::orderingMethod);
 #endif
 
-    m.def("CholeskyFactorizer", [](CholeskyProvider p) { return make_cholesky_factorizer(p); }, py::arg("provider") = get_default_cholesky_provider());
+    m.def("CholeskyFactorizer", [](CholeskyProvider p, bool singlePrecision) { return make_cholesky_factorizer(p, singlePrecision); },
+          py::arg("provider") = get_default_cholesky_provider(), py::arg("singlePrecision") = false,
+          "Construct a Cholesky factorizer. singlePrecision supports Accelerate and modern Catamari; inputs and outputs remain double precision.");
 
     m.def("recordMatrices", [](const std::string &directory, bool symbolic, bool numeric) { return g_matrixRecorder.recordMatrices(directory, symbolic, numeric); }, py::arg("directory"), py::arg("symbolic") = true, py::arg("numeric") = true,
           "Start recording matrices to the given directory. Recording of symbolic or numeric matrices can optionally be disabled.");
