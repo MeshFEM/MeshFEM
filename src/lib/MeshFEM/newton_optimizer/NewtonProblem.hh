@@ -107,6 +107,11 @@ struct MESHFEM_EXPORT NewtonProblem {
     // sparsity pattern updates.
     size_t sparsityPatternID() const { return m_sparsityPatternID; }
 
+    // A separate generation for requests to discard symbolic-analysis history.
+    // Each factorizer observes it independently, even if sparsity is updated
+    // several times before that factorizer next runs.
+    size_t symbolicFactorizationResetID() const { return m_symbolicFactorizationResetID; }
+
     // A **sorted, unique** list of indices of variables that are fixed in this problem.
     const std::vector<size_t> &fixedVars() const { return m_fixedVars; }
     size_t numFixedVars() const { return fixedVars().size(); }
@@ -290,6 +295,8 @@ struct MESHFEM_EXPORT NewtonProblem {
     void setLastFactorizationShiftMagnitude(Real val) { m_lastFactorizationShiftMagnitude = val; }
 
 protected:
+    void m_requestSymbolicFactorizationReset() const { ++m_symbolicFactorizationResetID; }
+
     // Clear the cached per-iterate quantities
     void m_clearCache() { m_cachedHessianUpToDate = false, m_cachedMetric.reset(); /* TODO: decide if we want this: m_metricL2Norm = -1; */ }
     // Called at the start of each new iteration (after line search has been performed)
@@ -323,6 +330,7 @@ protected:
     Real m_lastFactorizationShiftMagnitude = 0;
 
     mutable size_t m_sparsityPatternID = 0;
+    mutable size_t m_symbolicFactorizationResetID = 0;
 };
 
 } // namespace MeshFEM

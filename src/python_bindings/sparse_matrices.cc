@@ -202,6 +202,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .value("Catamari",         CholeskyProvider::Catamari)
         .value("CatamariNesdis",   CholeskyProvider::CatamariNesdis)
         .value("CatamariNesdisParallel", CholeskyProvider::CatamariNesdisParallel)
+        .value("CatamariNesdisReuse", CholeskyProvider::CatamariNesdisReuse)
         .value("CatamariMetis",    CholeskyProvider::CatamariMetis)
         .value("CatamariAMD",      CholeskyProvider::CatamariAMD)
 #if MESHFEM_WITH_SCOTCH
@@ -244,6 +245,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("factorize", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool isInTryCatch) {
                     c.factorize(mat, pinnedVars, isInTryCatch); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>(), py::arg("isInTryCatch") = false)
         .def("clearFactors", &CFB::clearFactors)
+        .def("resetSymbolicFactorizationReuse", &CFB::resetSymbolicFactorizationReuse)
         .def("checkPosDef",  &CFB::checkPosDef)
         .def("getFactorNNZ",    &CFB::getFactorNNZ)
         .def("getFlopEstimate", &CFB::getFlopEstimate)
@@ -276,6 +278,20 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .value("PardisoParallelMetis", CatF::OrderingMethod::PardisoParallelMetis)
         ;
     pyCatF.def_readwrite("orderingMethod", &CatF::orderingMethod);
+    pyCatF.def_property("temporalReusePeriod", &CatF::temporalReusePeriod, &CatF::setTemporalReusePeriod);
+    pyCatF.def("resetTemporalReuse", &CatF::resetTemporalReuse);
+#if MESHFEM_WITH_CHOLMOD
+    pyCatF.def_property_readonly("temporalReuseStatistics", [](const CatF &f) {
+        const auto &s = f.temporalReuseStatistics();
+        py::dict result;
+        result["full_rebuild"] = s.full_rebuild;
+        result["graph_vertices"] = s.graph_vertices;
+        result["recomputed_subtrees"] = s.recomputed_subtrees;
+        result["repartitioned_vertices"] = s.repartitioned_vertices;
+        result["nd_seconds"] = s.nd_seconds;
+        return result;
+    });
+#endif
 #endif
 
 #if __APPLE__

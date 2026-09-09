@@ -606,7 +606,11 @@ private:
                     nonstaticPart.mergeSparsityPattern(t);
 
                 if (m_sparsityLRU) {
-                    changed = m_sparsityLRU->update(*(nonstaticPart.H_ss));
+                    const auto updateResult = m_sparsityLRU->update(*(nonstaticPart.H_ss));
+                    changed = updateResult != 0;
+                    // Expiration/budget rebuilds seek a better ordering after
+                    // dropping retained edges. New entries alone can reuse ND.
+                    if (updateResult == SparsityLRU::EXPIRED) m_requestSymbolicFactorizationReset();
                     // {
                     //     static int num_updates = 0;
                     //     if (changed && !force) {
@@ -636,6 +640,7 @@ private:
             // Still notify the cache of the sparsity pattern update in case
             // it triggers a refactorization due to entry expiration.
             if (m_sparsityLRU->increaseAgeOfOldEntries()) {
+                m_requestSymbolicFactorizationReset();
                 // std::cout << "increaseAgeOfOldEntries triggered sparsity update" << std::endl;
                 // std::cout << "SparsityLRU: max age before update: " << before_increase_max_age << std::endl;
                 if (!m_hessianSparsity.H_ss) throw std::logic_error("NewtonMultiobjectiveProblem::m_updateSparsityPattern: m_hessianSparsity not initialized"); // This should never happen since `m_sparsityLRU` is only created when the static part is nonempty...

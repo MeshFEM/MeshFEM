@@ -35,6 +35,7 @@ struct NewtonOptimizerOptionsBase {
     size_t ngd_fallback_steps = 3;             // Total number of "fall-backs iterations" trying the neg gradient instead of the Newton direction
     int  verboseWorkingSet = 0;                // Whether to report changes to the working set (>0) and the contents of nonempty working sets upon termination (>1).
     CholeskyProvider factorizer = get_default_cholesky_provider();
+    bool single_precision_factorizer = false; // Float factorization/solves for modern Catamari or Accelerate; vectors remain double.
 };
 
 // The part of the optimizer interface that is not trivially copyable.
@@ -62,16 +63,17 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
     ////////////////////////////////////////////////////////////////////////////
     // Serialization + cloning support (for pickling)
     ////////////////////////////////////////////////////////////////////////////
-    using State = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t, CholeskyProvider>;
+    using State = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t, CholeskyProvider, bool>;
     using StateBackwardCompat = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>>; // before nbacktrack_iter and ngd_fallback_steps were added
     using StateBackwardCompat2 = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t>; // before CholeskyProvider was added
+    using StateBackwardCompat3 = std::tuple<Real, Real, bool, size_t, bool, bool, bool, int, bool, bool, std::shared_ptr<HessianProjectionController>, std::shared_ptr<HessianUpdateController>, size_t, size_t, CholeskyProvider>; // before single_precision_factorizer was added
     static State serialize(const NewtonOptimizerOptions &opts) {
         return std::make_tuple(opts.gradTol,  opts.beta,
                                opts.hessianScaledBeta, opts.niter, opts.useIdentityMetric,
                                opts.useNegativeCurvatureDirection, opts.feasibilitySolve,
                                opts.verbose, opts.writeIterateFiles, opts.verboseNonPosDef,
                                opts.m_hessianProjectionController, opts.m_hessianUpdateController,
-                               opts.nbacktrack_iter, opts.ngd_fallback_steps, opts.factorizer);
+                               opts.nbacktrack_iter, opts.ngd_fallback_steps, opts.factorizer, opts.single_precision_factorizer);
     }
     template<typename State_>
     static std::unique_ptr<NewtonOptimizerOptions> deserialize_(const State_ &state) {
@@ -97,11 +99,19 @@ struct MESHFEM_EXPORT NewtonOptimizerOptions : public NewtonOptimizerOptionsBase
         opts->ngd_fallback_steps = std::get<13>(state);
         return opts;
     }
-    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const State &state) {
+    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const StateBackwardCompat3 &state) {
         auto opts = deserialize_(state);
         opts->nbacktrack_iter    = std::get<12>(state);
         opts->ngd_fallback_steps = std::get<13>(state);
         opts->factorizer         = std::get<14>(state);
+        return opts;
+    }
+    static std::unique_ptr<NewtonOptimizerOptions> deserialize(const State &state) {
+        auto opts = deserialize_(state);
+        opts->nbacktrack_iter             = std::get<12>(state);
+        opts->ngd_fallback_steps          = std::get<13>(state);
+        opts->factorizer                  = std::get<14>(state);
+        opts->single_precision_factorizer = std::get<15>(state);
         return opts;
     }
     std::unique_ptr<NewtonOptimizerOptions> clone() { return deserialize(serialize(*this)); }

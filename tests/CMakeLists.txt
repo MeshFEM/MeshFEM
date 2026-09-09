@@ -21,6 +21,8 @@ add_executable(unit_tests
     test_field_sampler.cc
     test_fast_decompositions.cc
     test_analytic_hessian_projections.cc
+    test_symbolic_reuse_reset.cc
+    test_newton_options.cc
 )
 
 target_link_libraries(unit_tests PUBLIC

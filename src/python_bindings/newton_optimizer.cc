@@ -113,6 +113,8 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("armijo_c1",                     &NewtonOptimizerOptions::armijo_c1)
         .def_readwrite("backtrack_shrink_factor",       &NewtonOptimizerOptions::backtrack_shrink_factor)
         .def_readwrite("factorizer",                    &NewtonOptimizerOptions::factorizer)
+        .def_readwrite("single_precision_factorizer",    &NewtonOptimizerOptions::single_precision_factorizer,
+                       "Use single-precision factorization and solves with modern Catamari or Accelerate; inputs and outputs remain double precision.")
         .def_property("hessianProjectionController", [](const NewtonOptimizerOptions &opts) -> HessianProjectionController & { return opts.getHessianProjectionController(); },
                                                      [](      NewtonOptimizerOptions &opts, const HessianProjectionController &h) { opts.setHessianProjectionController(h); },
                                                      py::return_value_policy::reference_internal)
@@ -120,7 +122,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                                                      [](      NewtonOptimizerOptions &opts, const HessianUpdateController &h) { opts.setHessianUpdateController(h); },
                                                      py::return_value_policy::reference_internal)
         ;
-    addSerializationBindings<NewtonOptimizerOptions, PyNOO, NewtonOptimizerOptions::StateBackwardCompat, NewtonOptimizerOptions::StateBackwardCompat2>(pyNewtonOptimizerOptions);
+    addSerializationBindings<NewtonOptimizerOptions, PyNOO, NewtonOptimizerOptions::StateBackwardCompat, NewtonOptimizerOptions::StateBackwardCompat2, NewtonOptimizerOptions::StateBackwardCompat3>(pyNewtonOptimizerOptions);
 
     py::class_<ConvergenceReport>(m, "ConvergenceReport")
         .def_readonly("success",          &ConvergenceReport::success)

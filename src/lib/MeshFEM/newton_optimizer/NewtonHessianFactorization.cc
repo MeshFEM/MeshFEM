@@ -18,6 +18,9 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
     m_problem->updateSparsityPattern();
 
     bool needsUpdate = (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID);
+    const size_t resetID = m_problem->symbolicFactorizationResetID();
+    const bool resetSymbolicReuse = resetID != m_factorizedSymbolicResetID;
+    needsUpdate |= resetSymbolicReuse;
 
     // If the solver changed out from under us, it won't have a symbolic
     // factorization for the current pattern, and we need to force an update.
@@ -44,8 +47,10 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
         m_setFixedVars(m_problem->fixedVars()); // Note, this must happen after m_sparseDenseStructure has been initialized!
 
         // std::cout << "Symbolic factorization of sparsity pattern with " << Hsp.H_ss->scalarNNZ() << " nonzeros" << std::endl;
+        if (resetSymbolicReuse) s.resetSymbolicFactorizationReuse();
         s.factorizeSymbolic(*(Hsp.H_ss), sparseFixedVars());
         m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
+        m_factorizedSymbolicResetID = resetID;
         m_lowRankRank = Hsp.low_rank_rank();
     }
 
@@ -53,8 +58,11 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
 }
 
 CholeskyFactorizerBase &NewtonHessianFactorization::solver() {
-    if (!m_solver || (m_solver->provider() != m_options.factorizer))
-        m_solver = make_cholesky_factorizer(m_options.factorizer);
+    if (!m_solver || (m_solver->provider() != m_options.factorizer) ||
+        (m_solverSinglePrecision != m_options.single_precision_factorizer)) {
+        m_solver = make_cholesky_factorizer(m_options.factorizer, m_options.single_precision_factorizer);
+        m_solverSinglePrecision = m_options.single_precision_factorizer;
+    }
 
     return *m_solver;
 }

@@ -24,7 +24,8 @@ Real NewtonOptimizer::newton_step(Eigen::VectorXd &step, const Eigen::VectorXd &
     Real tau = NAN; // tau is unknown/undefined if we're reusing an old factorization; no negative curvature direction will be attempted by caller.
 
     auto &hUpdtCtr = options.getHessianUpdateController();
-    const bool reuseFactorization = m_hessianFactorization.exists() && !hUpdtCtr.needsUpdate() && (ws.size() == 0); // TODO: Reusing factorizations with bound constraints needs more care
+    // Apply provider/precision changes before considering a cached factorization.
+    const bool reuseFactorization = m_hessianFactorization.solver().hasFactorization() && !hUpdtCtr.needsUpdate() && (ws.size() == 0); // TODO: Reusing factorizations with bound constraints needs more care
     if (reuseFactorization) hUpdtCtr.reusedHessian();
     else                    tau = m_hessianFactorization.update(ws, beta, betaMin);
 
