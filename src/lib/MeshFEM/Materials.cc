@@ -377,9 +377,12 @@ void Bounds::setFromJson(const nlohmann::json &config) {
 ////////////////////////////////////////////////////////////////////////////////
 
 // g_bounds is shared by every material of a given type, so it is defined here and
-// exported rather than instantiated per module.
-template<size_t _N> typename   Isotropic<_N>::  IsotropicBounds   Isotropic<_N>::g_bounds;
-template<size_t _N> typename Orthotropic<_N>::OrthotropicBounds Orthotropic<_N>::g_bounds;
+// exported rather than instantiated per module. The initializers make these
+// specialization definitions; without them, they would only be declarations.
+template<> MESHFEM_EXPORT_DATA   Isotropic<2>::  IsotropicBounds   Isotropic<2>::g_bounds{};
+template<> MESHFEM_EXPORT_DATA   Isotropic<3>::  IsotropicBounds   Isotropic<3>::g_bounds{};
+template<> MESHFEM_EXPORT_DATA Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds{};
+template<> MESHFEM_EXPORT_DATA Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds{};
 
 template struct Isotropic<2>;
 template struct Isotropic<3>;
@@ -389,11 +392,6 @@ template struct Orthotropic<3>;
 
 template struct Constant<2>;
 template struct Constant<3>;
-
-template   Isotropic<2>::  IsotropicBounds   Isotropic<2>::g_bounds;
-template   Isotropic<3>::  IsotropicBounds   Isotropic<3>::g_bounds;
-template Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds;
-template Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds;
 
 }
 

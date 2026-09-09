@@ -452,11 +452,13 @@ private:
     ETensor m_E;
 };
 
-extern template Isotropic<2>::IsotropicBounds Isotropic<2>::g_bounds;
-extern template Isotropic<3>::IsotropicBounds Isotropic<3>::g_bounds;
+// Declare specializations so clients use the shared definitions in Materials.cc.
+// Unlike explicit instantiations, these are excluded from whole-class instantiation.
+template<> MESHFEM_EXPORT_DATA Isotropic<2>::IsotropicBounds Isotropic<2>::g_bounds;
+template<> MESHFEM_EXPORT_DATA Isotropic<3>::IsotropicBounds Isotropic<3>::g_bounds;
 
-extern template Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds;
-extern template Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds;
+template<> MESHFEM_EXPORT_DATA Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds;
+template<> MESHFEM_EXPORT_DATA Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds;
 
 } // Materials
 
