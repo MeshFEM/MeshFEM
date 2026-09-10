@@ -292,15 +292,15 @@ struct Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_
             //        small--this minimum should be set based on homogenization results
             //        Poisson ratios can't be less than -1, and for robustness we
             //        limit them to -0.75
-            if (_N == 3) Base::setUpperBounds({ Bound(3, 0.45), Bound(4, 0.45), Bound(5, 0.45) });
-            else         Base::setUpperBounds({ Bound(0,  384), Bound(1,  384), Bound(2, 0.45), Bound(3, 102) });
+            if (_N == 3) Bounds::setUpper({ Bound(3, 0.45), Bound(4, 0.45), Bound(5, 0.45) });
+            else         Bounds::setUpper({ Bound(0,  384), Bound(1,  384), Bound(2, 0.45), Bound(3, 102) });
             if (_N == 3) {
-                Base::setLowerBounds({ Bound(0,  0.01), Bound(1,  0.01), Bound(2,  0.01),
-                                       Bound(3, -0.75), Bound(4, -0.75), Bound(5, -0.75),
-                                       Bound(6,  0.01), Bound(7,  0.01), Bound(8,  0.01) });
+                Bounds::setLower({ Bound(0,  0.01), Bound(1,  0.01), Bound(2,  0.01),
+                                   Bound(3, -0.75), Bound(4, -0.75), Bound(5, -0.75),
+                                   Bound(6,  0.01), Bound(7,  0.01), Bound(8,  0.01) });
             }
-            else Base::setLowerBounds({ Bound(0,  18), Bound(1,  18),
-                                        Bound(2, 0.0), Bound(3,  2) });
+            else Bounds::setLower({ Bound(0,  18), Bound(1,  18),
+                                    Bound(2, 0.0), Bound(3,  2) });
         }
     };
 
