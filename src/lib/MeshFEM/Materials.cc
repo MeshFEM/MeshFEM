@@ -376,13 +376,8 @@ void Bounds::setFromJson(const nlohmann::json &config) {
 // Has the nice side-effect that only code using valid dimensions 2 and 3 links.
 ////////////////////////////////////////////////////////////////////////////////
 
-// g_bounds is shared by every material of a given type, so it is defined here and
-// exported rather than instantiated per module. The initializers make these
-// specialization definitions; without them, they would only be declarations.
-template<> MESHFEM_EXPORT_DATA   Isotropic<2>::  IsotropicBounds   Isotropic<2>::g_bounds{};
-template<> MESHFEM_EXPORT_DATA   Isotropic<3>::  IsotropicBounds   Isotropic<3>::g_bounds{};
-template<> MESHFEM_EXPORT_DATA Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds{};
-template<> MESHFEM_EXPORT_DATA Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds{};
+template<size_t _N> typename   Isotropic<_N>::  IsotropicBounds   &Isotropic<_N>::bounds() { static   IsotropicBounds b; return b; }
+template<size_t _N> typename Orthotropic<_N>::OrthotropicBounds &Orthotropic<_N>::bounds() { static OrthotropicBounds b; return b; }
 
 template struct Isotropic<2>;
 template struct Isotropic<3>;

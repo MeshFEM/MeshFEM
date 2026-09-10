@@ -71,11 +71,11 @@ struct VariableMaterial {
     virtual void getETensorDerivative(size_t p, ETensor &d) const = 0;
     virtual void getTensor(ETensor &tensor) const = 0;
 
-    static const std::vector<Bounds::Bound> &upperBounds() { return _Mat<_N>::g_bounds.upper(); }
-    static const std::vector<Bounds::Bound> &lowerBounds() { return _Mat<_N>::g_bounds.lower(); }
+    static const std::vector<Bounds::Bound> &upperBounds() { return _Mat<_N>::bounds().upper(); }
+    static const std::vector<Bounds::Bound> &lowerBounds() { return _Mat<_N>::bounds().lower(); }
 
-    static void setUpperBounds(const std::vector<Bounds::Bound> &u) { _Mat<_N>::g_bounds.setUpper(u); }
-    static void setLowerBounds(const std::vector<Bounds::Bound> &l) { _Mat<_N>::g_bounds.setLower(l); }
+    static void setUpperBounds(const std::vector<Bounds::Bound> &u) { _Mat<_N>::bounds().setUpper(u); }
+    static void setLowerBounds(const std::vector<Bounds::Bound> &l) { _Mat<_N>::bounds().setLower(l); }
 
     static void setBoundsFromFile(const std::string &path) {
         std::ifstream is(path);
@@ -88,11 +88,11 @@ struct VariableMaterial {
     }
 
     static void setBoundsFromJson(const nlohmann::json &config) {
-        _Mat<_N>::g_bounds.setFromJson(config);
+        _Mat<_N>::bounds().setFromJson(config);
         // Validate bounds.
         std::runtime_error indexError("Bounds variable index out-of-bounds.");
-        for (const auto &b : _Mat<_N>::g_bounds.lower()) if (b.var >= numVars) throw indexError;
-        for (const auto &b : _Mat<_N>::g_bounds.upper()) if (b.var >= numVars) throw indexError;
+        for (const auto &b : _Mat<_N>::bounds().lower()) if (b.var >= numVars) throw indexError;
+        for (const auto &b : _Mat<_N>::bounds().upper()) if (b.var >= numVars) throw indexError;
     }
 
     virtual ~VariableMaterial() { }
@@ -257,7 +257,7 @@ struct Isotropic : public VariableMaterial<_N, Isotropic, 2> {
     };
 private:
     friend Base;
-    static MESHFEM_EXPORT_DATA IsotropicBounds g_bounds;
+    static MESHFEM_EXPORT IsotropicBounds &bounds();
 };
 
 
@@ -392,7 +392,7 @@ struct Orthotropic : public VariableMaterial<_N, Orthotropic, nOrthotropicVars(_
     };
 private:
     friend Base;
-    static MESHFEM_EXPORT_DATA OrthotropicBounds g_bounds;
+    static MESHFEM_EXPORT OrthotropicBounds &bounds();
 };
 
 
@@ -451,14 +451,6 @@ struct MESHFEM_EXPORT Constant {
 private:
     ETensor m_E;
 };
-
-// Declare specializations so clients use the shared definitions in Materials.cc.
-// Unlike explicit instantiations, these are excluded from whole-class instantiation.
-template<> MESHFEM_EXPORT_DATA Isotropic<2>::IsotropicBounds Isotropic<2>::g_bounds;
-template<> MESHFEM_EXPORT_DATA Isotropic<3>::IsotropicBounds Isotropic<3>::g_bounds;
-
-template<> MESHFEM_EXPORT_DATA Orthotropic<2>::OrthotropicBounds Orthotropic<2>::g_bounds;
-template<> MESHFEM_EXPORT_DATA Orthotropic<3>::OrthotropicBounds Orthotropic<3>::g_bounds;
 
 } // Materials
 
