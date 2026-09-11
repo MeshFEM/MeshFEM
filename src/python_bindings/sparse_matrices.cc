@@ -263,7 +263,10 @@ PYBIND11_MODULE(sparse_matrices, m) {
           .def("getUseBlockAccel", &CatF::getUseBlockAccel)
           .def("setUseBlockAccel", &CatF::setUseBlockAccel, py::arg("useBlockAccel"))
           .def("setCollectIndefinitenessStats", &CatF::setCollectIndefinitenessStats, py::arg("collect") = true)
-          .def("writeSupernodeStats", &CatF::writeSupernodeStats, py::arg("path"));
+          .def("writeSupernodeStats", &CatF::writeSupernodeStats, py::arg("path"))
+          .def("configureSolveProfile", &CatF::configureSolveProfile, py::arg("enabled"), py::arg("maxDepth") = -1, py::arg("minWidth") = 0)
+          .def("resetSolveProfile", &CatF::resetSolveProfile)
+          .def("writeSolveProfile", &CatF::writeSolveProfile, py::arg("path"))
           ;
     py::enum_<CatF::OrderingMethod>(pyCatF, "OrderingMethod")
         .value("Catamari",             CatF::OrderingMethod::Catamari)
@@ -304,6 +307,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .value("Metis",      AF::OrderingMethod::Metis)
         .value("AMD",        AF::OrderingMethod::AMD)
         .value("Nesdis",     AF::OrderingMethod::Nesdis)
+        .value("CholmodNesdisParallel", AF::OrderingMethod::CholmodNesdisParallel)
         .value("CholmodAMD", AF::OrderingMethod::CholmodAMD)
         ;
     pyAF.def_readwrite("orderingMethod", &AF::orderingMethod);
