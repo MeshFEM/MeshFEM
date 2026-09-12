@@ -34,6 +34,7 @@ target_compile_options(newton_flow PRIVATE -ftemplate-backtrace-limit=0)
 pybind11_add_module(fast_newton_flow fast_newton_flow.cc)
 set_target_properties(fast_newton_flow PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(fast_newton_flow PUBLIC MeshFEM)
+taylorad_configure_sme2(fast_newton_flow)
 target_compile_options(fast_newton_flow PRIVATE -ftemplate-backtrace-limit=0)
 
 pybind11_add_module(poisson_gradient_integration poisson_gradient_integration.cc)

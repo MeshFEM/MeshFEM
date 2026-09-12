@@ -15,7 +15,7 @@
 
 #include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
-#include "3rdparty/TaylorAutodiff/TaylorAutodiffFields.hh"
+#include "3rdparty/TaylorAutodiff/TaylorFieldViews.hh"
 
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
@@ -43,7 +43,7 @@ struct SymmetricDirichletTADField {
         auto I2 = frobeniusNormSq(F);
         auto I3 = det(F);
         auto lambda_4_minus_1 = (I3 - I2) / pow(I3, 3);
-        auto T = twist_eigenmatrix(F);
+        auto T = twist_eigenmatrix_view(F);
         auto proj_coeff = doubleContract(T, F_prime);
         auto proj_dist = (eigenvalueClampTarget - 1) - lambda_4_minus_1;
         auto mod = (proj_dist * proj_coeff) * T;
@@ -77,7 +77,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
     using FType       = decltype(TaylorADFields::make_matrix_field<MNd>());
     using PType       = decltype(SymmetricDirichletTADField::PK1(std::declval<FType>())); // TODO: support additional energy densities beyond SymmetricDirichlet!
     using LambdaPType = decltype(std::declval<ScalarType>() * std::declval<PType>());
-    using FPrimeType  = decltype(derivative(std::declval<FType>()));
+    using FPrimeType  = decltype(derivative_view(std::declval<FType>()));
     using HModType    = decltype(SymmetricDirichletTADField::HessianProjectionDelta(0.0, std::declval<FType>(), std::declval<FPrimeType>()));
 
     void initCoefficients(const VXd &d, bool arclen = false, bool projectHessian = false) {
@@ -97,7 +97,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         if (!m_P) m_P = std::make_unique<PType>(SymmetricDirichletTADField::PK1(*m_F));
 
         if (!m_F_slice) m_F_slice = std::make_unique<FType>(TaylorADFields::make_matrix_field<MNd>());
-        if (!m_F_prime) m_F_prime = std::make_unique<FPrimeType>(derivative(*m_F_slice));
+        if (!m_F_prime) m_F_prime = std::make_unique<FPrimeType>(derivative_view(*m_F_slice));
         // TODO: rebuild `m_mod` when eigenvalueClampTarget is updated...
         if (!m_mod) m_mod = std::make_unique<HModType>(SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, *m_F_slice, *m_F_prime));
 
