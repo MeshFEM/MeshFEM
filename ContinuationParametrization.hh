@@ -13,6 +13,7 @@
 #ifndef CONTINUATIONPARAMETRIZATION_HH
 #define CONTINUATIONPARAMETRIZATION_HH
 
+#include <cmath>
 #include <MeshFEM/Elements/AutodiffElement.hh>
 #include <MeshFEM/Utilities/DensePSDDetect.hh>
 #include "3rdparty/TaylorAutodiff/TaylorAutodiffStaticSize.hh"
@@ -481,6 +482,76 @@ struct ContinuationParamMeshEnergy : public SDPME {
 
 private:
     Real m_lambda = 1.0;
+};
+
+// SLIM [Rabinovich et al. 2017] uses the exact symmetric-Dirichlet
+// objective/gradient with a reweighted quadratic proxy Hessian.  All
+// continuation-reference behavior is therefore inherited unchanged; only the
+// Hessian used to compute the search direction is replaced here.
+struct SLIMParamMeshEnergy : public ContinuationParamMeshEnergy {
+    using Base = ContinuationParamMeshEnergy;
+    using Base::Base;
+    using Real = typename Base::Real;
+    using ElementHessian = typename Base::ElementHessian;
+
+    void accumulateHessian(Real weight, NewtonHessian &H, bool projectionMask = false) const override {
+        BENCHMARK_SCOPED_TIMER_SECTION timer(name() + ".hessian (SLIM proxy)");
+        (void) projectionMask; // The SLIM proxy Hessian is PSD by construction.
+
+        this->assembler().assembleHessian(H, this->elements.size(), [&](size_t ei) {
+            const auto &e = this->elements[ei];
+            const auto J = e.computeJacobian(this->extractLocalVars(ei));
+
+            // Keep PP/src/Parafun.cpp::SLIM's closed-form singular-value and
+            // weight calculation recognizable for numerical parity.
+            const Real j00 = J(0, 0), j01 = J(0, 1);
+            const Real j10 = J(1, 0), j11 = J(1, 1);
+
+            const Real alpha0 = j00 + j11;
+            const Real alpha1 = j10 - j01;
+            const Real beta0  = j00 - j11;
+            const Real beta1  = j10 + j01;
+
+            const Real alphaNorm = 0.5 * std::hypot(alpha0, alpha1);
+            const Real betaNorm  = 0.5 * std::hypot(beta0,  beta1);
+            const Real sigma0 = alphaNorm + betaNorm;
+            const Real sigma1 = alphaNorm - betaNorm;
+
+            const Real newSigma0 = std::sqrt(1.0 + 1.0 / sigma0 + 1.0 / (sigma0 * sigma0) + 1.0 / (sigma0 * sigma0 * sigma0));
+            const Real newSigma1 = std::sqrt(1.0 + 1.0 / sigma1 + 1.0 / (sigma1 * sigma1) + 1.0 / (sigma1 * sigma1 * sigma1));
+
+            Real temp = 0.0;
+            if (betaNorm >= 1e-15)
+                temp = (newSigma1 - newSigma0) / (sigma1 * sigma1 - sigma0 * sigma0);
+
+            Eigen::Matrix<Real, 2, 2> W;
+            W(0, 0) = temp * (j00 * j00 + j01 * j01 - 0.5 * (sigma0 * sigma0 + sigma1 * sigma1)) + 0.5 * (newSigma0 + newSigma1);
+            W(0, 1) = temp * (j00 * j10 + j01 * j11);
+            W(1, 0) = temp * (j10 * j00 + j11 * j01);
+            W(1, 1) = temp * (j10 * j10 + j11 * j11 - 0.5 * (sigma0 * sigma0 + sigma1 * sigma1)) + 0.5 * (newSigma0 + newSigma1);
+            const Eigen::Matrix<Real, 2, 2> W2 = W.transpose() * W;
+
+            // Shape-function gradients are the rows of the active
+            // interpolated inverse reference.  MeshFEM uses interleaved local
+            // variables [u0,v0,u1,v1,u2,v2].
+            Eigen::Matrix<Real, 2, 3> gphi;
+            gphi.col(1) = e.F0InvInterp.row(0);
+            gphi.col(2) = e.F0InvInterp.row(1);
+            gphi.col(0) = -(gphi.col(1) + gphi.col(2));
+
+            ElementHessian He = ElementHessian::Zero();
+            for (size_t a = 0; a < 3; ++a) {
+                for (size_t b = 0; b < 3; ++b) {
+                    He.template block<2, 2>(2 * a, 2 * b) =
+                        weight * e.area * gphi.col(a).dot(gphi.col(b)) * W2;
+                }
+            }
+
+            if (this->elementHessianShift != 0.0)
+                He.diagonal().array() += weight * this->elementHessianShift;
+            return He;
+        }, [this](size_t ei) { return this->stencils[ei].blockVars; });
+    }
 };
 
 #endif /* end of include guard: CONTINUATIONPARAMETRIZATION_HH */

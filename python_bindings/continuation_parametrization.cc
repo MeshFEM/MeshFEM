@@ -124,5 +124,9 @@ PYBIND11_MODULE(continuation_parametrization, m)
         .def("computeTaylorCoefficients", &ContinuationParamMeshEnergy::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("degree") = 6)
         .def("computeTaylorCoefficientsArclen", &ContinuationParamMeshEnergy::computeTaylorCoefficientsArclen, py::arg("hessianFactorization"), py::arg("degree") = 6)
         .def("elementJacobians", &ContinuationParamMeshEnergy::elementJacobians);
-        ;
+
+    bindMeshEnergy<SLIMParamMeshEnergy>("slim_param", m, detail)
+        .def("setInterpolatedReference", [](SLIMParamMeshEnergy &slim, double lambda, const Eigen::VectorXd &x) { slim.setInterpolatedReference(lambda, x); }, py::arg("lambda"), py::arg("x"))
+        .def("setInterpolatedReference", [](SLIMParamMeshEnergy &slim, double lambda                          ) { slim.setInterpolatedReference(lambda   ); }, py::arg("lambda"))
+        .def("elementJacobians", [](const SLIMParamMeshEnergy &slim) { return slim.elementJacobians(); });
 }

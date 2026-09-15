@@ -38,4 +38,7 @@ endif()
 list(APPEND CMAKE_MODULE_PATH ${THIRD_PARTY_DIR}/MeshFEM/cmake)
 include(UseColors)
 
+# Fix the Unknown CMake command "taylorad_configure_sme2"
+include("${THIRD_PARTY_DIR}/TaylorAutodiff/SME2.cmake")
+
 add_subdirectory(python_bindings)
