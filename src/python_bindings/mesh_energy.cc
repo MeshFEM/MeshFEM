@@ -82,6 +82,7 @@ PYBIND11_MODULE(mesh_energy, m)
         .def("numElements", &MeshEnergyBase::numElements)
         .def_readwrite("useXBasedProjection",      &MeshEnergyBase::useXBasedProjection,      "Whether to apply brute-force eigendecomposition-based x-based projection")
         .def_readwrite("xBasedProjectionClampEps", &MeshEnergyBase::xBasedProjectionClampEps, "Eigenvalue clamping threshold for x-based projection (for comparison to TinyAD)")
+        .def_readwrite("elementHessianProjectionMasks", &MeshEnergyBase::elementHessianProjectionMasks)
         .def_readwrite("elementHessianShift",      &MeshEnergyBase::elementHessianShift,      "Whether to add a small multiple of the identity to each element Hessian (for comparison against the Composite Majorization codebase)")
         ;
 

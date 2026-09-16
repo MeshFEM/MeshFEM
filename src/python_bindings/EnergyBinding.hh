@@ -120,8 +120,8 @@ void generateEnergyBindingsYoungPoisson(const std::string &name, py::module &m, 
     auto lambdaFromENu = [](double E, double nu, bool is3D = true) { return is3D ? (E * nu / ((1 + nu) * (1 - 2 * nu))) : ((nu * E) / (1.0 - nu * nu)); };
     auto     muFromENu = [](double E, double nu)                   { return E / (2 * (1 + nu)); };
 
-    m.def(name.c_str(), [&](size_t dimension, double E, double nu) {                                                                     return constructDimensionSpecific<Psi>(dimension, lambdaFromENu(E, nu, !planeStressFor2D || (dimension == 3)), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("E"), py::arg("nu"));
-    m.def(name.c_str(), [&](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecific<Psi>(dimension, lambdaFromENu(E, nu, !planeStressFor2D || (dimension == 3)), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"));
+    m.def(name.c_str(), [=](size_t dimension, double E, double nu) {                                                                     return constructDimensionSpecific<Psi>(dimension, lambdaFromENu(E, nu, !planeStressFor2D || (dimension == 3)), muFromENu(E, nu)); }, py::arg("dimension"), py::arg("E"), py::arg("nu"));
+    m.def(name.c_str(), [=](py::object mesh,  double E, double nu) { size_t dimension = py::cast<double>(mesh.attr("simplexDimension")); return constructDimensionSpecific<Psi>(dimension, lambdaFromENu(E, nu, !planeStressFor2D || (dimension == 3)), muFromENu(E, nu)); }, py::arg("mesh"),      py::arg("E"), py::arg("nu"));
 }
 
 // Bind an energy that has no material parameters.

@@ -49,7 +49,7 @@ def load(path, *args, **kwargs):
 ################################################################################
 # Initialization
 ################################################################################
-def map_vertices_to_circle_area_normalized(V, F, bnd):
+def map_vertices_to_circle_area_normalized(V, F, bnd, uniform = False):
     """
     Python equivalent of the C++ function:
 
@@ -59,6 +59,9 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
             const Eigen::VectorXi& bnd,
             Eigen::MatrixXd& UV)
 
+    but with an optional `uniform` flag to space boundary vertices uniformly
+    along the circle instead of according to their edge lengths.
+
     Parameters
     ----------
     V : (n, 3) float ndarray
@@ -67,6 +70,8 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
         Triangle indices
     bnd : (k,) int ndarray
         Boundary vertex indices
+    uniform : bool, optional
+        If True, space boundary vertices uniformly along the circle.
 
     Returns
     -------
@@ -93,6 +98,8 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
         if (not isOnBnd[i]):
             map_ij[i] = len(interior)
             interior.append(i)
+    if uniform: segment_length = lambda i, j: 1.0
+    else:       segment_length = lambda i, j: np.linalg.norm(V[i] - V[j])
 
     # 2) Build a running length array along boundary vertices
     k = bnd.shape[0]
@@ -100,10 +107,10 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
     for i in range(1, k):
         prev_idx = bnd[i - 1]
         curr_idx = bnd[i]
-        length[i] = length[i - 1] + np.linalg.norm(V[prev_idx] - V[curr_idx])
+        length[i] = length[i - 1] + segment_length(prev_idx, curr_idx)
 
     # Add the distance between the last and the first boundary vertex
-    total_len = length[-1] + np.linalg.norm(V[bnd[0]] - V[bnd[-1]])
+    total_len = length[-1] + segment_length(bnd[-1], bnd[0])
 
     # 3) Place boundary vertices along the circle of computed radius
     bc = np.zeros((k, 2))
@@ -115,21 +122,30 @@ def map_vertices_to_circle_area_normalized(V, F, bnd):
         # bc[i, 1] = radius * np.sin(frac)
     return bc
 
-def getBDdataOnNormalizedCircle(m):
+def getBDdataOnNormalizedCircle(m, uniform = False):
     import igl
     BV = m.boundaryVertices()
     bnd_loop = igl.boundary_loop(m.elements())
     bloop = np.searchsorted(BV, bnd_loop)
-    bdry_uv = map_vertices_to_circle_area_normalized(m.vertices(), m.elements(), bnd_loop)
+    bdry_uv = map_vertices_to_circle_area_normalized(m.vertices(), m.elements(), bnd_loop, uniform)
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
 
-def tutteInitialization(m, bdry_uv = None):
-    # Tutte Initialization
-    if bdry_uv is None: bdry_uv = getBDdataOnNormalizedCircle(m)
-    uv_init = parametrization.harmonic(m, bdry_uv, False)
-    flip_list = parametrization.getFlips(m, uv_init)
-    if len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True)
+def tutteInitialization(m, bdry_uv = None, force_uniform = False):
+    """
+    Initialize a disk mesh using an area-normalized circular boundary.
+    By default, we first attempt a harmonic map and fall back to a uniform
+    Tutte map if the harmonic map has flips.
+
+    If `force_uniform` is True, we skip the harmonic map and directly compute a
+    uniform Tutte map, also spacing the boundary vertices *uniformly* around the
+    circle instead of proportionally to their edge lengths.
+    """
+    if bdry_uv is None: bdry_uv = getBDdataOnNormalizedCircle(m, uniform=force_uniform)
+    if not force_uniform:
+        uv_init = parametrization.harmonic(m, bdry_uv, False)
+        flip_list = parametrization.getFlips(m, uv_init)
+    if force_uniform or len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True)
     return uv_init
 
 ################################################################################
