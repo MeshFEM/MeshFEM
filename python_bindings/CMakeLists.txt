@@ -23,7 +23,7 @@ target_compile_options(flip_avoiding_step_length PRIVATE -ftemplate-backtrace-li
 
 pybind11_add_module(continuation_parametrization continuation_parametrization.cc)
 set_target_properties(continuation_parametrization PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
-target_link_libraries(continuation_parametrization PUBLIC MeshFEM)
+target_link_libraries(continuation_parametrization PUBLIC IsotropicAutodiff::IsotropicAutodiff)
 target_compile_options(continuation_parametrization PRIVATE -ftemplate-backtrace-limit=0)
 
 pybind11_add_module(newton_flow newton_flow.cc)
@@ -46,3 +46,11 @@ pybind11_add_module(rotation_strain_extrapolation rotation_strain_extrapolation.
 set_target_properties(rotation_strain_extrapolation PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
 target_link_libraries(rotation_strain_extrapolation PUBLIC MeshFEM)
 target_compile_options(rotation_strain_extrapolation PRIVATE -ftemplate-backtrace-limit=0)
+
+pybind11_add_module(parametrization_energies parametrization_energies.cc)
+set_target_properties(parametrization_energies PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(parametrization_energies PRIVATE IsotropicAutodiff::IsotropicAutodiff)
+
+pybind11_add_module(custom_energy_demo custom_energy_demo.cc)
+set_target_properties(custom_energy_demo PROPERTIES LIBRARY_OUTPUT_DIRECTORY $<1:${PROJECT_SOURCE_DIR}/python>)
+target_link_libraries(custom_energy_demo PRIVATE IsotropicAutodiff::IsotropicAutodiff)

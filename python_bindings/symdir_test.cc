@@ -6,6 +6,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 #include "../SymDirCompMajorEnergy.hh"
 #include <MeshFEM/Elements/ParametrizationElement.hh>
 
+using namespace MeshFEM;
+
 PYBIND11_MODULE(symdir_test, m)
 {
     py::module::import("mesh_energy");

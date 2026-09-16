@@ -19,13 +19,13 @@
 *///////////////////////////////////////////////////////////////////////////////
 #ifndef ROTATIONSTRAINEXTRAPOLATION_HH
 #define ROTATIONSTRAINEXTRAPOLATION_HH
+
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/Laplacian.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
-#include <MeshFEM/Solvers/make_cholesky_factorizer.hh>
-#include <MeshFEM/Types.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMSparse/Solvers/make_cholesky_factorizer.hh>
+#include <MeshFEMCore/Types.hh>
 #include "PoissonGradientIntegration.hh"
-
 #include <Eigen/Dense>
 #include <cmath>
 #include <memory>
@@ -34,6 +34,8 @@
 #include <stdexcept>
 #include <type_traits>
 #include <string>
+
+namespace MeshFEM {
 
 namespace rotation_strain_extrapolation {
 
@@ -406,9 +408,9 @@ private:
 };
 
 
-
-
 } // namespace rotation_strain_extrapolation
 
+
+} // namespace MeshFEM
 
 #endif /* ROTATIONSTRAINEXTRAPOLATION_HH */

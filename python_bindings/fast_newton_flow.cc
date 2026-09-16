@@ -8,6 +8,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include "../FastNewtonFlow.hh"
 
+using namespace MeshFEM;
+
 template<size_t Dim, size_t FEMDeg>
 auto bindFastNewtonFlow(const std::string &name, py::module &m, py::module &detail) {
     using NFME = FastNewtonFlowMeshEnergy<Dim, FEMDeg>;

@@ -8,6 +8,8 @@ namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include "../NewtonFlow.hh"
 
+using namespace MeshFEM;
+
 template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
 auto bindNewtonFlow(const std::string &name, py::module &m, py::module &detail) {
     using NFME = NewtonFlowMeshEnergy<Dim, FEMDeg, Psi_>;

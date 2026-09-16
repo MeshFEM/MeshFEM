@@ -6,6 +6,8 @@ namespace py = pybind11;
 
 #include "../TinyADParametrization.hh"
 
+using namespace MeshFEM;
+
 PYBIND11_MODULE(tinyad_parametrization, m)
 {
     py::module::import("MeshFEM");

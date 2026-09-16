@@ -5,11 +5,13 @@
 #include <stdexcept>
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
-#include <MeshFEM/EnergyDensities/IsotropicAutodiffEDensity.hh>
+#include <IsotropicAutodiff/IsotropicAutodiffEDensity.hh>
 #include <MeshFEM/../../python_bindings/EnergyBinding.hh>
 #include <MeshFEM/../../python_bindings/MeshEnergyBinder.hh>
-#include <MeshFEM/../../python_bindings/ParametrizationBinding.hh>
+#include "ParametrizationVariantBinding.hh"
 #include "../ContinuationParametrization.hh"
+
+using namespace MeshFEM;
 
 struct ARAP {
     static constexpr const char *name() { return "ARAP"; }

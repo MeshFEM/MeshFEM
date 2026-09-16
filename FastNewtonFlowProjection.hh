@@ -2,6 +2,8 @@
 
 #include "3rdparty/TaylorAutodiff/TaylorFieldViews.hh"
 
+namespace MeshFEM {
+
 namespace FastNewtonFlowDetail {
 using namespace TaylorADFields;
 
@@ -164,3 +166,5 @@ struct InvariantComponentMap {
 template<class GN, int Component>
 using ExtractInvariant = LinearCoefficientView<GN, InvariantComponentMap<Component>>;
 } // namespace FastNewtonFlowDetail
+
+} // namespace MeshFEM

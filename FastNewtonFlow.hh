@@ -17,12 +17,15 @@
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
 #include "3rdparty/TaylorAutodiff/TaylorFieldViews.hh"
 #include "3rdparty/TaylorAutodiff/TaylorFieldInverse.hh"
-
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
-#include <MeshFEM/ParallelVectorOps.hh>
+#include <MeshFEMCore/ParallelVectorOps.hh>
 #include "FastNewtonFlowProjection.hh"
 #include "FastNewtonFlowPK1.hh"
+
+#include <MeshFEM/newton_optimizer/NewtonHessianFactorization.hh>
+
+namespace MeshFEM {
 
 struct SymmetricDirichletTADField {
     template<class MatTCField>
@@ -408,7 +411,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                     return contrib;
                 };
 
-                Base::assembler().template assembleGradientConditionalGather</* Accumulate = */ false>(neg_delta_g, m, eval_ge);
+                Base::assembler().template assembleGradientConditionalGather</* Accumulate = */ false>(neg_delta_g, m, eval_ge, this->m_gatherCache);
                 // setZeroParallel(neg_delta_g);
                 // Base::assembler().assembleGradientSpinLock(neg_delta_g, m, eval_ge);
             }
@@ -519,5 +522,7 @@ private:
     int m_degree = -1;
     std::vector<VXd> m_x_storage;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FASTNEWTONFLOW_HH */

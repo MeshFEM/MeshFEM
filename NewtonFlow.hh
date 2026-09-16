@@ -22,6 +22,10 @@
 #include "3rdparty/TaylorAutodiff/TaylorAutodiffStaticSize.hh"
 #include <MeshFEM/Elements/SolidElement.hh>
 
+#include <MeshFEM/newton_optimizer/NewtonHessianFactorization.hh>
+
+namespace MeshFEM {
+
 template<size_t Dim, size_t FEMDeg, template<typename, size_t> class Psi_>
 struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> {
     using Psi = Psi_<double, Dim>;
@@ -374,5 +378,7 @@ struct NewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, Psi_<double, Dim>> 
 
     mutable VXd neg_delta_g;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: NEWTONFLOW_HH */

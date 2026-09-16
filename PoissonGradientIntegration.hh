@@ -18,7 +18,9 @@
 #define POISSONGRADIENTINTEGRATION_HH
 
 #include <MeshFEM/FEMMesh.hh>
-#include <MeshFEM/SystemAssembler.hh>
+#include <MeshFEMSparse/SystemAssembler.hh>
+
+namespace MeshFEM {
 
 namespace poisson_gradient_integration {
 
@@ -49,5 +51,7 @@ Eigen::VectorXd rhs(const Mesh &m, const Eigen::MatrixXd &g) {
 }
 
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: POISSONGRADIENTINTEGRATION_HH */

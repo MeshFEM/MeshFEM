@@ -8,6 +8,8 @@ namespace py = pybind11;
 #include <MeshFEM/../../python_bindings/BindingInstantiations.hh>
 #include <MeshFEM/Utilities/NameMangling.hh>
 
+using namespace MeshFEM;
+
 struct VPBinder {
     template<class Mesh>
     static void bind(py::module &m, py::module &detail_module) {

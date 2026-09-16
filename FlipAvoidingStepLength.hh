@@ -10,9 +10,11 @@
 #define FLIPAVOIDINGSTEPLENGTH_HH
 
 #include <MeshFEM/newton_optimizer/FeasibleStepLengthComputer.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
-#include <MeshFEM/Parallelism.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
+#include <MeshFEMCore/Parallelism.hh>
 #include <tbb/parallel_reduce.h>
+
+namespace MeshFEM {
 
 namespace flip_avoiding {
     //---------------------------------------------------------------------------
@@ -325,5 +327,7 @@ struct FlipAvoidingStepLength : public FeasibleStepLengthComputer {
     int dim = 0;
     Eigen::MatrixXi F;
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: FLIPAVOIDINGSTEPLENGTH_HH */

@@ -17,6 +17,11 @@
 #include <MeshFEM/Elements/AutodiffElement.hh>
 #include <MeshFEM/Utilities/DensePSDDetect.hh>
 #include "3rdparty/TaylorAutodiff/TaylorAutodiffStaticSize.hh"
+#include <MeshFEM/MeshEnergy.hh>
+
+#include <MeshFEM/newton_optimizer/NewtonHessianFactorization.hh>
+
+namespace MeshFEM {
 
 template<typename Real_>
 using TriCornerUVs = Eigen::Matrix<Real_, 3, 2, Eigen::RowMajor>;
@@ -258,7 +263,6 @@ struct SymmetricDirichletInterpElement : public ElementBase<SymmetricDirichletIn
     mutable V2d m_exp_factor = V2d::Constant(1);
 };
 
-#include <MeshFEM/MeshEnergy.hh>
 using SDPME = MeshEnergy<FEMMesh<2, 1, Vector3D>, NodalVars<2>, ElementStencil</* K = */ 2, /* Deg = */ 1, /* N = */ 2>, SymmetricDirichletInterpElement<double>>;
 struct ContinuationParamMeshEnergy : public SDPME {
     using Base = SDPME;
@@ -553,5 +557,7 @@ struct SLIMParamMeshEnergy : public ContinuationParamMeshEnergy {
         }, [this](size_t ei) { return this->stencils[ei].blockVars; });
     }
 };
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: CONTINUATIONPARAMETRIZATION_HH */

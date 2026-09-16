@@ -11,10 +11,15 @@
 *///////////////////////////////////////////////////////////////////////////////
 #ifndef SYMDIRCOMPMAJORENERGY_HH
 #define SYMDIRCOMPMAJORENERGY_HH
+
 #include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 #include <MeshFEM/EnergyDensities/FBasedEDensitySimple.hh>
 #include <MeshFEM/EnergyDensities/Tensor.hh>
 #include <MeshFEM/EmbeddedElement.hh>
+#include <MeshFEM/Elements/ElementBase.hh>
+#include <MeshFEM/Elements/AutodiffElement.hh>
+
+namespace MeshFEM {
 
 ////////////////////////////////////////////////////////////////////////////////
 // in CompMajor we use the following expressions
@@ -40,8 +45,6 @@ template<typename Real_, size_t Dim_>
 using SymmetricDirichletEDensityAD = AutodiffEDensity<SymmetricDirichletEDensityADPsi, Real_, Dim_>;
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////
 // SymDirCompMajor parametrization element (x-based) using analytical derivatives and
 // embedding information from the LinearlyEmbeddedElement class.
@@ -49,7 +52,6 @@ using SymmetricDirichletEDensityAD = AutodiffEDensity<SymmetricDirichletEDensity
 template<typename Real_>
 using TriCornerUVs = Eigen::Matrix<Real_, 3, 2, Eigen::RowMajor>;
 
-#include <MeshFEM/Elements/ElementBase.hh>
 template<typename Real_>
 struct SymDirCompMajorParamElement : public ElementBase<SymDirCompMajorParamElement<Real_>> {
     static constexpr bool CachesDeformedQuantities = false;
@@ -289,13 +291,11 @@ private:
 };
 
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // Symmetric Dirichlet parametrization element (x-based) using automatic
 // differentiation. This is for benchmark comparison against the
 // `SymmetricDirichletDerivativeFree` energy density.
 ////////////////////////////////////////////////////////////////////////////////
-#include <MeshFEM/Elements/AutodiffElement.hh>
 template<typename Real_>
 struct SymDirCompMajorElementEnergy {
     static std::string name() { return "SymDirCompMajorParamElementAD"; }
@@ -330,8 +330,6 @@ private:
 
 template<typename Real_>
 using SymDirCompMajorParamElementAD = AutodiffElement<SymDirCompMajorElementEnergy<Real_>>;
-
-
 
 
 // template<typename Real_, size_t Dim_>
@@ -387,5 +385,7 @@ using SymDirCompMajorParamElementAD = AutodiffElement<SymDirCompMajorElementEner
 //     }
 // };
 
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: SYMDIRCOMPMAJORENERGY_HH */

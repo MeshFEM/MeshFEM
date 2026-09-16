@@ -2,6 +2,8 @@
 
 #include "3rdparty/TaylorAutodiff/TaylorFieldViews.hh"
 
+namespace MeshFEM {
+
 namespace FastNewtonFlowDetail {
 using namespace TaylorADFields;
 
@@ -176,3 +178,5 @@ private:
     }
 };
 } // namespace FastNewtonFlowDetail
+
+} // namespace MeshFEM

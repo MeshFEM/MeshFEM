@@ -4,9 +4,11 @@
 namespace py = pybind11; // NOLINT (work around clang-tidy bug)
 
 #include <MeshFEM/../../python_bindings/BindingInstantiations.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include "../RotationStrainExtrapolation.hh"
+
+using namespace MeshFEM;
 
 struct RSEBinder {
     template<class Mesh>

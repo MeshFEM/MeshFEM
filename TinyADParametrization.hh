@@ -3,19 +3,21 @@
 
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEM/Parametrization.hh>
-#include <MeshFEM/GlobalBenchmark.hh>
+#include <MeshFEMCore/GlobalBenchmark.hh>
 #include <Eigen/CholmodSupport>
-
 #include <TinyAD/ScalarFunction.hh>
 #include <TinyAD/Utils/NewtonDirection.hh>
 #include <TinyAD/Utils/NewtonDecrement.hh>
 #include <TinyAD/Utils/LineSearch.hh>
-
 #include <string>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <MeshFEM/MeshEnergy.hh>
+#include "DirichletEnergy.hh"
+
+namespace MeshFEM {
 
 namespace TinyADParametrization{
 
@@ -283,8 +285,6 @@ symmdsParamTinyAD(const Mesh &mesh, const NDMap &uv_init, int max_iters=1000, do
 // Use MeshFEM's energy/gradient/Hessian evaluation with the Newton
 // framework of the TinyAD example.
 ////////////////////////////////////////////////////////////////////////////////
-#include <MeshFEM/MeshEnergy.hh>
-#include "DirichletEnergy.hh"
 
 template<class Mesh>
 std::tuple<Eigen::MatrixXd, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>, std::vector<double>>
@@ -378,5 +378,7 @@ paramTADMeshFEMHybrid(std::shared_ptr<Mesh> mesh, const Eigen::MatrixXd &uv_init
 
     return std::make_tuple(vars->getVars(), energy_history, grad_norm_history, iter_time_history, step_norm_history, dir_der_history);
 }
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: TINYADPARAMETRIZATION_HH */

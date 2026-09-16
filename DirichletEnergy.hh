@@ -11,9 +11,14 @@
 *///////////////////////////////////////////////////////////////////////////////
 #ifndef DIRICHLETENERGY_HH
 #define DIRICHLETENERGY_HH
+
 #include <MeshFEM/EnergyDensities/AutodiffEDensity.hh>
 #include <MeshFEM/EnergyDensities/FBasedEDensitySimple.hh>
 #include <MeshFEM/EmbeddedElement.hh>
+#include <MeshFEM/Elements/ElementBase.hh>
+#include <MeshFEM/Elements/AutodiffElement.hh>
+
+namespace MeshFEM {
 
 ////////////////////////////////////////////////////////////////////////////////
 // F-based energy density using automatic differentiation.
@@ -53,7 +58,6 @@ private:
 template<typename Real_>
 using TriCornerUVs = Eigen::Matrix<Real_, 3, 2, Eigen::RowMajor>;
 
-#include <MeshFEM/Elements/ElementBase.hh>
 template<typename Real_>
 struct DirichletParamElement : public ElementBase<DirichletParamElement<Real_>> {
     static constexpr bool CachesDeformedQuantities = false;
@@ -109,7 +113,6 @@ private:
 // Dirichlet parametrization element (x-based) using automatic differentiation
 // and operating only on node positions (ignoring LinearlyEmbeddedElement).
 ////////////////////////////////////////////////////////////////////////////////
-#include <MeshFEM/Elements/AutodiffElement.hh>
 template<typename Real_>
 struct DirichletElementEnergy {
     using LocalVars = TriCornerUVs<Real_>;
@@ -236,5 +239,7 @@ using SymDirichletParamElementAD = AutodiffElement<SymDirichletElementEnergy<Rea
 
 template<typename Real_>
 using SymDirichletParamElementTADCompare = AutodiffElement<SymDirichletElementTADCompare<Real_>>;
+
+} // namespace MeshFEM
 
 #endif /* end of include guard: DIRICHLETENERGY_HH */

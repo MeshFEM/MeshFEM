@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1...3.29)
+cmake_minimum_required(VERSION 3.14...3.31)
 project(MeshFEMDemos)
 
 if (${CMAKE_VERSION} VERSION_GREATER "3.13")
@@ -25,9 +25,8 @@ endif()
 
 option(INCLUDE_TINYAD "Whether to include TinyAD and build associated bindings" ON)
 
-if (INCLUDE_TINYAD) # If we want TinyAD, tell MeshFEM to download it
-    set(MESHFEM_FORCE_TINYAD_DOWNLOAD ON CACHE BOOL "" FORCE)
-endif()
+# IsotropicAutodiff requires TinyAD even when the comparison module is disabled.
+set(MESHFEM_FORCE_TINYAD_DOWNLOAD ON CACHE BOOL "" FORCE)
 
 if (NOT TARGET MeshFEM)
     option(MESHFEM_ENABLE_BENCHMARKING "" ON)
@@ -35,8 +34,9 @@ if (NOT TARGET MeshFEM)
 endif()
 
 # Color errors/warnings.
-list(APPEND CMAKE_MODULE_PATH ${THIRD_PARTY_DIR}/MeshFEM/cmake)
+list(APPEND CMAKE_MODULE_PATH ${THIRD_PARTY_DIR}/MeshFEM/3rdparty/MeshFEMCore/cmake)
 include(UseColors)
 
 include("${THIRD_PARTY_DIR}/TaylorAutodiff/SME2.cmake")
+add_subdirectory(${THIRD_PARTY_DIR}/IsotropicAutodiff)
 add_subdirectory(python_bindings)
