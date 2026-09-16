@@ -20,6 +20,8 @@ auto bindFastNewtonFlow(const std::string &name, py::module &m, py::module &deta
         }, py::arg("d"), "Get the degree-d Taylor coefficient as a numpy array (note: this is a view into the internal storage of the energy, not a copy)")
         .def("upgradeToDegree", &NFME::upgradeToDegree, py::arg("hessianFactorization"), py::arg("targetDegree"))
         .def("computeTaylorCoefficients", &NFME::computeTaylorCoefficients, py::arg("hessianFactorization"), py::arg("x1"), py::arg("degree") = 6, py::arg("arclen") = false, py::arg("projectHessian") = false)
+        .def_readwrite("pk1ChunkSize", &NFME::pk1ChunkSize, "PK1/arclength graph chunk size; 0 selects degree-dependent automatic tuning")
+        .def_readwrite("projectionChunkSize", &NFME::projectionChunkSize, "Projection graph chunk size; 0 selects automatic tuning for the projected-element count")
         .def_readonly("neg_delta_g", &NFME::neg_delta_g)
         ;
 }

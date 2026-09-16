@@ -16,17 +16,27 @@
 #include <MeshFEM/Elements/SolidElement.hh>
 #include <MeshFEM/EnergyDensities/SymmetricDirichlet.hh>
 #include "3rdparty/TaylorAutodiff/TaylorFieldViews.hh"
+#include "3rdparty/TaylorAutodiff/TaylorFieldInverse.hh"
 
 #include <MeshFEM/Utilities/fast_2x2_decompositions.hh>
 #include <MeshFEM/Utilities/fast_3x3_decompositions.hh>
 #include <MeshFEM/ParallelVectorOps.hh>
+#include "FastNewtonFlowProjection.hh"
+#include "FastNewtonFlowPK1.hh"
 
 struct SymmetricDirichletTADField {
     template<class MatTCField>
     static auto PK1(const MatTCField &F) {
-        auto Finv = inverse(F);
-        // return transpose(Finv) * Finv * transpose(Finv);
-        return F - transpose(Finv) * Finv * transpose(Finv);
+        auto Finv = inverse_2x2(F);
+        // auto Finv = inverse(F); // Generic Eigen recurrence for comparison.
+        // return F - transpose(Finv) * Finv * transpose(Finv);
+
+        // G = Finv^T Finv is symmetric: retain only [G00, G01, G11].
+        auto G = FastNewtonFlowDetail::PackedGram2x2<typename decltype(Finv)::node_type>::make(Finv);
+        G->setName("G");
+        return FastNewtonFlowDetail::PackedGramProductDifference2x2<
+            typename decltype(G)::node_type, typename decltype(Finv)::node_type,
+            typename MatTCField::node_type>::make(G, Finv, F);
     }
 
     template<class Mat>
@@ -38,21 +48,77 @@ struct SymmetricDirichletTADField {
 
     // Perturbation of PK1 contributed by switching the evaluation of
     // `H x'` to its projected version.
-    template<class FType, class FPrimeType>
-    static auto HessianProjectionDelta(double eigenvalueClampTarget, const FType &F, const FPrimeType &F_prime) {
-        auto I2 = frobeniusNormSq(F);
-        auto I3 = det(F);
-        auto lambda_4_minus_1 = (I3 - I2) / pow(I3, 3);
-        auto T = twist_eigenmatrix_view(F);
-        auto proj_coeff = doubleContract(T, F_prime);
+    template<class FType>
+    static auto HessianProjectionDelta(double eigenvalueClampTarget, const FType &F) {
+        // The projection term for 2D symmetric Dirichlet is:
+        //      (lambda_delta * (T : F')) * T
+        // where `T` is the "twist eigenmatrix" and `lambda_delta` is the
+        // shift in the associated eigenvalue needed to raise it to
+        // `eigenvalueClampTarget`.
+        //
+        // For efficiency, this expression can be algebraically simplified
+        // using the fact that T = [-b, -a; a, -b] / (sqrt(2) ||[a, b]||)
+        // with unnormalized axis vector [a, b] = [F00 + F11, F10 - F01].
+        // The normalization factors can be collected onto the scalar
+        // `lambda_delta`, avoiding a `sqrt` and matrix scaling.
+        // Operation `T : F'` turns out to be equivalent, up to the extracted
+        // normalization factors, to the 2D (scalar) cross product
+        // [a, b] x [a', b'].
+        // Finally, we can build the full expression by scaling `[a, b]`
+        // appropriately and applying the "unnormalized_twist_eigenmatrix_view"
+        // that maps an `[a, b]` vector to `[-b, -a; a, -b]` (trading matrix
+        // scaling for cheaper vector scaling).
+        //
+        // We furthermore note the identity:
+        //      ||[a, b]||^2 = I_2 + 2 I_3
+        // which we use as a further minor simplification. This does bypass the
+        // exact-degeneracy handling done in `UnnormalizedAxisExtractor`
+        // (needed to avoid expansion blow-ups in the pure-reflection case).
+        // However, since injective surface parametrization applications never
+        // accept and compute steps from configurations with `I_3 <= 0`, we can
+        // avoid explicitly handling the singularity.
+        auto axis = TaylorADFields::ClosestRotationHelpers2x2::UnnormalizedAxisExtractor<typename FType::node_type>::make(F);
+        auto axis_prime = derivative_view(axis);
+        auto invariants = FastNewtonFlowDetail::FusedInvariants2x2<typename FType::node_type>::make(F);
+        using InvariantsNode = typename decltype(invariants)::node_type;
+        auto I2 = FastNewtonFlowDetail::ExtractInvariant<InvariantsNode, 0>::make(invariants);
+        auto I3 = FastNewtonFlowDetail::ExtractInvariant<InvariantsNode, 1>::make(invariants);
+        invariants->setName("I2_I3_fused");
+        auto numerator = I3 - I2;
+        auto cube = pow(I3, 3);
+        auto lambda_4_minus_1 = numerator / cube;
+        auto proj_coeff = FastNewtonFlowDetail::cross_product_2D(axis, axis_prime);
         auto proj_dist = (eigenvalueClampTarget - 1) - lambda_4_minus_1;
-        auto mod = (proj_dist * proj_coeff) * T;
+        // auto axis_norm_sq = frobeniusNormSq(axis);
+        auto axis_norm_sq = I2 + scaled_view(I3, 2.0);
+        auto scaled_dist = proj_dist / scaled_view(axis_norm_sq, 2.0);
+        auto weight = scaled_dist * proj_coeff;
+        auto weighted_axis = weight * axis;
+        auto mod = TaylorADFields::unnormalized_twist_eigenmatrix_view(weighted_axis);
 
-        // Also name the graph nodes for debugging/benchmarking purposes.
         I2->setName("I2"); I3->setName("I3");
+        numerator->setName("numerator"); cube->setName("cube");
         lambda_4_minus_1->setName("lambda_4_minus_1");
+        axis->setName("axis"); axis_norm_sq->setName("axis_norm_sq"); axis_prime->setName("axis_prime");
         proj_coeff->setName("proj_coeff"); proj_dist->setName("proj_dist");
-        T->setName("T"); mod->setName("mod");
+        scaled_dist->setName("scaled_dist"); weight->setName("weight");
+        weighted_axis->setName("weighted_axis"); mod->setName("mod");
+
+        // Original normalized-axis graph, retained for comparison:
+        // auto I2 = frobeniusNormSq(F);
+        // auto I3 = det(F);
+        // auto lambda_4_minus_1 = (I3 - I2) / pow(I3, 3);
+        // auto F_prime = derivative_view(F);
+        // auto T = twist_eigenmatrix_view(F);
+        // auto proj_coeff = doubleContract(T, F_prime);
+        // auto proj_dist = (eigenvalueClampTarget - 1) - lambda_4_minus_1;
+        // auto mod = (proj_dist * proj_coeff) * T;
+        //
+        // // Also name the graph nodes for debugging/benchmarking purposes.
+        // I2->setName("I2"); I3->setName("I3");
+        // lambda_4_minus_1->setName("lambda_4_minus_1");
+        // proj_coeff->setName("proj_coeff"); proj_dist->setName("proj_dist");
+        // T->setName("T"); mod->setName("mod");
 
         return mod;
     }
@@ -77,8 +143,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
     using FType       = decltype(TaylorADFields::make_matrix_field<MNd>());
     using PType       = decltype(SymmetricDirichletTADField::PK1(std::declval<FType>())); // TODO: support additional energy densities beyond SymmetricDirichlet!
     using LambdaPType = decltype(std::declval<ScalarType>() * std::declval<PType>());
-    using FPrimeType  = decltype(derivative_view(std::declval<FType>()));
-    using HModType    = decltype(SymmetricDirichletTADField::HessianProjectionDelta(0.0, std::declval<FType>(), std::declval<FPrimeType>()));
+    using HModType = decltype(SymmetricDirichletTADField::HessianProjectionDelta(0.0, std::declval<FType>()));
 
     void initCoefficients(const VXd &d, bool arclen = false, bool projectHessian = false) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("FastNewtonFlow.initCoefficients");
@@ -97,9 +162,8 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         if (!m_P) m_P = std::make_unique<PType>(SymmetricDirichletTADField::PK1(*m_F));
 
         if (!m_F_slice) m_F_slice = std::make_unique<FType>(TaylorADFields::make_matrix_field<MNd>());
-        if (!m_F_prime) m_F_prime = std::make_unique<FPrimeType>(derivative_view(*m_F_slice));
         // TODO: rebuild `m_mod` when eigenvalueClampTarget is updated...
-        if (!m_mod) m_mod = std::make_unique<HModType>(SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, *m_F_slice, *m_F_prime));
+        if (!m_mod) m_mod = std::make_unique<HModType>(SymmetricDirichletTADField::HessianProjectionDelta(eigenvalueClampTarget, *m_F_slice));
 
         if (!m_coeffPerturb)       m_coeffPerturb       = std::make_unique<TaylorADFields::CoefficientPerturbations>();
         if (!m_lambdaCoeffPerturb) m_lambdaCoeffPerturb = std::make_unique<TaylorADFields::CoefficientPerturbations>();
@@ -119,7 +183,6 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
             cs_lambdaP.reset();
         }
 
-        auto &F_prime = *m_F_prime;
         auto &mod = *m_mod;
         auto mod_cs = mod->computeSequence();
         mod_cs.reset();
@@ -167,7 +230,6 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
         auto &F = *m_F;
         auto &P = *m_P;
-        auto &F_prime = *m_F_prime;
         auto &mod = *m_mod;
         auto mod_cs = mod->computeSequence();
 
@@ -183,6 +245,16 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         TaylorADFields::ComputeSequence cs_lambdaP;
         if (m_arclen) cs_lambdaP = (*m_lambda_P)->computeSequence();
         TaylorADFields::ComputeSequence cs_P = P->computeSequence();
+        size_t numWorkers = 1;
+#if MESHFEM_WITH_TBB
+        numWorkers = std::max(1, get_max_num_tbb_threads());
+#endif
+        // Calibrated on the M4 Pro at 14 workers, through degrees 8, 12, and 24.
+        // With few workers, the original larger chunks remain faster.
+        const size_t pkChunk = pk1ChunkSize ? pk1ChunkSize
+            : (numWorkers <= 4 ? 4096 : (targetDegree >= 24 ? 128 : 256));
+        cs_P.chunk_size = cs_lambdaP.chunk_size = pkChunk;
+        size_t projChunk = projectionChunkSize; // Zero: choose after the projected domain is known.
 
         const auto &m = Base::mesh();
         const size_t ne = m.numElements();
@@ -270,17 +342,14 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                         }
                     }
 
-                    // Currently F is newly known to degree `d - 1`, and so we can now determine coefficient `d - 2` of `F'`.
-                    assert(F_prime->degree() == d - 3);
-                    F_prime->computeSequence().upgrade(d - 2, /* ignoreHigherDegrees = */ true);
-
-                    if (d > 2) { // mod is first computed at degree 2, so perturbation is first needed at degree 3
-                        // The previous iteration computed a degree `d - 2` expansion of `mod`;
-                        // we need to update it to account for the new coefficient of `F'`.
-                        // Note that the `d - 2` coefficients of lambda_4/proj_dist are
-                        // already correct since they depend only the previously known `F` coefficients (up to degree `d - 2`).
-                        mod_perturbations.setPreappliedCoefficient(*F_prime, F_prime->coefficientPtr(d - 2));
-                        // mod_cs.perturbHighestDegreeCoefficient(mod_perturbations);
+                    if (projChunk == 0)
+                        projChunk = m_defaultProjectionChunkSize(m_projectedElementIndices.size(), numWorkers);
+                    mod_cs.chunk_size = projChunk;
+                    if (d > 2) {
+                        // Propagate corrections from the new F' coefficent to
+                        // the existing `d - 2` expansion of `mod`.
+                        const auto &F_slice = *m_F_slice;
+                        mod_perturbations.setPreappliedCoefficient(*F_slice, F_slice->coefficientPtr(d - 1));
                         mod_cs.perturb_and_upgrade(mod_perturbations, d - 1, /* ignoreHigherDegrees = */ true);
                     }
                     else mod_cs.upgrade(d - 1, /* ignoreHigherDegrees = */ true);
@@ -292,7 +361,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
             {
             BENCHMARK_SCOPED_TIMER_SECTION ta("Assembly");
             neg_delta_g.resize(Base::numVars());
-            Base::assembler().template assembleGradientConditionalGather</* Accumulate = */ false>(neg_delta_g, m, [this, &P, d, &projMask, &mod](size_t ei) -> ElementLocalVars {
+            auto eval_ge = [this, &P, d, &projMask, &mod](size_t ei) -> ElementLocalVars {
                     // P : (e_i otimes grad phi_j) = e_i . [P grad phi_j]
                     MNd P_e = m_arclen ? (*m_lambda_P)[d - 1][ei] : P[d - 1][ei];
 
@@ -337,7 +406,11 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                     const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric(); // TODO: higher-degree elements.
                     Eigen::Map<Eigen::Matrix<double, Dim, Dim + 1>>(contrib.data()) = (-Base::elements[ei].elementData().volume()) * P_e * grad_bary;
                     return contrib;
-                });
+                };
+
+                Base::assembler().template assembleGradientConditionalGather</* Accumulate = */ false>(neg_delta_g, m, eval_ge);
+                // setZeroParallel(neg_delta_g);
+                // Base::assembler().assembleGradientSpinLock(neg_delta_g, m, eval_ge);
             }
 
             ++m_degree;
@@ -375,7 +448,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 addScaledInPlace(x_tilde, x1, lambda_d);
 
                 m_lambdaCoeffPerturb->setPreappliedCoefficient(lambda, lambda.coefficientPtr(d - 1)); // but the coefficient computed in the previous iteration needs to be accounted for...
-                cs_lambdaP.perturbHighestDegreeCoefficient(*m_lambdaCoeffPerturb);
+                cs_lambdaP.perturb_and_upgrade(*m_lambdaCoeffPerturb, d - 1, true);
 
                 // auto lambdaP_recompute = (*m_lambda) * (*m_P);
                 // for (int d2 = 0; d2 < d; ++d2)
@@ -400,9 +473,28 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         return m_x_storage;
     }
 
+    // Spatial graph chunk sizes; zero selects the automatic policy.
+    // PK1 (and lambda * P): 256 below target degree 24, 128 at higher degrees.
+    // Projection: roughly two chunks per worker, rounded to powers of two in
+    // [256, 4096], using the current projected-element count; tiny domains use
+    // one chunk. Automatic mode retains 4096 with at most four workers.
+    // Explicit positive sizes override either choice; 4096/4096 restores the
+    // original traversal. These defaults are calibrated for the M4 Pro.
+    size_t pk1ChunkSize = 0;
+    size_t projectionChunkSize = 0;
+
     VXd neg_delta_g; // Public for validation/debugging access.
 
 private:
+    static size_t m_defaultProjectionChunkSize(size_t numProjected, size_t numWorkers) {
+        if (numWorkers <= 4) return 4096;
+        if (numProjected < 512) return std::max(size_t(1), numProjected);
+        const double desired = double(numProjected) / (2.0 * double(numWorkers));
+        size_t chunk = 256;
+        while ((chunk < 4096) && (desired > std::sqrt(2.0) * double(chunk))) chunk *= 2;
+        return chunk;
+    }
+
     bool m_arclen = false;
     bool m_projectHessian = false;
 
@@ -413,7 +505,6 @@ private:
     std::unique_ptr<LambdaPType> m_lambda_P; // Scaled version of `P` used for arclength variant.
     std::unique_ptr<ScalarType> m_lambda; // Normalization factor for arclength variant.
     std::unique_ptr<HModType> m_mod; // PK1 perturbation field for Hessian projection.
-    std::unique_ptr<FPrimeType> m_F_prime; // F' field
 
     std::unique_ptr<TaylorADFields::CoefficientPerturbations> m_coeffPerturb, m_lambdaCoeffPerturb, m_modCoeffPerturb;
     double eigenvalueClampTarget = 0;
