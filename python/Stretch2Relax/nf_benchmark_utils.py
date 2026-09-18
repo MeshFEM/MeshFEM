@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 import sys
 import time
@@ -34,10 +35,10 @@ for _dependency_path in (
 import MeshFEM  # noqa: F401,E402 - initializes MeshFEM's Python bindings
 import benchmark  # noqa: E402
 import continuation_parametrization  # noqa: E402
+import fast_newton_flow  # noqa: E402
 import flip_avoiding_step_length  # noqa: E402
 import mesh  # noqa: E402
 import mesh_energy  # noqa: E402
-import newton_flow  # noqa: E402
 import parallelism  # noqa: E402
 import param_utils  # noqa: E402
 import parametrization  # noqa: E402
@@ -66,6 +67,7 @@ CSV_COLUMNS = (
     "initializer",
     "initial_optimizer",
     "initial_optimization_iters",
+    "initial_optimization_grad_tol",
     "repeat_index",
     "constant_speed_indicator",
     "thread_num",
@@ -76,6 +78,30 @@ CSV_COLUMNS = (
     "time_spent_within_this_iteration",
     "current_timestamp",
 )
+RUN_STATUS_COLUMNS = (
+    "ID",
+    "model_name",
+    "method",
+    "initializer",
+    "initial_optimizer",
+    "initial_optimization_iters",
+    "initial_optimization_grad_tol",
+    "repeat_index",
+    "constant_speed_indicator",
+    "thread_num",
+    "max_iters",
+    "status",
+    "termination_reason",
+    "failure_scope",
+    "completed_iterations",
+    "last_recorded_phase",
+    "last_recorded_iteration",
+    "exception_type",
+    "exception_message",
+    "finished_timestamp",
+)
+RUN_STATUS_VALUES = frozenset({"converged", "completed", "failed", "skipped"})
+FAILURE_SCOPE_VALUES = frozenset({"NA", "model_load", "initializer", "run_execution"})
 
 
 class BenchmarkPhase(IntEnum):
@@ -129,6 +155,9 @@ class BenchmarkConfig:
     initial_optimizer_specs: tuple[InitialOptimizerSpec, ...]
     initial_optimization_iters: tuple[int, ...]
     initializer_specs: tuple[InitializerSpec, ...]
+    initial_only: bool = False
+    initial_optimization_grad_tols: tuple[float, ...] = (GRADIENT_TOLERANCE,)
+    models_dir_recursive: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,12 +168,21 @@ class RunSpec:
     model_path: Path
     model_name: str
     initializer_spec: InitializerSpec
-    method_spec: MethodSpec
+    method_spec: Optional[MethodSpec]
     initial_optimizer_spec: Optional[InitialOptimizerSpec]
     initial_optimization_iters: int
     thread_num: int
     repeat_index: int
     max_iters: int
+    initial_optimization_grad_tol: Optional[float] = GRADIENT_TOLERANCE
+
+    @property
+    def method_name(self) -> str:
+        """Return the selected core method or the initial-only sentinel."""
+
+        if self.method_spec is None:
+            return "N/A"
+        return self.method_spec.display_name
 
     @property
     def initial_optimizer_name(self) -> str:
@@ -481,6 +519,7 @@ class CsvIterationWriter:
 
         self._file = self.output_path.open("a", newline="", encoding="utf-8")
         self._writer = csv.DictWriter(self._file, fieldnames=CSV_COLUMNS)
+        self._last_positions: dict[str, tuple[int, int]] = {}
         if needs_header:
             self._writer.writeheader()
             self._file.flush()
@@ -503,10 +542,28 @@ class CsvIterationWriter:
         if int(row["initial_optimization_iters"]) == 0:
             if row["initial_optimizer"] != "N/A":
                 raise ValueError("Disabled Phase 1 requires initial_optimizer=N/A")
+            if row["initial_optimization_grad_tol"] != "NA":
+                raise ValueError("Disabled Phase 1 requires initial_optimization_grad_tol=NA")
         elif row["initial_optimizer"] == "N/A":
             raise ValueError("Enabled Phase 1 requires a named initial optimizer")
+        else:
+            grad_tol = float(row["initial_optimization_grad_tol"])
+            if not np.isfinite(grad_tol) or grad_tol <= 0:
+                raise ValueError("Enabled Phase 1 requires a positive finite gradient tolerance")
+        if row["method"] == "N/A":
+            if (
+                row["constant_speed_indicator"] != "NA"
+                or phase == int(BenchmarkPhase.CORE_METHOD)
+            ):
+                raise ValueError("Initial-only rows require constant_speed_indicator=NA and no Phase 2")
         self._writer.writerow(dict(row))
         self._file.flush()
+        self._last_positions[str(row["ID"])] = (phase, iteration_index)
+
+    def last_position(self, run_id: UUID | str) -> Optional[tuple[int, int]]:
+        """Return the last successfully written phase/index for one run."""
+
+        return self._last_positions.get(str(run_id))
 
     def close(self) -> None:
         """Flush and close the underlying CSV file."""
@@ -522,6 +579,144 @@ class CsvIterationWriter:
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Close the CSV whether the experiment succeeds or raises."""
+
+        self.close()
+
+
+class RunStatusCsvWriter:
+    """Append one terminal outcome row for each benchmark run specification."""
+
+    def __init__(self, output_path: Path) -> None:
+        """Open a status CSV and validate an existing exact header."""
+
+        self.output_path = Path(output_path)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        needs_header = not self.output_path.exists() or self.output_path.stat().st_size == 0
+        if not needs_header:
+            with self.output_path.open("r", newline="", encoding="utf-8") as existing:
+                header = next(csv.reader(existing), None)
+            if tuple(header or ()) != RUN_STATUS_COLUMNS:
+                raise ValueError(
+                    "Existing run-status CSV header does not match the benchmark "
+                    f"schema: {self.output_path}"
+                )
+
+        self._file = self.output_path.open("a", newline="", encoding="utf-8")
+        self._writer = csv.DictWriter(self._file, fieldnames=RUN_STATUS_COLUMNS)
+        self._written_ids: set[str] = set()
+        if needs_header:
+            self._writer.writeheader()
+            self._file.flush()
+
+    def write_row(self, row: Mapping[str, Any]) -> None:
+        """Validate, append, and flush one terminal run-status row."""
+
+        missing = set(RUN_STATUS_COLUMNS) - set(row)
+        extra = set(row) - set(RUN_STATUS_COLUMNS)
+        if missing or extra:
+            raise ValueError(
+                f"Run-status row schema mismatch; missing={missing}, extra={extra}"
+            )
+
+        run_id = str(row["ID"])
+        UUID(run_id)
+        if run_id in self._written_ids:
+            raise ValueError(f"Duplicate run-status row for ID={run_id}")
+
+        status = str(row["status"])
+        failure_scope = str(row["failure_scope"])
+        if status not in RUN_STATUS_VALUES:
+            raise ValueError(f"Invalid run status: {status}")
+        if failure_scope not in FAILURE_SCOPE_VALUES:
+            raise ValueError(f"Invalid failure scope: {failure_scope}")
+        if status in {"converged", "completed"} and failure_scope != "NA":
+            raise ValueError("Successful run statuses require failure_scope=NA")
+        if status == "skipped" and failure_scope not in {"model_load", "initializer"}:
+            raise ValueError("Skipped status requires a model or initializer failure scope")
+        if status == "failed" and failure_scope != "run_execution":
+            raise ValueError("Failed status requires failure_scope=run_execution")
+
+        initial_iters = int(row["initial_optimization_iters"])
+        initial_optimizer = row["initial_optimizer"]
+        initial_tol = row["initial_optimization_grad_tol"]
+        if initial_iters == 0:
+            if initial_optimizer != "N/A" or initial_tol != "NA":
+                raise ValueError(
+                    "Disabled Phase 1 requires N/A optimizer and gradient tolerance"
+                )
+        else:
+            if initial_optimizer == "N/A":
+                raise ValueError("Enabled Phase 1 requires a named initial optimizer")
+            grad_tol = float(initial_tol)
+            if not np.isfinite(grad_tol) or grad_tol <= 0:
+                raise ValueError(
+                    "Enabled Phase 1 requires a positive finite gradient tolerance"
+                )
+        if row["method"] == "N/A" and row["constant_speed_indicator"] != "NA":
+            raise ValueError("Initial-only status rows require constant speed NA")
+
+        completed = int(row["completed_iterations"])
+        if completed < 0:
+            raise ValueError("completed_iterations must be nonnegative")
+        if completed > int(row["max_iters"]):
+            raise ValueError("completed_iterations cannot exceed max_iters")
+        phase = row["last_recorded_phase"]
+        iteration = row["last_recorded_iteration"]
+        if (phase == "NA") != (iteration == "NA"):
+            raise ValueError("Last recorded phase and iteration must both be NA or numeric")
+        if phase != "NA":
+            phase = int(phase)
+            iteration = int(iteration)
+            if phase not in tuple(int(value) for value in BenchmarkPhase):
+                raise ValueError(f"Invalid last recorded phase: {phase}")
+            if iteration < 0:
+                raise ValueError("last_recorded_iteration must be nonnegative")
+            if phase == int(BenchmarkPhase.UV_INITIALIZATION) and iteration != 0:
+                raise ValueError("A Phase 0 last position requires iteration zero")
+            if phase != int(BenchmarkPhase.UV_INITIALIZATION) and iteration < 1:
+                raise ValueError("An optimization last position requires iteration >= 1")
+        if status == "skipped" and (
+            completed != 0 or phase != "NA" or iteration != "NA"
+        ):
+            raise ValueError("Skipped runs cannot have completed or recorded iterations")
+        if phase != "NA" and completed != iteration:
+            raise ValueError(
+                "completed_iterations must equal the last continuous iteration index"
+            )
+
+        exception_type = row["exception_type"]
+        exception_message = row["exception_message"]
+        if (exception_type == "NA") != (exception_message == "NA"):
+            raise ValueError("Exception type and message must both be NA or both be present")
+        if status in {"converged", "completed"} and exception_type != "NA":
+            raise ValueError("Successful run statuses cannot contain an exception")
+        if not str(row["termination_reason"]):
+            raise ValueError("termination_reason must not be empty")
+
+        finished = datetime.fromisoformat(
+            str(row["finished_timestamp"]).replace("Z", "+00:00")
+        )
+        if finished.tzinfo is None:
+            raise ValueError("finished_timestamp must include a UTC offset")
+
+        self._writer.writerow(dict(row))
+        self._file.flush()
+        self._written_ids.add(run_id)
+
+    def close(self) -> None:
+        """Flush and close the underlying status CSV."""
+
+        if not self._file.closed:
+            self._file.flush()
+            self._file.close()
+
+    def __enter__(self) -> "RunStatusCsvWriter":
+        """Return this writer as a context manager."""
+
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Close the status CSV whether the benchmark succeeds or raises."""
 
         self.close()
 
@@ -609,6 +804,61 @@ def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def run_status_csv_path(output_csv: Path) -> Path:
+    """Derive the automatic companion status path for an iteration CSV."""
+
+    output_csv = Path(output_csv)
+    return output_csv.with_name(f"{output_csv.stem}_run_status.csv")
+
+
+def build_run_status_row(
+    run_spec: RunSpec,
+    status: str,
+    termination_reason: str,
+    failure_scope: str,
+    completed_iterations: int,
+    last_position: Optional[tuple[int, int]],
+    exception: Optional[BaseException] = None,
+) -> dict[str, Any]:
+    """Build one terminal row matching the companion run-status contract."""
+
+    constant_speed = (
+        None if run_spec.method_spec is None else run_spec.method_spec.constant_speed
+    )
+    if last_position is None:
+        last_phase: int | str = "NA"
+        last_iteration: int | str = "NA"
+    else:
+        last_phase, last_iteration = last_position
+    return {
+        "ID": str(run_spec.run_id),
+        "model_name": run_spec.model_name,
+        "method": run_spec.method_name,
+        "initializer": run_spec.initializer_spec.canonical_name,
+        "initial_optimizer": run_spec.initial_optimizer_name,
+        "initial_optimization_iters": run_spec.initial_optimization_iters,
+        "initial_optimization_grad_tol": (
+            "NA" if run_spec.initial_optimization_grad_tol is None
+            else run_spec.initial_optimization_grad_tol
+        ),
+        "repeat_index": run_spec.repeat_index,
+        "constant_speed_indicator": (
+            "NA" if constant_speed is None else str(bool(constant_speed))
+        ),
+        "thread_num": run_spec.thread_num,
+        "max_iters": run_spec.max_iters,
+        "status": status,
+        "termination_reason": termination_reason,
+        "failure_scope": failure_scope,
+        "completed_iterations": completed_iterations,
+        "last_recorded_phase": last_phase,
+        "last_recorded_iteration": last_iteration,
+        "exception_type": "NA" if exception is None else type(exception).__name__,
+        "exception_message": "NA" if exception is None else str(exception),
+        "finished_timestamp": utc_timestamp(),
+    }
+
+
 def collect_iteration_metrics(problem: Any) -> tuple[float, float]:
     """Evaluate energy and full Euclidean gradient norm at the current iterate."""
 
@@ -627,15 +877,21 @@ def build_iteration_row(
 ) -> dict[str, Any]:
     """Build one row matching the public phase-aware CSV contract."""
 
-    constant_speed = run_spec.method_spec.constant_speed
+    constant_speed = (
+        None if run_spec.method_spec is None else run_spec.method_spec.constant_speed
+    )
     speed_indicator = "NA" if constant_speed is None else str(bool(constant_speed))
     return {
         "ID": str(run_spec.run_id),
         "model_name": run_spec.model_name,
-        "method": run_spec.method_spec.display_name,
+        "method": run_spec.method_name,
         "initializer": run_spec.initializer_spec.canonical_name,
         "initial_optimizer": run_spec.initial_optimizer_name,
         "initial_optimization_iters": run_spec.initial_optimization_iters,
+        "initial_optimization_grad_tol": (
+            "NA" if run_spec.initial_optimization_grad_tol is None
+            else run_spec.initial_optimization_grad_tol
+        ),
         "repeat_index": run_spec.repeat_index,
         "constant_speed_indicator": speed_indicator,
         "thread_num": run_spec.thread_num,
@@ -648,33 +904,38 @@ def build_iteration_row(
     }
 
 
-def discover_models(models_dir: Path) -> list[Path]:
-    """Discover supported mesh files in one directory and sort them deterministically."""
+def discover_models(models_dir: Path, recursive: bool = False) -> list[Path]:
+    """Discover supported mesh files, optionally including subdirectories."""
 
     models_dir = Path(models_dir)
     if not models_dir.is_dir():
         raise ValueError(f"Models directory does not exist or is not a directory: {models_dir}")
 
+    candidates = models_dir.rglob("*") if recursive else models_dir.iterdir()
     model_paths = sorted(
         (
             path
-            for path in models_dir.iterdir()
+            for path in candidates
             if path.is_file() and path.suffix.lower() in SUPPORTED_MODEL_EXTENSIONS
         ),
-        key=lambda path: (path.name.lower(), path.name),
+        key=lambda path: (
+            str(path.relative_to(models_dir)).lower(),
+            str(path.relative_to(models_dir)),
+        ),
     )
     if not model_paths:
         raise ValueError(f"No OBJ, OFF, or MSH models found in: {models_dir}")
 
-    stems: dict[str, Path] = {}
-    for path in model_paths:
-        normalized_stem = path.stem.lower()
-        if normalized_stem in stems:
-            raise ValueError(
-                "Duplicate model stem would make CSV rows ambiguous: "
-                f"{stems[normalized_stem].name} and {path.name}"
-            )
-        stems[normalized_stem] = path
+    if not recursive:
+        stems: dict[str, Path] = {}
+        for path in model_paths:
+            normalized_stem = path.stem.lower()
+            if normalized_stem in stems:
+                raise ValueError(
+                    "Duplicate model stem in non-recursive discovery: "
+                    f"{stems[normalized_stem].name} and {path.name}"
+                )
+            stems[normalized_stem] = path
     return model_paths
 
 
@@ -957,6 +1218,14 @@ def parse_newton_token(token: str) -> Optional[MethodSpec]:
     return MethodSpec(adapter_key="newton", display_name="Newton")
 
 
+def parse_slim_token(token: str) -> Optional[MethodSpec]:
+    """Parse the case-insensitive SLIM method token."""
+
+    if token.lower() != "slim":
+        return None
+    return MethodSpec(adapter_key="slim", display_name="SLIM")
+
+
 def parse_rs_token(token: str) -> Optional[MethodSpec]:
     """Parse the exact rotation-strain method token."""
 
@@ -1064,7 +1333,7 @@ def build_common_problem_bundle(
         normalized_mesh.elements(),
     )
     mesh_2d.reembedElements(normalized_mesh.vertices())
-    flow_energy = newton_flow.symmetric_dirichlet(mesh_2d, nodal_variables)
+    flow_energy = fast_newton_flow.symmetric_dirichlet(mesh_2d, nodal_variables)
     problem = py_newton_optimizer.NewtonMultiobjectiveProblem(
         nodal_variables,
         [flow_energy],
@@ -1111,6 +1380,7 @@ def run_ordinary_newton_stage(
     phase: BenchmarkPhase,
     iteration_offset: int,
     max_iters: int,
+    grad_tol: float = GRADIENT_TOLERANCE,
 ) -> StageOutcome:
     """Run and record an ordinary-Newton stage through MeshFEM's optimizer."""
 
@@ -1120,17 +1390,102 @@ def run_ordinary_newton_stage(
     callback = _OrdinaryNewtonCallback(recorder, phase, iteration_offset)
     bundle.problem.setCustomIterationCallback(callback)
     bundle.optimizer.options.niter = max_iters
+    bundle.optimizer.options.gradTol = grad_tol
     bundle.optimizer.optimize()
     completed = callback.completed_iterations
     final_gradient = _final_gradient_norm(bundle.problem)
 
     if recorder.nonfinite_detected or not np.isfinite(final_gradient):
         return StageOutcome(completed, False, True, "nonfinite_state")
-    if final_gradient < GRADIENT_TOLERANCE:
-        return StageOutcome(completed, True, False, "gradient_tolerance")
     if completed >= max_iters:
         return StageOutcome(completed, False, False, "iteration_budget_exhausted")
+    if final_gradient < grad_tol:
+        return StageOutcome(completed, True, False, "gradient_tolerance")
     return StageOutcome(completed, False, True, "optimizer_stopped_before_budget")
+
+
+def run_slim_stage(
+    bundle: ProblemBundle,
+    recorder: IterationRecorder,
+    phase: BenchmarkPhase,
+    iteration_offset: int,
+    max_iters: int,
+    grad_tol: float = GRADIENT_TOLERANCE,
+) -> StageOutcome:
+    """Run source-reference SLIM with the plan-defined PP-style line search."""
+
+    if max_iters <= 0:
+        return StageOutcome(0, False, False, "iteration_budget_exhausted")
+
+    slim_energy = continuation_parametrization.slim_param(
+        bundle.normalized_mesh,
+        bundle.nodal_variables,
+    )
+    slim_energy.elementHessianShift = 0.0
+    slim_problem = py_newton_optimizer.NewtonMultiobjectiveProblem(
+        bundle.nodal_variables,
+        [slim_energy],
+    )
+    slim_problem.setFixedVars([0, 1])
+    slim_problem.hessianShift = 0.0
+    slim_problem.useRelativeHessianShift = False
+
+    slim_optimizer = slim_problem.optimizer()
+    slim_optimizer.options.hessianProjectionController = (
+        py_newton_optimizer.HessianProjectionNever()
+    )
+    slim_optimizer.options.gradTol = grad_tol
+    slim_optimizer.options.verbose = 0
+
+    step_limiter = flip_avoiding_step_length.FlipAvoidingStepLength(
+        bundle.normalized_mesh.elements()
+    )
+    step_limiter.backoffFactor = 1.0
+    slim_problem.initialFeasibleStepLengthComputer = step_limiter
+    line_search = opt_utils.BacktrackArmijoLineSearch(
+        backoff_factor=0.8,
+        backtrack_factor=0.5,
+        armijo_c=0.2,
+        max_alpha=1.25,
+        step_limiter=step_limiter,
+    )
+    linear_extrapolator = extra_utils.LinearExtrapolator()
+    completed = 0
+
+    while completed < max_iters:
+        gradient_norm = _final_gradient_norm(bundle.problem)
+        if not np.isfinite(gradient_norm):
+            return StageOutcome(completed, False, True, "nonfinite_state")
+        if gradient_norm < grad_tol:
+            return StageOutcome(completed, True, False, "gradient_tolerance")
+
+        start_ns = time.perf_counter_ns()
+        opt_utils.newton_extrapolate(
+            slim_optimizer,
+            linear_extrapolator,
+            line_search,
+            grad_tol=0.0,
+            max_iters=1,
+            verbose=False,
+            max_extraNewton_stop_counter=np.inf,
+        )
+        bundle.problem.setVars(slim_problem.getVars())
+        end_ns = time.perf_counter_ns()
+
+        finite = recorder.record(
+            bundle.problem,
+            phase,
+            iteration_offset + completed + 1,
+            end_ns - start_ns,
+        )
+        completed += 1
+        if not finite:
+            return StageOutcome(completed, False, True, "nonfinite_state")
+
+    final_gradient = _final_gradient_norm(bundle.problem)
+    if not np.isfinite(final_gradient):
+        return StageOutcome(completed, False, True, "nonfinite_state")
+    return StageOutcome(completed, False, False, "iteration_budget_exhausted")
 
 
 def run_extrapolated_stage(
@@ -1207,6 +1562,24 @@ def run_newton_main_stage(
     )
 
 
+def run_slim_main_stage(
+    bundle: ProblemBundle,
+    run_spec: RunSpec,
+    recorder: IterationRecorder,
+    iteration_offset: int,
+    max_iters: int,
+) -> StageOutcome:
+    """Run source-reference SLIM for the core-method iteration budget."""
+
+    return run_slim_stage(
+        bundle,
+        recorder,
+        BenchmarkPhase.CORE_METHOD,
+        iteration_offset,
+        max_iters,
+    )
+
+
 def run_taylor_main_stage(
     bundle: ProblemBundle,
     run_spec: RunSpec,
@@ -1273,7 +1646,7 @@ def run_rs_main_stage(
 
 
 def register_builtin_methods() -> MethodRegistry:
-    """Register ordinary Newton, Taylor, Pade, and rotation-strain adapters."""
+    """Register Newton, SLIM, Taylor, Pade, and rotation-strain adapters."""
 
     registry = MethodRegistry()
     registry.register(
@@ -1284,6 +1657,16 @@ def register_builtin_methods() -> MethodRegistry:
             uses_initial_optimization=True,
             uses_constant_speed=False,
             run_main_stage=run_newton_main_stage,
+        )
+    )
+    registry.register(
+        MethodAdapter(
+            key="slim",
+            token_description="SLIM",
+            try_parse_token=parse_slim_token,
+            uses_initial_optimization=True,
+            uses_constant_speed=False,
+            run_main_stage=run_slim_main_stage,
         )
     )
     registry.register(
@@ -1333,7 +1716,34 @@ def run_newton_initial_optimizer(
         BenchmarkPhase.INITIAL_OPTIMIZATION,
         iteration_offset=0,
         max_iters=max_iters,
+        grad_tol=run_spec.initial_optimization_grad_tol,
     )
+    return InitialOptimizerResult(
+        completed_iterations=outcome.completed_iterations,
+        benchmark_converged=outcome.converged,
+        failed=outcome.failed,
+        termination_reason=outcome.termination_reason,
+        bundle=bundle,
+    )
+
+
+def run_slim_initial_optimizer(
+    bundle: ProblemBundle,
+    run_spec: RunSpec,
+    recorder: IterationRecorder,
+    max_iters: int,
+) -> InitialOptimizerResult:
+    """Run source-reference SLIM in Phase 1 and hand off its accepted UV state."""
+
+    outcome = run_slim_stage(
+        bundle,
+        recorder,
+        BenchmarkPhase.INITIAL_OPTIMIZATION,
+        iteration_offset=0,
+        max_iters=max_iters,
+        grad_tol=run_spec.initial_optimization_grad_tol,
+    )
+    bundle.optimizer.options.hessianProjectionController.reset()
     return InitialOptimizerResult(
         completed_iterations=outcome.completed_iterations,
         benchmark_converged=outcome.converged,
@@ -1355,6 +1765,14 @@ def register_builtin_initial_optimizers() -> InitialOptimizerRegistry:
             run_stage=run_newton_initial_optimizer,
         )
     )
+    registry.register(
+        InitialOptimizerAdapter(
+            key="slim",
+            canonical_name="SLIM",
+            aliases=(),
+            run_stage=run_slim_initial_optimizer,
+        )
+    )
     return registry
 
 
@@ -1368,7 +1786,6 @@ def run_complete_method(
 ) -> RunOutcome:
     """Record initialization, then run optional Phase 1 and core Phase 2."""
 
-    adapter = method_registry.get(run_spec.method_spec.adapter_key)
     recorder = IterationRecorder(writer, run_spec)
     initialization_finite = recorder.record(
         bundle.problem,
@@ -1381,6 +1798,7 @@ def run_complete_method(
         return RunOutcome(0, False, True, "nonfinite_initialization")
 
     completed = 0
+    initial_stage = None
     if run_spec.initial_optimization_iters > 0:
         if run_spec.initial_optimizer_spec is None:
             raise ValueError("Positive Phase-1 cap requires an initial optimizer")
@@ -1395,13 +1813,31 @@ def run_complete_method(
         )
         bundle = initial_stage.bundle
         completed += initial_stage.completed_iterations
-        if initial_stage.failed or initial_stage.benchmark_converged:
+        if initial_stage.failed:
             return RunOutcome(
                 completed_iterations=completed,
-                converged=initial_stage.benchmark_converged,
-                failed=initial_stage.failed,
+                converged=False,
+                failed=True,
                 termination_reason=initial_stage.termination_reason,
             )
+
+    if run_spec.method_spec is None:
+        if initial_stage is None:
+            return RunOutcome(0, False, False, "initial_optimization_disabled")
+        return RunOutcome(
+            completed_iterations=completed,
+            converged=initial_stage.benchmark_converged,
+            failed=False,
+            termination_reason=initial_stage.termination_reason,
+        )
+
+    if (
+        initial_stage is not None
+        and _final_gradient_norm(bundle.problem) < GRADIENT_TOLERANCE
+    ):
+        return RunOutcome(completed, True, False, "gradient_tolerance")
+
+    adapter = method_registry.get(run_spec.method_spec.adapter_key)
 
     if adapter.uses_initial_optimization and run_spec.initial_optimizer_spec is None:
         bundle.optimizer.options.hessianProjectionController.reset()
@@ -1439,7 +1875,11 @@ def validate_config(config: BenchmarkConfig) -> None:
         raise ValueError(f"Models directory does not exist: {config.models_dir}")
     if config.output_csv.exists() and config.output_csv.is_dir():
         raise ValueError(f"Output CSV path is a directory: {config.output_csv}")
-    if not config.requested_method_tokens:
+    if config.initial_only and config.requested_method_tokens:
+        raise ValueError("--methods cannot be used with --initial-only")
+    if config.initial_only and config.constant_speed_mode is not None:
+        raise ValueError("--constant-speed cannot be used with --initial-only")
+    if not config.initial_only and not config.requested_method_tokens:
         raise ValueError("At least one method is required")
     if not config.initializer_specs:
         raise ValueError("At least one initializer is required")
@@ -1463,6 +1903,17 @@ def validate_config(config: BenchmarkConfig) -> None:
         config.initial_optimization_iters
     ):
         raise ValueError("--initial-optimization-iters must not contain duplicates")
+    if not config.initial_optimization_grad_tols:
+        raise ValueError("--initial-optimization-grad-tol needs at least one value")
+    if any(
+        not np.isfinite(tol) or tol <= 0
+        for tol in config.initial_optimization_grad_tols
+    ):
+        raise ValueError("--initial-optimization-grad-tol values must be positive and finite")
+    if len(set(config.initial_optimization_grad_tols)) != len(
+        config.initial_optimization_grad_tols
+    ):
+        raise ValueError("--initial-optimization-grad-tol must not contain duplicates")
     if not config.thread_counts or any(thread < 1 for thread in config.thread_counts):
         raise ValueError("--threads must contain positive integers")
     if len(set(config.thread_counts)) != len(config.thread_counts):
@@ -1471,24 +1922,27 @@ def validate_config(config: BenchmarkConfig) -> None:
 
 def initial_optimization_variants_for_method(
     config: BenchmarkConfig,
-    method_spec: MethodSpec,
+    method_spec: Optional[MethodSpec],
     method_registry: MethodRegistry,
-) -> tuple[tuple[Optional[InitialOptimizerSpec], int], ...]:
-    """Return Phase-1 optimizer/limit variants for one core method."""
+) -> tuple[tuple[Optional[InitialOptimizerSpec], int, Optional[float]], ...]:
+    """Return Phase-1 optimizer/limit/tolerance variants for one run."""
 
-    adapter = method_registry.get(method_spec.adapter_key)
-    if not adapter.uses_initial_optimization:
-        return ((None, 0),)
+    if (
+        method_spec is not None
+        and not method_registry.get(method_spec.adapter_key).uses_initial_optimization
+    ):
+        return ((None, 0, None),)
 
-    variants: list[tuple[Optional[InitialOptimizerSpec], int]] = []
+    variants: list[tuple[Optional[InitialOptimizerSpec], int, Optional[float]]] = []
     if 0 in config.initial_optimization_iters:
-        variants.append((None, 0))
+        variants.append((None, 0, None))
     for optimizer_spec in config.initial_optimizer_specs:
-        variants.extend(
-            (optimizer_spec, count)
-            for count in config.initial_optimization_iters
-            if count > 0
-        )
+        for count in config.initial_optimization_iters:
+            if count > 0:
+                variants.extend(
+                    (optimizer_spec, count, tol)
+                    for tol in config.initial_optimization_grad_tols
+                )
     return tuple(variants)
 
 
@@ -1496,11 +1950,12 @@ def build_run_spec(
     config: BenchmarkConfig,
     model_path: Path,
     initializer_spec: InitializerSpec,
-    method_spec: MethodSpec,
+    method_spec: Optional[MethodSpec],
     thread_num: int,
     repeat_index: int,
     initial_optimizer_spec: Optional[InitialOptimizerSpec],
     initial_optimization_iters: int,
+    initial_optimization_grad_tol: Optional[float],
 ) -> RunSpec:
     """Build one immutable complete-run specification from loop coordinates."""
 
@@ -1508,10 +1963,14 @@ def build_run_spec(
         raise ValueError("A zero Phase-1 cap requires initial_optimizer_spec=None")
     if initial_optimization_iters > 0 and initial_optimizer_spec is None:
         raise ValueError("A positive Phase-1 cap requires an initial optimizer")
+    if initial_optimization_iters == 0 and initial_optimization_grad_tol is not None:
+        raise ValueError("A zero Phase-1 cap requires no gradient tolerance")
+    if initial_optimization_iters > 0 and initial_optimization_grad_tol is None:
+        raise ValueError("A positive Phase-1 cap requires a gradient tolerance")
     return RunSpec(
         run_id=uuid4(),
         model_path=model_path,
-        model_name=model_path.stem,
+        model_name=os.path.relpath(model_path, start=_MODULE_DIR),
         initializer_spec=initializer_spec,
         method_spec=method_spec,
         initial_optimizer_spec=initial_optimizer_spec,
@@ -1519,6 +1978,7 @@ def build_run_spec(
         thread_num=thread_num,
         repeat_index=repeat_index,
         max_iters=config.max_iters,
+        initial_optimization_grad_tol=initial_optimization_grad_tol,
     )
 
 
@@ -1535,13 +1995,13 @@ def build_experiment_matrix(
         for initializer_spec in config.initializer_specs:
             for thread_num in config.thread_counts:
                 for repeat_index in range(1, config.repeat_count + 1):
-                    for method_spec in methods:
+                    for method_spec in ((None,) if config.initial_only else methods):
                         phase_one_variants = initial_optimization_variants_for_method(
                             config,
                             method_spec,
                             method_registry,
                         )
-                        for optimizer_spec, initial_iters in phase_one_variants:
+                        for optimizer_spec, initial_iters, grad_tol in phase_one_variants:
                             matrix.append(
                                 build_run_spec(
                                     config,
@@ -1552,14 +2012,17 @@ def build_experiment_matrix(
                                     repeat_index,
                                     optimizer_spec,
                                     initial_iters,
+                                    grad_tol,
                                 )
                             )
     return matrix
 
 
-def format_method_variant(method_spec: MethodSpec) -> str:
+def format_method_variant(method_spec: Optional[MethodSpec]) -> str:
     """Format a method variant for concise progress output."""
 
+    if method_spec is None:
+        return "N/A"
     if method_spec.constant_speed is None:
         return method_spec.display_name
     return f"{method_spec.display_name}[constant_speed={method_spec.constant_speed}]"

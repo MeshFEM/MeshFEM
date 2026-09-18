@@ -18,8 +18,6 @@ import numpy as np
 import igl
 import differential_operators, sparse_matrices
 
-import newton_flow 
-import newton_flow_utils as nfu
 import vector_pade
 import param_utils, sim_utils
 import rotation_strain_extrapolation
@@ -346,11 +344,21 @@ class HybridExtrapolator:
         if self._active_extrapolator is None:
             raise RuntimeError("linesearch_begin must be called before linesearch_eval")
         return self._active_extrapolator.linesearch_eval(alpha)
+
+def _compute_fast_newton_flow_coefficients(flow_energy, opt, d, max_degree,
+                                           constant_speed, project_hessian):
+    return np.asarray(flow_energy.computeTaylorCoefficients(
+        opt.hessian_factorization,
+        d,
+        degree=max_degree,
+        arclen=constant_speed,
+        projectHessian=project_hessian,
+    ))
     
 class TaylorExtrapolator:
     def __init__(self, opt, max_degree, constant_speed=True):
         """
-        Assume opt.get_problem() contains one nfu(newton_flow_utils) object
+        Assume opt.get_problem().term(0) is a fast_newton_flow symmetric-Dirichlet energy.
         """
         self.opt = opt
         self.prob = opt.get_problem()
@@ -367,20 +375,19 @@ class TaylorExtrapolator:
         return np.array([self.linesearch_eval(a) for a in alphas])
     
     def linesearch_begin(self, x0, d):
-        opt = self.opt
-        proj = self.prob.hessianWasProjected
-        if self.constant_speed:
-            speed = np.linalg.norm(d)
-            scales = speed ** (np.arange(self.max_degree) + 1)
-            d_coeffs = scales[:, np.newaxis] * np.array(self.nf.computeTaylorCoefficientsArclen(opt.hessian_factorization, self.max_degree, proj))
-        else:
-            d_coeffs = self.nf.computeTaylorCoefficients(opt.hessian_factorization, self.max_degree, proj)
         self.x0 = x0
-        self.d_coeffs = d_coeffs
+        self.d_coeffs = _compute_fast_newton_flow_coefficients(
+            self.nf,
+            self.opt,
+            d,
+            self.max_degree,
+            self.constant_speed,
+            self.prob.hessianWasProjected,
+        )
         
     def linesearch_eval(self, alpha):
         """
-        same with nfu.eval_trajectory_taylor
+        Evaluate the Taylor trajectory prepared by linesearch_begin.
         """
         coeffs = self.d_coeffs[:self.max_degree]
         x = self.x0.copy()
@@ -391,7 +398,7 @@ class TaylorExtrapolator:
 class PadeExtrapolator:
     def __init__(self, opt, max_degree, constant_speed=True):
         """
-        Assume opt.get_problem() contains one nfu(newton_flow_utils) object
+        Assume opt.get_problem().term(0) is a fast_newton_flow symmetric-Dirichlet energy.
         """
         self.opt = opt
         self.prob = opt.get_problem()
@@ -408,17 +415,15 @@ class PadeExtrapolator:
         return np.array([self.linesearch_eval(a) for a in alphas])
     
     def linesearch_begin(self, x0, d):
-        opt = self.opt
-        proj = self.prob.hessianWasProjected
-        # proj = False
-        if self.constant_speed:
-            speed = np.linalg.norm(d)
-            scales = speed ** (np.arange(self.max_degree) + 1)
-            d_coeffs = scales[:, np.newaxis] * np.array(self.nf.computeTaylorCoefficientsArclen(opt.hessian_factorization, self.max_degree, proj))
-        else:
-            d_coeffs = self.nf.computeTaylorCoefficients(opt.hessian_factorization, self.max_degree, proj)
         self.x0 = x0
-        self.d_coeffs = d_coeffs
+        self.d_coeffs = _compute_fast_newton_flow_coefficients(
+            self.nf,
+            self.opt,
+            d,
+            self.max_degree,
+            self.constant_speed,
+            self.prob.hessianWasProjected,
+        )
         coeffs = self.d_coeffs[:self.max_degree]
         degree = len(coeffs)
         if degree < 2:
@@ -433,7 +438,6 @@ class PadeExtrapolator:
         
     def linesearch_eval(self, alpha):
         """
-        same with nfu.eval_trajectory_vector_pade
+        Evaluate the vector-Pade trajectory prepared by linesearch_begin.
         """
         return self.f(alpha).reshape(-1, 2)
-    

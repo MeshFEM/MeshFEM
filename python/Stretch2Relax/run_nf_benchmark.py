@@ -38,9 +38,11 @@ from nf_benchmark_utils import (  # noqa: E402
     InitialOptimizerRegistry,
     InitializerRegistry,
     MethodRegistry,
+    RunStatusCsvWriter,
     RunSpec,
     build_common_problem_bundle,
     build_experiment_matrix,
+    build_run_status_row,
     discover_models,
     expand_method_specs,
     format_method_variant,
@@ -52,6 +54,7 @@ from nf_benchmark_utils import (  # noqa: E402
     register_builtin_initializers,
     register_builtin_methods,
     run_complete_method,
+    run_status_csv_path,
     set_thread_limit,
     timed_initialize_uv,
     validate_config,
@@ -74,8 +77,8 @@ def build_parser(
 
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark Newton, Newton-flow extrapolators, and rotation-strain "
-            "extrapolation on pre-cut surface meshes."
+            "Benchmark Newton, SLIM, Newton-flow extrapolators, and "
+            "rotation-strain extrapolation on pre-cut surface meshes."
         ),
         epilog="""Examples:
   Run Newton and Taylor2 with two initializers using otherwise default settings:
@@ -111,6 +114,23 @@ def build_parser(
       --initial-optimizer Newton \\
       --initial-optimization-iters 0 5 10 \\
       --dry-run
+
+  Compare UV initializers and Phase-1 optimizers without a core Phase 2:
+    python run_nf_benchmark.py \\
+      --models-dir /path/to/precut-models \\
+      --output-csv exp_results/initial_only.csv \\
+      --initial-only \\
+      --initializers tutte energy_minimal \\
+      --initial-optimizer Newton SLIM \\
+      --initial-optimization-iters 0 5 10 \\
+      --initial-optimization-grad-tol 1.0 0.1 1e-2
+
+  Include mesh files in subdirectories of the models directory:
+    python run_nf_benchmark.py \\
+      --models-dir /path/to/precut-models \\
+      --models-dir-recursive \\
+      --output-csv exp_results/recursive.csv \\
+      --methods Newton
 """,
         formatter_class=_BenchmarkHelpFormatter,
     )
@@ -118,20 +138,35 @@ def build_parser(
         "--models-dir",
         type=Path,
         required=True,
-        help="Directory containing immediate OBJ, OFF, or MSH model files.",
+        help="Directory containing OBJ, OFF, or MSH model files.",
+    )
+    parser.add_argument(
+        "--models-dir-recursive",
+        action="store_true",
+        help="Also discover OBJ, OFF, or MSH models in subdirectories.",
     )
     parser.add_argument(
         "--output-csv",
         type=Path,
         required=True,
-        help="CSV file to create or append after every completed iteration.",
+        help=(
+            "Iteration CSV to create or append; a sibling <stem>_run_status.csv "
+            "records one terminal row per run."
+        ),
     )
     parser.add_argument(
         "--methods",
         nargs="+",
-        required=True,
         metavar="METHOD",
-        help=f"Method tokens. Registered forms: {method_registry.help_summary()}.",
+        help=(
+            "Core method tokens (required unless --initial-only). "
+            f"Registered forms: {method_registry.help_summary()}."
+        ),
+    )
+    parser.add_argument(
+        "--initial-only",
+        action="store_true",
+        help="Benchmark UV initializers and Phase-1 optimizers without a core method.",
     )
     parser.add_argument(
         "--initializers",
@@ -188,8 +223,16 @@ def build_parser(
         metavar="N",
         help=(
             "One or more Phase-1 iteration limits included within --max-iters "
-            "for eligible methods; zero creates one collapsed N/A core-only variant."
+            "for eligible methods; zero creates one collapsed N/A variant."
         ),
+    )
+    parser.add_argument(
+        "--initial-optimization-grad-tol",
+        type=float,
+        nargs="+",
+        default=[2e-8],
+        metavar="TOL",
+        help="Phase-1 gradient tolerances; inactive when the Phase-1 cap is zero.",
     )
     parser.add_argument(
         "--initial-newton-iters",
@@ -224,7 +267,7 @@ def make_config(
     return BenchmarkConfig(
         models_dir=args.models_dir.expanduser().resolve(),
         output_csv=args.output_csv.expanduser().resolve(),
-        requested_method_tokens=tuple(args.methods),
+        requested_method_tokens=tuple(args.methods or ()),
         constant_speed_mode=args.constant_speed,
         thread_counts=tuple(args.threads),
         repeat_count=args.repeat,
@@ -232,6 +275,9 @@ def make_config(
         initial_optimizer_specs=tuple(initial_optimizer_specs),
         initial_optimization_iters=tuple(args.initial_optimization_iters),
         initializer_specs=tuple(initializer_specs),
+        initial_only=args.initial_only,
+        initial_optimization_grad_tols=tuple(args.initial_optimization_grad_tol),
+        models_dir_recursive=args.models_dir_recursive,
     )
 
 
@@ -244,13 +290,21 @@ def print_configuration(
     """Print the resolved experiment matrix and thread-pool provenance."""
 
     print("Newton-flow benchmark configuration")
+    print(f"  initial_only: {config.initial_only}")
     print(f"  models_dir: {config.models_dir}")
-    print(f"  models ({len(models)}): {', '.join(path.name for path in models)}")
+    print(f"  models_dir_recursive: {config.models_dir_recursive}")
+    print(
+        f"  models ({len(models)}): "
+        + ", ".join(os.path.relpath(path, _SCRIPT_DIR) for path in models)
+    )
     print(
         "  initializers: "
         + ", ".join(spec.canonical_name for spec in config.initializer_specs)
     )
-    print("  methods: " + ", ".join(format_method_variant(spec) for spec in methods))
+    print("  methods: " + (
+        ", ".join(format_method_variant(spec) for spec in methods)
+        if methods else "N/A"
+    ))
     print(
         "  initial_optimizers: "
         + ", ".join(spec.canonical_name for spec in config.initial_optimizer_specs)
@@ -262,7 +316,9 @@ def print_configuration(
         "  initial_optimization_iters: "
         f"{list(config.initial_optimization_iters)}"
     )
+    print(f"  initial_optimization_grad_tols: {list(config.initial_optimization_grad_tols)}")
     print(f"  output_csv: {config.output_csv}")
+    print(f"  run_status_csv: {run_status_csv_path(config.output_csv)}")
     print(f"  native_thread_environment: {native_thread_environment()}")
     print(f"  complete_runs: {total_runs}")
 
@@ -281,24 +337,29 @@ def print_experiment_matrix(matrix: list[RunSpec]) -> None:
         "Repeat",
         "Initial optimizer",
         "Initial iters",
+        "Initial grad tol",
         "Max iters",
     )
     rows = [
         (
             str(index),
             str(run_spec.run_id),
-            run_spec.model_path.name,
+            run_spec.model_name,
             run_spec.initializer_spec.canonical_name,
-            run_spec.method_spec.display_name,
+            run_spec.method_name,
             (
                 "NA"
-                if run_spec.method_spec.constant_speed is None
+                if run_spec.method_spec is None or run_spec.method_spec.constant_speed is None
                 else str(run_spec.method_spec.constant_speed)
             ),
             str(run_spec.thread_num),
             str(run_spec.repeat_index),
             run_spec.initial_optimizer_name,
             str(run_spec.initial_optimization_iters),
+            (
+                "NA" if run_spec.initial_optimization_grad_tol is None
+                else str(run_spec.initial_optimization_grad_tol)
+            ),
             str(run_spec.max_iters),
         )
         for index, run_spec in enumerate(matrix, start=1)
@@ -333,15 +394,55 @@ def run_benchmark(
     total_runs = len(matrix)
     run_positions = {run_spec.run_id: index for index, run_spec in enumerate(matrix, 1)}
     attempted_runs = 0
-    failed_configurations = 0
+    outcome_counts = {
+        "converged": 0,
+        "completed": 0,
+        "failed": 0,
+        "skipped": 0,
+    }
+    status_path = run_status_csv_path(config.output_csv)
 
-    with CsvIterationWriter(config.output_csv) as writer:
+    with (
+        CsvIterationWriter(config.output_csv) as writer,
+        RunStatusCsvWriter(status_path) as status_writer,
+    ):
+        def record_status(
+            run_spec: RunSpec,
+            status: str,
+            termination_reason: str,
+            failure_scope: str,
+            completed_iterations: int,
+            exception: BaseException | None = None,
+        ) -> None:
+            """Append one terminal status using the latest recorded CSV position."""
+
+            status_writer.write_row(
+                build_run_status_row(
+                    run_spec=run_spec,
+                    status=status,
+                    termination_reason=termination_reason,
+                    failure_scope=failure_scope,
+                    completed_iterations=completed_iterations,
+                    last_position=writer.last_position(run_spec.run_id),
+                    exception=exception,
+                )
+            )
+
         for model_path, model_group in groupby(matrix, key=lambda spec: spec.model_path):
             model_runs = list(model_group)
             try:
                 normalized_mesh = load_normalized_mesh(model_path)
             except Exception as exc:
-                failed_configurations += len(model_runs)
+                outcome_counts["skipped"] += len(model_runs)
+                for run_spec in model_runs:
+                    record_status(
+                        run_spec,
+                        "skipped",
+                        "model_load_failure",
+                        "model_load",
+                        0,
+                        exc,
+                    )
                 print(
                     f"[model failure] {model_path.name}: {type(exc).__name__}: {exc}",
                     file=sys.stderr,
@@ -369,7 +470,16 @@ def run_benchmark(
                         initializer_registry,
                     )
                 except Exception as exc:
-                    failed_configurations += len(initializer_runs)
+                    outcome_counts["skipped"] += len(initializer_runs)
+                    for run_spec in initializer_runs:
+                        record_status(
+                            run_spec,
+                            "skipped",
+                            "initializer_failure",
+                            "initializer",
+                            0,
+                            exc,
+                        )
                     print(
                         f"[initializer failure] {model_path.name} / "
                         f"{initializer_spec.canonical_name}: {type(exc).__name__}: {exc}",
@@ -397,6 +507,8 @@ def run_benchmark(
                         f"initial_optimizer={run_spec.initial_optimizer_name} "
                         f"initial_optimization_iters="
                         f"{run_spec.initial_optimization_iters} "
+                        f"initial_optimization_grad_tol="
+                        f"{run_spec.initial_optimization_grad_tol or 'NA'} "
                         f"threads={run_spec.thread_num} "
                         f"repeat={run_spec.repeat_index}"
                     )
@@ -416,7 +528,19 @@ def run_benchmark(
                             initialization_elapsed_ns,
                         )
                     except Exception as exc:
-                        failed_configurations += 1
+                        outcome_counts["failed"] += 1
+                        last_position = writer.last_position(run_spec.run_id)
+                        completed_iterations = (
+                            0 if last_position is None else last_position[1]
+                        )
+                        record_status(
+                            run_spec,
+                            "failed",
+                            "run_exception",
+                            "run_execution",
+                            completed_iterations,
+                            exc,
+                        )
                         print(
                             f"[run failure] id={run_spec.run_id} "
                             f"model={run_spec.model_name} "
@@ -425,6 +549,8 @@ def run_benchmark(
                             f"initial_optimizer={run_spec.initial_optimizer_name} "
                             f"initial_optimization_iters="
                             f"{run_spec.initial_optimization_iters} "
+                            f"initial_optimization_grad_tol="
+                            f"{run_spec.initial_optimization_grad_tol or 'NA'} "
                             f"threads={run_spec.thread_num} "
                             f"repeat={run_spec.repeat_index}: "
                             f"{type(exc).__name__}: {exc}",
@@ -433,24 +559,44 @@ def run_benchmark(
                         continue
 
                     status = "failed" if outcome.failed else (
-                        "converged" if outcome.converged else "stopped"
+                        "converged" if outcome.converged else "completed"
+                    )
+                    outcome_counts[status] += 1
+                    record_status(
+                        run_spec,
+                        status,
+                        outcome.termination_reason,
+                        "run_execution" if outcome.failed else "NA",
+                        outcome.completed_iterations,
                     )
                     print(
-                        f"[done {run_index}/{total_runs}] status={status} "
+                        f"[done {run_index}/{total_runs}] id={run_spec.run_id} "
+                        f"status={status} "
                         f"iterations={outcome.completed_iterations} "
                         f"reason={outcome.termination_reason}"
                     )
-                    if outcome.failed:
-                        failed_configurations += 1
 
     global_elapsed_seconds = time.perf_counter() - benchmark_start
-    print(
-        f"Benchmark finished: attempted={attempted_runs}, expected={total_runs}, "
-        f"failed_or_skipped={failed_configurations}, "
-        f"global_elapsed_seconds={global_elapsed_seconds:.6f}, "
-        f"output={config.output_csv}"
+    if total_runs != attempted_runs + outcome_counts["skipped"]:
+        raise RuntimeError("Run accounting mismatch: planned != attempted + skipped")
+    attempted_outcomes = sum(
+        outcome_counts[key] for key in ("converged", "completed", "failed")
     )
-    return 1 if failed_configurations else 0
+    if attempted_runs != attempted_outcomes:
+        raise RuntimeError(
+            "Run accounting mismatch: attempted != converged + completed + failed"
+        )
+    failed_or_skipped = outcome_counts["failed"] + outcome_counts["skipped"]
+    print(
+        f"Benchmark finished: planned={total_runs}, attempted={attempted_runs}, "
+        f"converged={outcome_counts['converged']}, "
+        f"completed={outcome_counts['completed']}, "
+        f"failed={outcome_counts['failed']}, skipped={outcome_counts['skipped']}, "
+        f"failed_or_skipped={failed_or_skipped}, "
+        f"global_elapsed_seconds={global_elapsed_seconds:.6f}, "
+        f"output={config.output_csv}, run_status={status_path}"
+    )
+    return 1 if failed_or_skipped else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -479,12 +625,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         config = make_config(args, initializer_specs, initial_optimizer_specs)
         validate_config(config)
-        methods = expand_method_specs(
+        methods = [] if config.initial_only else expand_method_specs(
             config.requested_method_tokens,
             config.constant_speed_mode,
             method_registry,
         )
-        models = discover_models(config.models_dir)
+        models = discover_models(config.models_dir, config.models_dir_recursive)
         experiment_matrix = build_experiment_matrix(
             config,
             models,
@@ -495,11 +641,11 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    if config.constant_speed_mode is not None and not any(
+    if not config.initial_only and config.constant_speed_mode is not None and not any(
         method_registry.get(spec.adapter_key).uses_constant_speed for spec in methods
     ):
         print("Notice: --constant-speed is ignored because no selected method uses it.")
-    if not any(
+    if not config.initial_only and not any(
         method_registry.get(spec.adapter_key).uses_initial_optimization
         for spec in methods
     ):
