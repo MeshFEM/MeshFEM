@@ -22,6 +22,8 @@ namespace py = pybind11;
 #include <MeshFEMSparse/Solvers/PardisoFactorizer.hh>
 #endif
 
+#include "bind_nd_partition.hh"
+
 using namespace MeshFEM;
 
 PYBIND11_MODULE(sparse_matrices, m) {
@@ -198,8 +200,10 @@ PYBIND11_MODULE(sparse_matrices, m) {
     ////////////////////////////////////////////////////////////////////////////
     py::enum_<CholeskyProvider>(m, "CholeskyProvider")
         .value("CHOLMOD",  CholeskyProvider::CHOLMOD)
+        .value("CHOLMODNative", CholeskyProvider::CHOLMODNative)
 #if MESHFEM_WITH_CATAMARI
         .value("Catamari",         CholeskyProvider::Catamari)
+        .value("CatamariNative", CholeskyProvider::CatamariNative)
         .value("CatamariNesdis",   CholeskyProvider::CatamariNesdis)
         .value("CatamariNesdisParallel", CholeskyProvider::CatamariNesdisParallel)
         .value("CatamariNesdisReuse", CholeskyProvider::CatamariNesdisReuse)
@@ -222,6 +226,13 @@ PYBIND11_MODULE(sparse_matrices, m) {
         ;
 
     using CFB = CholeskyFactorizerBase;
+    py::class_<CFB::NDOrdering>(m, "NDOrdering")
+        .def_readonly("CParent", &CFB::NDOrdering::CParent)
+        .def_readonly("CMember", &CFB::NDOrdering::CMember)
+        .def_readonly("blockSize", &CFB::NDOrdering::blockSize);
+
+    bindNDPartition(m);
+
     py::class_<CFB> pyCFB(detail_module, "CholeskyFactorizerBase");
     py::enum_<CFB::FactorizationType>(pyCFB, "FactorizationType")
         .value("None",     CFB::FactorizationType::None)
@@ -230,6 +241,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
         ;
 
     pyCFB
+        // Return an owning snapshot; it remains valid after another analysis.
+        .def_property_readonly("ndOrdering", [](const CFB &c) { return c.ndOrdering(); })
         .def("m", &CFB::m)
         .def("n", &CFB::n)
         .def("m_reduced",    &CFB::m_reduced)
@@ -255,9 +268,23 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("writeSolveTimers", &CFB::writeSolveTimers)
         ;
 
+#if MESHFEM_WITH_CHOLMOD
+    using CF = CholmodFactorizer;
+    py::class_<CF, CFB> pyCF(detail_module, "CholmodFactorizer");
+    py::enum_<CF::OrderingMethod>(pyCF, "OrderingMethod")
+        .value("Native", CF::OrderingMethod::Native)
+        .value("Nesdis", CF::OrderingMethod::Nesdis)
+        .value("Metis", CF::OrderingMethod::Metis)
+        .value("AMD", CF::OrderingMethod::AMD);
+    pyCF.def_property("orderingMethod", &CF::getOrderingMethod, &CF::setOrderingMethod);
+#endif
 #if MESHFEM_WITH_CATAMARI
     using CatF = CatamariFactorizer;
     py::class_<CatF, CFB> pyCatF(detail_module, "CatamariFactorizer");
+#ifndef MESHFEM_USE_LEGACY_CATAMARI
+    pyCatF.def("getInversePermutation", &CatF::getInversePermutation,
+              "Final new-to-old permutation of reduced scalar variables, including amalgamation; available after symbolic analysis.");
+#endif
     pyCatF.def("getUseLeftLooking", &CatF::getUseLeftLooking)
           .def("setUseLeftLooking", &CatF::setUseLeftLooking, py::arg("useLeftLooking"))
           .def("getUseBlockAccel", &CatF::getUseBlockAccel)
@@ -269,6 +296,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
           .def("writeSolveProfile", &CatF::writeSolveProfile, py::arg("path"))
           ;
     py::enum_<CatF::OrderingMethod>(pyCatF, "OrderingMethod")
+        .value("Native", CatF::OrderingMethod::Native)
         .value("Catamari",             CatF::OrderingMethod::Catamari)
         .value("CholmodNesdis",        CatF::OrderingMethod::CholmodNesdis)
         .value("CholmodNesdisParallel", CatF::OrderingMethod::CholmodNesdisParallel)

@@ -20,7 +20,8 @@ PYBIND11_MODULE(parametrization, m)
         ;
 
     // Parametrization algorithms
-    m.def("harmonic", &Parametrization::harmonic, py::arg("mesh"), py::arg("boundaryPositions"), py::arg("tutte") = false, "Harmonic/Tutte Parametrization");
+    m.def("harmonic", &Parametrization::harmonic, py::arg("mesh"), py::arg("boundaryPositions"), py::arg("tutte") = false,
+          py::arg("provider") = get_default_cholesky_provider(CholeskyProviderHint::CheapSymbolic), "Harmonic/Tutte Parametrization");
     m.def("lscm",     &Parametrization::lscm,     py::arg("mesh"), py::arg("initParam") = Parametrization::UVMap(), "Least-Squares Conformal Parametrization");
     m.def("scp",      &Parametrization::scp,      py::arg("mesh"),
             py::arg("iprod") = Parametrization::SCPInnerProduct::Mass,

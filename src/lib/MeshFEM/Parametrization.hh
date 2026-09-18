@@ -13,6 +13,7 @@
 #include <MeshFEMCore/Types.hh>
 #include <MeshFEM/FEMMesh.hh>
 #include <MeshFEMSparse/SparseMatrices.hh>
+#include <MeshFEMSparse/Solvers/make_cholesky_factorizer.hh>
 
 namespace MeshFEM {
 
@@ -40,7 +41,8 @@ UVMap lscm(const Mesh &mesh, const UVMap &initParam = UVMap());
 
 // Compute a harmonic map with prescribed boundary positions (in 2D or 3D)
 MESHFEM_EXPORT
-NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte = false);
+NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte = false,
+                CholeskyProvider provider = get_default_cholesky_provider(CholeskyProviderHint::CheapSymbolic));
 
 // Inner product used to express the unit norm constraint in the eigenvalue
 // problem formulation.

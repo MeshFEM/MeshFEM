@@ -94,7 +94,7 @@ UVMap lscm(const Mesh &mesh, const UVMap &initParam) {
     return rescale(mesh, uv);
 }
 
-NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte) {
+NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte, CholeskyProvider provider) {
     const size_t nbn = mesh.numBoundaryNodes(),
                  nn  = mesh.numNodes();
     if (size_t(boundaryData.rows()) != nbn) throw std::runtime_error("Invalid boundary data size");
@@ -114,7 +114,7 @@ NDMap harmonic(const Mesh &mesh, NDMap &boundaryData, bool tutte) {
     for (auto bn : mesh.boundaryNodes())
         fixedVars[bn.index()] = bn.volumeNode().index();
 
-    auto solver = make_cholesky_factorizer(get_default_cholesky_provider(CholeskyProviderHint::CheapSymbolic));
+    auto solver = make_cholesky_factorizer(provider);
     solver->factorize(Lss, fixedVars);
 
     Eigen::VectorXd negDirichletValues;

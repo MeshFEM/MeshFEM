@@ -131,7 +131,73 @@ def getBDdataOnNormalizedCircle(m, uniform = False):
     bdry_uv[bloop] =  bdry_uv.copy()
     return bdry_uv
 
-def tutteInitialization(m, bdry_uv = None, force_uniform = False):
+def nestedDissectionReordering(m, splitDepth=7, *, amalgamate=True, blockSize=-1):
+    """Return (reordered_mesh, partition, vertex_new_to_old, element_new_to_old).
+
+    Obtain a permuted version of `m` that is optimized for subsequent assemblies
+    and solves.
+
+    We first reorder the vertices of a mesh using nested dissection.
+    Then we use the ND separator tree information to construct a compatible
+    partition of the elements: elements in different partitions have only
+    the separator variables in common. This partition can later be used to
+    accelerate assembly since write conflicts are restricted to the
+    much smaller set of separator vertices (narrowing the use of spin locks or
+    thread-local copies).
+
+    We finally reorder the elements to group them by partition and sort them
+    lexicographically by their (new) variable indices. This step is very important
+    for cohesive access to mesh data in the assembly loops (avoiding scattered
+    reads that indirect through `partition.elementOrder`).
+
+    Note that supernodal symbolic factorizations tend to apply an additional
+    permutation in their supernode relaxation/amalgamation stages, and so
+    the vertex ordering may not match the final block variable ordering
+    used during numeric factorization and solves even when requesting
+    a trivial/identity native ordering. This would prevent permutation
+    bypasses in the solve phase, but there is a workaround:
+    BlockCatamari now supports disabling those additional permutations
+    during supernode relaxation (while still executing ordering-preserving
+    amalgamation).
+
+    If we apply this ordering constraint with the raw ND ordering, though,
+    we end up with slower numeric factorizations due to slightly worse
+    amalgamation (Although faster solves! More aggressive amalgamation
+    increases nnz(L) and thus solve times despite lowering numfac times
+    due to reduced indexing and improved BLAS3 throughput).
+    Therefore, by default, we obtain the ordering by performing a full
+    `CatamariNesdisParallel` symbolic factorization including the
+    amalgamation-driven post-reordering. This can be disabled
+    by instead passing `amalgamate=False`.
+
+    Matching the actual Hessian factorization's amalgamation when operating on
+    the compressed (mesh) graph requires knowledge of the eventual variable
+    block size, which by default we infer from the mesh simplex dimension
+    (2 for triangles, 3 for tets).
+    """
+    import sparse_matrices
+    if m.degree != 1:
+        raise ValueError("ND preprocessing currently requires a linear mesh")
+    E = m.elements()
+    if blockSize == -1:
+        blockSize = m.simplexDimension
+    vertex_new_to_old, nd = sparse_matrices.nested_dissection(
+        m.numVertices(), E, amalgamate=amalgamate, blockSize=blockSize)
+    vertex_new_to_old = np.asarray(vertex_new_to_old, dtype=np.int64)
+    old_to_new = np.empty_like(vertex_new_to_old)
+    old_to_new[vertex_new_to_old] = np.arange(len(vertex_new_to_old))
+    # Passing renumbered stencils makes the constructor's existing sort use
+    # exactly the final vertex indices; no separate sorting-rank map is needed.
+    E = old_to_new[E]
+    members = np.asarray(nd.CMember)[vertex_new_to_old]
+    partition = sparse_matrices.ElementPartitionFromND(E, nd.CParent, members, splitDepth)
+    element_new_to_old = np.asarray(partition.elementOrder, dtype=np.int64)
+    reordered = mesh.Mesh(m.vertices()[vertex_new_to_old], E[element_new_to_old], degree=1)
+    partition.elementOrder = []
+    partition.validate(reordered.elements())
+    return reordered, partition, vertex_new_to_old, element_new_to_old
+
+def tutteInitialization(m, bdry_uv = None, force_uniform = False, provider=None):
     """
     Initialize a disk mesh using an area-normalized circular boundary.
     By default, we first attempt a harmonic map and fall back to a uniform
@@ -140,12 +206,19 @@ def tutteInitialization(m, bdry_uv = None, force_uniform = False):
     If `force_uniform` is True, we skip the harmonic map and directly compute a
     uniform Tutte map, also spacing the boundary vertices *uniformly* around the
     circle instead of proportionally to their edge lengths.
+
+    `provider` selects the Cholesky solver; use CatamariNative after
+    nestedDissectionReordering to reuse the mesh ordering. None preserves
+    the existing solver default.
     """
+    # None retains harmonic()'s historical solver default. Native providers can
+    # reuse an ND ordering already applied to the mesh, including after pins.
+    solver_args = {} if provider is None else dict(provider=provider)
     if bdry_uv is None: bdry_uv = getBDdataOnNormalizedCircle(m, uniform=force_uniform)
     if not force_uniform:
-        uv_init = parametrization.harmonic(m, bdry_uv, False)
+        uv_init = parametrization.harmonic(m, bdry_uv, False, **solver_args)
         flip_list = parametrization.getFlips(m, uv_init)
-    if force_uniform or len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True)
+    if force_uniform or len(flip_list) > 0:  uv_init = parametrization.harmonic(m, bdry_uv, True, **solver_args)
     return uv_init
 
 ################################################################################
