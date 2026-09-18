@@ -15,6 +15,10 @@ auto bindFastNewtonFlow(const std::string &name, py::module &m, py::module &deta
     using NFME = FastNewtonFlowMeshEnergy<Dim, FEMDeg>;
     return bindMeshEnergy<NFME>(name, m, detail)
 
+        .def("setNDPartition", &NFME::setNDPartition)
+        .def("clearNDPartition", &NFME::clearNDPartition)
+        .def_property_readonly("hasNDPartition", &NFME::hasNDPartition)
+        .def("refreshGeometryCache", &NFME::refreshGeometryCache)
         .def("initCoefficients", &NFME::initCoefficients, py::arg("d"), py::arg("arclen") = false, py::arg("projectHessian") = false)
         .def("getCoefficient", []( NFME &me, int d) -> py::array {
             const auto &xd = me.getCoefficient(d);
@@ -30,10 +34,12 @@ auto bindFastNewtonFlow(const std::string &name, py::module &m, py::module &deta
 
 PYBIND11_MODULE(fast_newton_flow, m)
 {
+    py::module::import("sparse_matrices");
     py::module::import("mesh_energy");
     py::module::import("py_newton_optimizer");
     py::module::import("rotation_strain_extrapolation");
     py::module detail = m.def_submodule("detail");
 
+    m.attr("ElementPartitionFromND") = py::module::import("sparse_matrices").attr("ElementPartitionFromND");
     bindFastNewtonFlow<2, 1>("symmetric_dirichlet", m, detail);
 }

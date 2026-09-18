@@ -22,6 +22,7 @@
 #include <MeshFEMCore/ParallelVectorOps.hh>
 #include "FastNewtonFlowProjection.hh"
 #include "FastNewtonFlowPK1.hh"
+#include <MeshFEMSparse/ElementPartitionFromND.hh>
 
 #include <MeshFEM/newton_optimizer/NewtonHessianFactorization.hh>
 
@@ -150,6 +151,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 
     void initCoefficients(const VXd &d, bool arclen = false, bool projectHessian = false) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("FastNewtonFlow.initCoefficients");
+        refreshGeometryCache(); // Snapshot rest geometry once per new flow expansion.
         m_x_storage.reserve(30); // large enough to avoid reallocations for typical use cases
 
         m_degree = 1;
@@ -201,7 +203,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         parallel_for_range(ne, [this, &F0, &F1, &x0, &x1, &vs](size_t ei) {
             ElementNodePositions x_e = Base::extractLocalVars(ei, x0, vs);
             ElementNodePositions xprime_e = Base::extractLocalVars(ei, x1, vs);
-            const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric();
+            const auto &grad_bary = Base::mesh().elementData(ei).gradBarycentric();
             F0[ei] = x_e.transpose() * grad_bary.transpose();
             F1[ei] = xprime_e.transpose() * grad_bary.transpose();
         });
@@ -230,6 +232,7 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
     void upgradeToDegree(const NewtonHessianFactorization &Hf, int targetDegree) {
         BENCHMARK_SCOPED_TIMER_SECTION timer_upgrade("FastNewtonFlow.upgradeToDegree");
         if (targetDegree <= m_degree) return; // already computed
+        if (!m_ndPartition) m_tryBuildNDPartition(Hf);
 
         auto &F = *m_F;
         auto &P = *m_P;
@@ -279,8 +282,8 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
                 const VXd &x_dm1 = getCoefficient(d - 1);
                 parallel_for_range(ne, [this, &F_coeff, &x_dm1, &vs, d](size_t ei) {
                     ElementNodePositions x_e = Base::extractLocalVars(ei, x_dm1, vs);
-                    const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric();
-                    F_coeff[ei] = x_e.transpose() * grad_bary.transpose();
+                    MNd edges = (x_e.template bottomRows<Dim>().rowwise() - x_e.row(0)).transpose();
+                    F_coeff[ei] = edges * Eigen::Map<const MNd>(m_packedGradBary.row(ei).data()).transpose();
                 });
                 if (needs_perturbation) {
                     // A degree `d - 1` expansion was already produced using a
@@ -406,14 +409,17 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
 #endif
 
                     ElementLocalVars contrib;
-                    const auto &grad_bary = Base::elements[ei].elementData().gradBarycentric(); // TODO: higher-degree elements.
-                    Eigen::Map<Eigen::Matrix<double, Dim, Dim + 1>>(contrib.data()) = (-Base::elements[ei].elementData().volume()) * P_e * grad_bary;
+                    Eigen::Map<Eigen::Matrix<double, Dim, Dim + 1>> result(contrib.data());
+                    result.template rightCols<Dim>() = m_negativeVolume[ei] * P_e * Eigen::Map<const MNd>(m_packedGradBary.row(ei).data());
+                    result.col(0) = -result.template rightCols<Dim>().rowwise().sum();
                     return contrib;
                 };
 
-                Base::assembler().template assembleGradientConditionalGather</* Accumulate = */ false>(neg_delta_g, m, eval_ge, this->m_gatherCache);
-                // setZeroParallel(neg_delta_g);
-                // Base::assembler().assembleGradientSpinLock(neg_delta_g, m, eval_ge);
+                if (m_ndPartition) {
+                    setZeroParallel(neg_delta_g);
+                    Base::assembler().assembleGradient(neg_delta_g, *m_ndPartition, eval_ge, [&m](size_t ei) { return m.elementNodeIndices(ei); });
+                }
+                else Base::assembler().template assembleGradientConditionalGather</* Accumulate = */ false>(neg_delta_g, m, eval_ge, this->m_gatherCache);
             }
 
             ++m_degree;
@@ -476,6 +482,35 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
         return m_x_storage;
     }
 
+    // Snapshot of rest geometry: four unscaled gradient entries and one area per
+    // triangle, shared by higher F coefficients and gradient assembly. F0/F1 keep
+    // the original evaluation order to avoid amplifying roundoff in the flow.
+    // Automatically refreshed by initCoefficients; call again if rest geometry
+    // changes before an incremental upgrade (existing coefficients must be reset).
+    void refreshGeometryCache() {
+        const auto &m = Base::mesh();
+        m_packedGradBary.resize(m.numElements(), Dim * Dim);
+        m_negativeVolume.resize(m.numElements());
+        parallel_for_range(m.numElements(), [&](size_t e) {
+            const auto &data = m.elementData(e);
+            Eigen::Map<MNd>(m_packedGradBary.row(e).data()) = data.gradBarycentric().template rightCols<Dim>();
+            m_negativeVolume[e] = -data.volume();
+        });
+    }
+
+    // Partition data must describe the current mesh numbering. Copy after
+    // validation so a caller cannot invalidate the single-writer guarantee.
+    void setNDPartition(const ElementPartitionFromND<SuiteSparse_long> &partition) {
+        const auto &m = Base::mesh();
+        if (partition.numBlockVars() != m.numVertices())
+            throw std::invalid_argument("ND partition block-variable count does not match mesh vertex count");
+        partition.validate(m.numElements(), [&m](size_t ei) { return m.elementNodeIndices(ei); });
+        m_ndPartition = std::make_unique<const ElementPartitionFromND<SuiteSparse_long>>(partition);
+    }
+    // Clearing also allows discovery from the next upgrade's factorization.
+    void clearNDPartition() { m_ndPartition.reset(); }
+    bool hasNDPartition() const { return bool(m_ndPartition); }
+
     // Spatial graph chunk sizes; zero selects the automatic policy.
     // PK1 (and lambda * P): 256 below target degree 24, 128 at higher degrees.
     // Projection: roughly two chunks per worker, rounded to powers of two in
@@ -489,6 +524,34 @@ struct FastNewtonFlowMeshEnergy : public SolidMeshEnergy<FEMDeg, SymmetricDirich
     VXd neg_delta_g; // Public for validation/debugging access.
 
 private:
+    // Packed, contiguous element data to avoid slower access via
+    // `Base::elements[ei].elementData()` or Base::mesh().elementData(ei)`,
+    // both of which lead to suprisingly significant slowdowns on gradient assembly.
+    // We also store only `grad lambda_{12}` in `m_packedGradBary` (a 2x2 matrix)
+    // since `grad labmda_0` can be recovered from their negated sum.
+    Eigen::Array<double, Eigen::Dynamic, Dim * Dim, Eigen::RowMajor> m_packedGradBary;
+    VecX_T<double> m_negativeVolume;
+    std::unique_ptr<const ElementPartitionFromND<SuiteSparse_long>> m_ndPartition;
+
+    void m_tryBuildNDPartition(const NewtonHessianFactorization &Hf) {
+        const auto &solver = Hf.solver();
+        const auto &nd = solver.ndOrdering();
+        const auto &m = Base::mesh();
+        // Initially support only unreduced, uniform mesh-variable blocks.
+        // Scalar/pinned analyses require a separate mapping back to mesh nodes.
+        if (!nd || solver.hasFixedVars() || nd->blockSize != Dim || nd->CMember.size() != m.numVertices()) return;
+        BENCHMARK_SCOPED_TIMER_SECTION timer("Build ND partition");
+        try {
+            m_ndPartition = std::make_unique<const ElementPartitionFromND<SuiteSparse_long>>(
+                m.numElements(), [&m](size_t ei) { return m.elementNodeIndices(ei); },
+                nd->CParent, nd->CMember, /* splitDepth = */ 7);
+        }
+        catch (const std::invalid_argument &) {
+            // A solver graph can omit couplings needed by this element set.
+            // Its tree is then unsuitable for assembly; retain the gather path.
+        }
+    }
+
     static size_t m_defaultProjectionChunkSize(size_t numProjected, size_t numWorkers) {
         if (numWorkers <= 4) return 4096;
         if (numProjected < 512) return std::max(size_t(1), numProjected);
