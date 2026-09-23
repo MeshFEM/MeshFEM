@@ -467,6 +467,7 @@ struct MESHFEM_EXPORT NewtonMultiobjectiveProblem : public NewtonProblem, public
     }
 
     void setCustomIterationCallback(const CallbackFunction &cb) { m_customCallback = cb; }
+    const CallbackFunction &getCustomIterationCallback() const { return m_customCallback; }
 
     // The user can attach a FeasibleStepLengthComputer that determines an
     // initial upper bound for the feasible step length before each term is

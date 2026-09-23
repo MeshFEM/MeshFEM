@@ -39,6 +39,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
          .def("notifyStep",          &HessianProjectionController::notifyStep,          py::arg("step"))
          .def("notifyDirectionalDerivative", &HessianProjectionController::notifyDirectionalDerivative, py::arg("directionalDerivative"))
          .def("reset", &HessianProjectionController::reset, "Reset the controller to its initial state (e.g., automatically called at the start of each Newton optimization).")
+         .def("clone", [](const HessianProjectionController &c) { return std::shared_ptr<HessianProjectionController>(c.clone()); }, "Copy the controller, including its current adaptive state.")
          .def("prepareForInitialFactorizationAttempt", &HessianProjectionController::prepareForInitialFactorizationAttempt)
         ;
 
@@ -50,7 +51,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("stepLengthThresholdForDisable",             &HessianProjectionAdaptive::stepLengthThresholdForDisable,             "Disable projection if step length falls below this threshold")
         .def_readwrite("directionalDerivativeThresholdForDisable",  &HessianProjectionAdaptive::directionalDerivativeThresholdForDisable,  "Disable projection if directional derivative exceeds (becomes less negative than) this threshold")
         .def_readwrite("projectionActive",                          &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
-        .def_readwrite("switchCounter",                             &HessianProjectionAdaptive::projectionActive,                          "(internal state for switching logic)")
+        .def_readwrite("switchCounter",                             &HessianProjectionAdaptive::switchCounter,                             "(internal state for switching logic)")
         .def_readwrite("startWithProjectionActive",                 &HessianProjectionAdaptive::startWithProjectionActive,                 "Whether to start the optimization with projection active")
         ;
 
@@ -264,9 +265,13 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
                 &NewtonMultiobjectiveProblem::initialFeasibleStepLengthComputer,
                 "A user-defined functor that computes an initial upper bound for the feasible step length before each term is queried for its own feasible step length. An example use case is in injective parameterization, where we seek a step that prevents elements from inverting.")
 
+        .def("getCustomIterationCallback", [](const NewtonMultiobjectiveProblem &prob) {
+                    return prob.getCustomIterationCallback(); // Return a copy that survives callback replacement.
+                })
         .def("setCustomIterationCallback",
                 [](NewtonMultiobjectiveProblem &prob, const PyCallbackFunction<NewtonProblem> &pcb) {
-                    prob.setCustomIterationCallback(callbackWrapper<NewtonProblem>(pcb));
+                    prob.setCustomIterationCallback(pcb ? callbackWrapper<NewtonProblem>(pcb)
+                                                       : NewtonMultiobjectiveProblem::CallbackFunction());
                 }, py::arg("cb"))
         ;
 
