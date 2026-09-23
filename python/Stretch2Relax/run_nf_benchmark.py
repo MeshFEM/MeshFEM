@@ -77,10 +77,18 @@ def build_parser(
 
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark Newton, SLIM, Newton-flow extrapolators, and "
+            "Benchmark Newton, StretchNewton, SLIM, Newton-flow extrapolators, and "
             "rotation-strain extrapolation on pre-cut surface meshes."
         ),
         epilog="""Examples:
+  Run StretchNewton from each UV initializer without Phase 1:
+    python run_nf_benchmark.py \\
+      --models-dir /path/to/precut-models \\
+      --output-csv exp_results/stretchnewton.csv \\
+      --methods StretchNewton \\
+      --initializers tutte energy_minimal grad_minimal \\
+      --initial-optimization-iters 0
+
   Run Newton and Taylor2 with two initializers using otherwise default settings:
     python run_nf_benchmark.py \\
       --models-dir /path/to/precut-models \\
