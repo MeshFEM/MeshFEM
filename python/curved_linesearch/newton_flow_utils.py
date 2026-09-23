@@ -131,7 +131,10 @@ def eval_trajectory_componentwise_pade(x_0, coeffs, alphas):
     result = evaluated_approximations.reshape(num_coordinates // 2, 2, -1)
     return np.transpose(result, (2, 0, 1))
 
-import vector_pade
+if __package__:
+    from . import vector_pade
+else:
+    import vector_pade
 def eval_trajectory_vector_pade(x_0, coeffs, alphas, proj_rank=11, rho=1.75):
     degree = len(coeffs)
     if (degree < 2):

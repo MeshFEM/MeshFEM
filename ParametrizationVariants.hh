@@ -55,7 +55,14 @@ struct ParametrizationElementAKVF : public ParametrizationElement<Deg, Psi_2x2, 
         if (projectionMask) {
             LinearlyEmbeddedElement<2, Deg, Vec2_T<Real>> deformed_edata;
             deformed_edata.embed(x);
-            return HLE::template hessian<SetLowerTri>(m.psi, IdentityFGetter(), deformed_edata, /* projectionDisabled  = */ true, weight);
+            // Note: the AKVF preconditioner should use the deformed-mesh
+            // shape-function gradients but integrate over the rest
+            // configuration. We could match this behavior with:
+            //      deformed_edata.m_volume = this->elementData.volume()
+            // but `LinearlyEmbeddedSimplex` currently lacks such a setter.
+            // We resort to baking a volume correction factor into the weight:
+            const Real restAreaWeight = weight * this->elementData.volume() / deformed_edata.volume();
+            return HLE::template hessian<SetLowerTri>(m.psi, IdentityFGetter(), deformed_edata, /* projectionDisabled  = */ true, restAreaWeight);
         }
         return HLE::template hessian<SetLowerTri>(m.psi, this->FBGetter(x), this->elementData, /* projectionDisabled  = */ true, weight);
     }

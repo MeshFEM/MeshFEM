@@ -2,7 +2,8 @@
 
 Importing this module does not initialize native libraries. ``run_pp_true_area``
 configures them on its first call; use a fresh process to change thread counts.
-UVs and source metrics use a source mesh normalized to unit area.
+The standalone entry point normalizes source area to one. ``run_pp_from_uv``
+reuses a supplied mesh, initialization, and runtime without rescaling.
 """
 
 from __future__ import annotations
@@ -28,6 +29,15 @@ _THREAD_VARIABLES = (
 _native_thread_count = None
 
 
+def _configure_import_paths():
+    """Expose the existing solver helpers without changing thread settings."""
+    root = Path(__file__).resolve().parents[2]
+    for path in (root / 'python', root / 'python/Stretch2Relax',
+                 root / 'python/curved_linesearch', root / '3rdparty/MeshFEM/python'):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+
+
 def _configure_runtime(thread_count):
     """Set paths and threads before native imports; reject late reconfiguration."""
     global _native_thread_count
@@ -41,11 +51,7 @@ def _configure_runtime(thread_count):
         )
     for key in _THREAD_VARIABLES:
         os.environ[key] = str(thread_count)
-    root = Path(__file__).resolve().parents[2]
-    for path in (root / 'python', root / 'python/Stretch2Relax',
-                 root / 'python/curved_linesearch', root / '3rdparty/MeshFEM/python'):
-        if str(path) not in sys.path:
-            sys.path.insert(0, str(path))
+    _configure_import_paths()
     import MeshFEM  # Registers the native module search paths.
     import parallelism
     parallelism.set_max_num_tbb_threads(thread_count)
@@ -162,8 +168,8 @@ def select_pp_t(source_jacobians, K=250.0):
             float(np.count_nonzero(~violating) / len(J)))
 
 
-def _validate_disk(source_mesh):
-    """Require a finite, normalized, connected, consistently oriented triangle disk."""
+def _validate_disk(source_mesh, *, require_unit_area=True):
+    """Require a finite connected triangle disk, optionally with unit source area."""
     import numpy as np
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import connected_components
@@ -173,7 +179,7 @@ def _validate_disk(source_mesh):
             or not np.isfinite(vertices).all()
             or not np.all(np.isfinite(areas) & (areas > 0.0))):
         raise ValueError('Input must have finite vertices and nondegenerate triangles.')
-    if not np.isclose(areas.sum(), 1.0, rtol=1e-10, atol=1e-12):
+    if require_unit_area and not np.isclose(areas.sum(), 1.0, rtol=1e-10, atol=1e-12):
         raise ValueError('The existing mesh loader did not produce unit source area.')
     directed = np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]))
     edges, inverse, counts = np.unique(
@@ -222,7 +228,7 @@ class PPFiniteStepLimiter:
         return alpha_max
 
 
-def _build_pp_solvers(source_mesh, uv):
+def _build_pp_solvers(source_mesh, uv, fixed_vars=(0, 1)):
     """Configure existing SLIM/CM energies, optimizers and Armijo searches sharing uv."""
     import numpy as np
     import continuation_parametrization
@@ -240,7 +246,7 @@ def _build_pp_solvers(source_mesh, uv):
         energy = factory(source_mesh, uv)
         energy.elementHessianShift = shift
         problem = py_newton_optimizer.NewtonMultiobjectiveProblem(uv, [energy])
-        problem.setFixedVars([0, 1])
+        problem.setFixedVars(list(fixed_vars))
         problem.hessianShift = 0.0
         problem.useRelativeHessianShift = False
         optimizer = problem.optimizer()
@@ -321,23 +327,74 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
         raise ValueError('return_history must be a bool.')
     input_mesh = Path(input_mesh).expanduser().resolve(strict=True)
     _configure_runtime(thread_count)
-    import numpy as np
-    import mesh_energy
-    import continuation_parametrization
     from Benchmark import helper_funcs
-    import extra_utils
-    import opt_utils
 
     source_mesh = helper_funcs.read_mesh(str(input_mesh))
     _validate_disk(source_mesh)
     boundary_uv = helper_funcs.getBDdataOnNormalizedCircle(source_mesh)
     uv_init = helper_funcs.tutteInitialization(source_mesh, boundary_uv)
+    result = _run_pp_from_uv(source_mesh, uv_init, max_iter_num=max_iter_num,
+                             bound_distortion_K=bound_distortion_K, convergence_rate=convergence_rate,
+                             return_history=return_history)
+    if return_history:
+        result[1]['metadata'].update(
+            input_mesh=str(input_mesh), model=input_mesh.stem, effective_thread_count=thread_count,
+            initializer='Benchmark.helper_funcs.tutteInitialization',
+            boundary_initializer='Benchmark.helper_funcs.getBDdataOnNormalizedCircle',
+            normalization='unit_source_area', uv_units='normalized_source')
+    return result
+
+
+def run_pp_from_uv(source_mesh, uv_init, *, max_iter_num=5000, bound_distortion_K=250.0,
+                   convergence_rate=1e-6, return_history=False, iteration_callback=None,
+                   fixed_vars=(0, 1)):
+    """Run the same PP controller from supplied mesh/UVs in the current runtime.
+
+    Unlike run_pp_true_area, this neither loads/normalizes the mesh, initializes
+    UVs, nor configures native thread counts. The mesh must be a connected,
+    consistently oriented triangle disk. UVs retain the mesh's length units.
+    max_iter_num may be zero and counts controller passes, including transitions.
+    PP's native relative-change/source-gradient stopping rule is unchanged.
+
+    iteration_callback(uv, gradient_norm, energy, label), if supplied, receives
+    an independent UV copy initially and after each completed step. Metrics use
+    the original source geometry. Recording does not change the optimization.
+    Returns UVs or (UVs, scalar history), as in run_pp_true_area.
+    """
+    if isinstance(max_iter_num, bool) or not isinstance(max_iter_num, int) or max_iter_num < 0:
+        raise ValueError('max_iter_num must be a nonnegative integer.')
+    if not math.isfinite(bound_distortion_K) or bound_distortion_K <= 4.0:
+        raise ValueError('bound_distortion_K must be finite and greater than four.')
+    if not math.isfinite(convergence_rate) or convergence_rate <= 0.0:
+        raise ValueError('convergence_rate must be finite and positive.')
+    if not isinstance(return_history, bool):
+        raise ValueError('return_history must be a bool.')
+    if iteration_callback is not None and not callable(iteration_callback):
+        raise TypeError('iteration_callback must be callable.')
+    _configure_import_paths()
+    _validate_disk(source_mesh, require_unit_area=False)
+    return _run_pp_from_uv(source_mesh, uv_init, max_iter_num=max_iter_num,
+                          bound_distortion_K=bound_distortion_K, convergence_rate=convergence_rate,
+                          return_history=return_history, iteration_callback=iteration_callback,
+                          fixed_vars=tuple(fixed_vars))
+
+
+def _run_pp_from_uv(source_mesh, uv_init, *, max_iter_num, bound_distortion_K,
+                    convergence_rate, return_history, iteration_callback=None, fixed_vars=(0, 1)):
+    """Shared controller; standalone and comparison entry points only prepare inputs."""
+    import numpy as np
+    import mesh_energy
+    import continuation_parametrization
+    import extra_utils
+    import opt_utils
+
+    uv_init = np.asarray(uv_init, dtype=float)
     if uv_init.shape != (source_mesh.numVertices(), 2) or not np.isfinite(uv_init).all():
-        raise ValueError('Our initialization did not produce finite (n_vertices, 2) UVs.')
+        raise ValueError('Initial UVs must be finite with shape (n_vertices, 2).')
     uv = mesh_energy.NodalVars(source_mesh, 2)
     uv.setVars(uv_init.ravel())
     metric_energy = continuation_parametrization.symmetric_dirichlet_param(source_mesh, uv)
-    solvers = _build_pp_solvers(source_mesh, uv)
+    solvers = _build_pp_solvers(source_mesh, uv, fixed_vars)
     linear_extrapolator = extra_utils.LinearExtrapolator()
     rows = [] if return_history else None
     events = [] if return_history else None
@@ -347,7 +404,10 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
     conv_percent, fraction_below_K = 1.0, np.nan
 
     def record_row(iteration_time, step_info=None):
-        """Append one completed-step record only when history collection is enabled."""
+        """Notify the observer and optionally record scalar step diagnostics."""
+        if iteration_callback is not None:
+            label = 'Initial state' if stage == 'initial' else f'PP {stage}: iteration {sum(counts.values())}'
+            iteration_callback(uv.getVars().reshape(-1, 2).copy(), source_grad_norm, source['area'], label)
         if rows is None:
             return
         row = {'energy': source['area'], 'grad_norm': source_grad_norm,
@@ -419,7 +479,7 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
         x_after = problem.getVars()
         if callback_count != 1 or not np.isfinite(x_after).all():
             raise RuntimeError('Expected exactly one finite completed Newton update.')
-        if not np.array_equal(x_after[:2], x_before[:2]):
+        if not np.array_equal(x_after[list(fixed_vars)], x_before[list(fixed_vars)]):
             raise RuntimeError('The Newton update changed fixed UV entries.')
         step_info['step_norm'] = float(np.linalg.norm(x_after - x_before))
         source = _source_state(metric_energy)
@@ -525,19 +585,19 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
         'optimization_wall_time': optimization_wall_time,
     }
     history['metadata'] = {
-        'input_mesh': str(input_mesh), 'model': input_mesh.stem,
+        'input_mesh': None, 'model': None,
         'experiment_name': 'true_area', 'area_mode': 'source_area',
-        'optimizer_mode': 'slim_then_cm', 'effective_thread_count': thread_count,
+        'optimizer_mode': 'slim_then_cm', 'effective_thread_count': None,
         'max_iter': max_iter_num, 'convergence_rate': convergence_rate,
         'bound_distortion_K': bound_distortion_K, 'root_residual_tol': ROOT_RESIDUAL_TOL,
         'slim_fraction_threshold': SLIM_FRACTION_THRESHOLD,
         'slim_change_threshold': SLIM_CHANGE_THRESHOLD,
         'cm_change_threshold': CM_CHANGE_THRESHOLD,
         'source_reference_threshold': SOURCE_REFERENCE_THRESHOLD,
-        'initializer': 'Benchmark.helper_funcs.tutteInitialization',
-        'boundary_initializer': 'Benchmark.helper_funcs.getBDdataOnNormalizedCircle',
-        'normalization': 'unit_source_area', 'uv_units': 'normalized_source',
-        'fixed_vars': [0, 1], 'factorizer': 'CatamariAdaptive',
+        'initializer': 'provided_uv',
+        'boundary_initializer': None,
+        'normalization': 'as_provided', 'uv_units': 'source_mesh',
+        'fixed_vars': list(fixed_vars), 'factorizer': 'CatamariAdaptive',
         'single_precision_factorizer': False, 'slim_projection': 'never',
         'cm_projection': 'always', 'slim_element_shift': 0.0,
         'cm_element_shift': CM_ELEMENT_SHIFT, 'problem_shift': 0.0,

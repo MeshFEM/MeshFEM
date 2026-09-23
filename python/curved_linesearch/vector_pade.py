@@ -45,7 +45,8 @@ def hermite_pade_ls(
     basis = None,
     rcond = None,
     accurate_proj = False,
-    rho = 1.0
+    rho = 1.0,
+    center = True
 ):
     """
     Least-squares 'type II' shared-denominator rational approximant for a vector Taylor series.
@@ -75,6 +76,12 @@ def hermite_pade_ls(
     rho : float
         Optional reweighting factor for blow rows of the LS system. Default 1.0 (no reweighting).
 
+    center : bool
+        For p >= m, fit and evaluate the displacement from x_0. The denominator
+        equations do not involve x_0 in this case; removing it improves numerical
+        conditioning and makes the fit independent of the coordinate origin.
+        The returned numerator still represents the full, uncentered curve.
+
     Returns
     -------
     q : (m+1,) array
@@ -93,6 +100,15 @@ def hermite_pade_ls(
         raise ValueError("p and m must be nonnegative.")
     if p + m > K:
         raise ValueError(f"Need K >= p+m. Got K={K}, p+m={p+m}.")
+
+    # When p >= m, adding a constant to the rational curve only adds x_0 q(t)
+    # to its numerator, without increasing the numerator degree. Fit the
+    # displacement so absolute positions cannot overwhelm tiny flow coefficients.
+    origin = None
+    if center and p >= m:
+        origin = x_coeffs[0].copy()
+        x_coeffs = x_coeffs.copy()
+        x_coeffs[0] = 0
 
     # For efficiency, we first construct an orthonormal basis for the (K + 1)-dimensional
     # space spanned by `x_coeffs` and do subsequent computations on coefficients in that basis.
@@ -180,8 +196,14 @@ def hermite_pade_ls(
                 # Return inf in a predictable way.
                 return np.full((n,), np.inf, dtype=a.dtype)
             numer = _polyval_vector_desc_dot(a_desc, t)
-            return numer / denom
+            displacement = numer / denom
+            return displacement if origin is None else origin + displacement
 
+    if origin is not None:
+        # Keep the public numerator consistent with q and eval_fn. The closure
+        # retains a_desc from the centered numerator for stable evaluation.
+        a = a.copy()
+        a[:m + 1] += q[:, None] * origin
     return q, a, eval_fn
 
 
