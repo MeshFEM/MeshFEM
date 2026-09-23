@@ -798,6 +798,86 @@ class _OrdinaryNewtonCallback:
         return should_stop
 
 
+class _StretchNewtonCallback:
+    """Scale before each native Newton step and record completed iterations."""
+
+    def __init__(
+        self,
+        bundle: ProblemBundle,
+        recorder: IterationRecorder,
+        phase: BenchmarkPhase,
+        iteration_offset: int,
+        max_iters: int,
+        grad_tol: float,
+    ) -> None:
+        self.bundle = bundle
+        self.recorder = recorder
+        self.phase = phase
+        self.iteration_offset = iteration_offset
+        self.max_iters = max_iters
+        self.grad_tol = grad_tol
+        self.completed_iterations = 0
+        self.invalid_state = False
+        self._start_ns: Optional[int] = None
+
+    def __call__(self, problem: Any, callback_index: int) -> bool:
+        if self._start_ns is not None:
+            end_ns = time.perf_counter_ns()
+            finite = self.recorder.record(
+                problem,
+                self.phase,
+                self.iteration_offset + self.completed_iterations + 1,
+                end_ns - self._start_ns,
+            )
+            self.completed_iterations += 1
+            self._start_ns = None
+            if not finite:
+                return True
+
+        if self.completed_iterations >= self.max_iters:
+            return True
+        gradient_norm = _final_gradient_norm(problem)
+        if not np.isfinite(gradient_norm):
+            self.invalid_state = True
+            raise FloatingPointError("Nonfinite StretchNewton gradient")
+        if gradient_norm < self.grad_tol:
+            return True
+
+        start_ns = time.perf_counter_ns()
+        scale = initial_utils.initialization_scale(
+            self.bundle.normalized_mesh,
+            self.bundle.nodal_variables,
+            self.bundle.newton_flow_energy,
+            "grad_minimal",
+        )
+        if not np.isfinite(scale) or scale <= 0:
+            self.invalid_state = True
+            raise FloatingPointError("Invalid StretchNewton scale")
+        problem.setVars(scale * problem.getVars())
+        scaled_gradient = _final_gradient_norm(problem)
+        if not np.isfinite(scaled_gradient):
+            self.invalid_state = True
+            raise FloatingPointError("Nonfinite StretchNewton scaled gradient")
+        if scaled_gradient < self.grad_tol:
+            end_ns = time.perf_counter_ns()
+            finite = self.recorder.record(
+                problem,
+                self.phase,
+                self.iteration_offset + self.completed_iterations + 1,
+                end_ns - start_ns,
+            )
+            self.completed_iterations += 1
+            self.invalid_state = not finite
+            if not finite:
+                raise FloatingPointError("Nonfinite StretchNewton scaled state")
+            # The first callback has no native gradient report yet. Later calls
+            # can stop directly, even after an indefinite-Hessian step.
+            return callback_index > 1
+
+        self._start_ns = start_ns
+        return False
+
+
 def utc_timestamp() -> str:
     """Return an ISO-8601 UTC timestamp with a trailing Z."""
 
@@ -1218,6 +1298,14 @@ def parse_newton_token(token: str) -> Optional[MethodSpec]:
     return MethodSpec(adapter_key="newton", display_name="Newton")
 
 
+def parse_stretch_newton_token(token: str) -> Optional[MethodSpec]:
+    """Parse the case-insensitive StretchNewton method token."""
+
+    if token.lower() != "stretchnewton":
+        return None
+    return MethodSpec(adapter_key="stretchnewton", display_name="StretchNewton")
+
+
 def parse_slim_token(token: str) -> Optional[MethodSpec]:
     """Parse the case-insensitive SLIM method token."""
 
@@ -1404,6 +1492,50 @@ def run_ordinary_newton_stage(
     return StageOutcome(completed, False, True, "optimizer_stopped_before_budget")
 
 
+def run_stretch_newton_stage(
+    bundle: ProblemBundle,
+    recorder: IterationRecorder,
+    phase: BenchmarkPhase,
+    iteration_offset: int,
+    max_iters: int,
+    grad_tol: float = GRADIENT_TOLERANCE,
+) -> StageOutcome:
+    """Run Newton with grad-minimal scaling before each attempted step."""
+
+    if max_iters <= 0:
+        return StageOutcome(0, False, False, "iteration_budget_exhausted")
+    initial_gradient = _final_gradient_norm(bundle.problem)
+    if not np.isfinite(initial_gradient):
+        return StageOutcome(0, False, True, "nonfinite_state")
+    if initial_gradient < grad_tol:
+        return StageOutcome(0, True, False, "gradient_tolerance")
+
+    callback = _StretchNewtonCallback(
+        bundle, recorder, phase, iteration_offset, max_iters, grad_tol
+    )
+    bundle.problem.setCustomIterationCallback(callback)
+    bundle.optimizer.options.niter = max_iters
+    bundle.optimizer.options.gradTol = grad_tol
+    try:
+        try:
+            bundle.optimizer.optimize()
+        except FloatingPointError:
+            if not callback.invalid_state:
+                raise
+    finally:
+        bundle.problem.setCustomIterationCallback(None)
+
+    completed = callback.completed_iterations
+    final_gradient = _final_gradient_norm(bundle.problem)
+    if callback.invalid_state or recorder.nonfinite_detected or not np.isfinite(final_gradient):
+        return StageOutcome(completed, False, True, "nonfinite_state")
+    if completed >= max_iters:
+        return StageOutcome(completed, False, False, "iteration_budget_exhausted")
+    if final_gradient < grad_tol:
+        return StageOutcome(completed, True, False, "gradient_tolerance")
+    return StageOutcome(completed, False, True, "optimizer_stopped_before_budget")
+
+
 def run_slim_stage(
     bundle: ProblemBundle,
     recorder: IterationRecorder,
@@ -1562,6 +1694,24 @@ def run_newton_main_stage(
     )
 
 
+def run_stretch_newton_main_stage(
+    bundle: ProblemBundle,
+    run_spec: RunSpec,
+    recorder: IterationRecorder,
+    iteration_offset: int,
+    max_iters: int,
+) -> StageOutcome:
+    """Run StretchNewton as the Phase-2 core method."""
+
+    return run_stretch_newton_stage(
+        bundle,
+        recorder,
+        BenchmarkPhase.CORE_METHOD,
+        iteration_offset,
+        max_iters,
+    )
+
+
 def run_slim_main_stage(
     bundle: ProblemBundle,
     run_spec: RunSpec,
@@ -1646,7 +1796,7 @@ def run_rs_main_stage(
 
 
 def register_builtin_methods() -> MethodRegistry:
-    """Register Newton, SLIM, Taylor, Pade, and rotation-strain adapters."""
+    """Register the built-in core methods."""
 
     registry = MethodRegistry()
     registry.register(
@@ -1657,6 +1807,16 @@ def register_builtin_methods() -> MethodRegistry:
             uses_initial_optimization=True,
             uses_constant_speed=False,
             run_main_stage=run_newton_main_stage,
+        )
+    )
+    registry.register(
+        MethodAdapter(
+            key="stretchnewton",
+            token_description="StretchNewton",
+            try_parse_token=parse_stretch_newton_token,
+            uses_initial_optimization=True,
+            uses_constant_speed=False,
+            run_main_stage=run_stretch_newton_main_stage,
         )
     )
     registry.register(
@@ -1727,6 +1887,34 @@ def run_newton_initial_optimizer(
     )
 
 
+def run_stretch_newton_initial_optimizer(
+    bundle: ProblemBundle,
+    run_spec: RunSpec,
+    recorder: IterationRecorder,
+    max_iters: int,
+) -> InitialOptimizerResult:
+    """Run StretchNewton in Phase 1 and retain its accepted UV for Phase 2."""
+
+    try:
+        outcome = run_stretch_newton_stage(
+            bundle,
+            recorder,
+            BenchmarkPhase.INITIAL_OPTIMIZATION,
+            iteration_offset=0,
+            max_iters=max_iters,
+            grad_tol=run_spec.initial_optimization_grad_tol,
+        )
+    finally:
+        bundle.optimizer.options.gradTol = GRADIENT_TOLERANCE
+    return InitialOptimizerResult(
+        completed_iterations=outcome.completed_iterations,
+        benchmark_converged=outcome.converged,
+        failed=outcome.failed,
+        termination_reason=outcome.termination_reason,
+        bundle=bundle,
+    )
+
+
 def run_slim_initial_optimizer(
     bundle: ProblemBundle,
     run_spec: RunSpec,
@@ -1753,6 +1941,62 @@ def run_slim_initial_optimizer(
     )
 
 
+def run_pp_true_area_initial_optimizer(
+    bundle: ProblemBundle,
+    run_spec: RunSpec,
+    recorder: IterationRecorder,
+    max_iters: int,
+) -> InitialOptimizerResult:
+    """Run PP on the selected Phase-0 UVs and stream accepted states into Phase 1."""
+
+    if max_iters <= 0:
+        return InitialOptimizerResult(0, False, False, "iteration_budget_exhausted", bundle)
+    initial_gradient = _final_gradient_norm(bundle.problem)
+    if not np.isfinite(initial_gradient):
+        return InitialOptimizerResult(0, False, True, "nonfinite_state", bundle)
+    if initial_gradient < run_spec.initial_optimization_grad_tol:
+        return InitialOptimizerResult(0, True, False, "gradient_tolerance", bundle)
+
+    from pp_study import PP_utils
+
+    PP_utils._validate_disk(bundle.normalized_mesh)
+
+    def record_pp_step(uv_after: np.ndarray, completed: int, pp_elapsed_ns: int) -> Optional[str]:
+        """Synchronize one PP endpoint, record common metrics, and apply the stage stop."""
+
+        sync_start = time.perf_counter_ns()
+        bundle.problem.setVars(uv_after.ravel())
+        elapsed_ns = pp_elapsed_ns + time.perf_counter_ns() - sync_start
+        finite = recorder.record(
+            bundle.problem, BenchmarkPhase.INITIAL_OPTIMIZATION, completed, elapsed_ns
+        )
+        if not finite:
+            return "nonfinite_state"
+        if completed >= max_iters:
+            return "iteration_budget_exhausted"
+        if _final_gradient_norm(bundle.problem) < run_spec.initial_optimization_grad_tol:
+            return "gradient_tolerance"
+        return None
+
+    _, summary, _ = PP_utils.run_pp_true_area_from_uv(
+        bundle.normalized_mesh,
+        bundle.problem.getVars().reshape(-1, 2),
+        execution_mode="benchmark",
+        iteration_limit=max_iters,
+        bound_distortion_K=250.0,
+        post_step_cb=record_pp_step,
+    )
+    bundle.optimizer.options.hessianProjectionController.reset()
+    reason = summary["termination_reason"]
+    return InitialOptimizerResult(
+        completed_iterations=summary["sum_iter"],
+        benchmark_converged=reason == "gradient_tolerance",
+        failed=reason == "nonfinite_state",
+        termination_reason=reason,
+        bundle=bundle,
+    )
+
+
 def register_builtin_initial_optimizers() -> InitialOptimizerRegistry:
     """Register the currently supported Phase-1 optimizer adapters."""
 
@@ -1767,10 +2011,26 @@ def register_builtin_initial_optimizers() -> InitialOptimizerRegistry:
     )
     registry.register(
         InitialOptimizerAdapter(
+            key="stretchnewton",
+            canonical_name="StretchNewton",
+            aliases=(),
+            run_stage=run_stretch_newton_initial_optimizer,
+        )
+    )
+    registry.register(
+        InitialOptimizerAdapter(
             key="slim",
             canonical_name="SLIM",
             aliases=(),
             run_stage=run_slim_initial_optimizer,
+        )
+    )
+    registry.register(
+        InitialOptimizerAdapter(
+            key="pp_truearea",
+            canonical_name="PP_TrueArea",
+            aliases=(),
+            run_stage=run_pp_true_area_initial_optimizer,
         )
     )
     return registry
