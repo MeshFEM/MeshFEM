@@ -1753,6 +1753,62 @@ def run_slim_initial_optimizer(
     )
 
 
+def run_pp_true_area_initial_optimizer(
+    bundle: ProblemBundle,
+    run_spec: RunSpec,
+    recorder: IterationRecorder,
+    max_iters: int,
+) -> InitialOptimizerResult:
+    """Run PP on the selected Phase-0 UVs and stream accepted states into Phase 1."""
+
+    if max_iters <= 0:
+        return InitialOptimizerResult(0, False, False, "iteration_budget_exhausted", bundle)
+    initial_gradient = _final_gradient_norm(bundle.problem)
+    if not np.isfinite(initial_gradient):
+        return InitialOptimizerResult(0, False, True, "nonfinite_state", bundle)
+    if initial_gradient < run_spec.initial_optimization_grad_tol:
+        return InitialOptimizerResult(0, True, False, "gradient_tolerance", bundle)
+
+    from pp_study import PP_utils
+
+    PP_utils._validate_disk(bundle.normalized_mesh)
+
+    def record_pp_step(uv_after: np.ndarray, completed: int, pp_elapsed_ns: int) -> Optional[str]:
+        """Synchronize one PP endpoint, record common metrics, and apply the stage stop."""
+
+        sync_start = time.perf_counter_ns()
+        bundle.problem.setVars(uv_after.ravel())
+        elapsed_ns = pp_elapsed_ns + time.perf_counter_ns() - sync_start
+        finite = recorder.record(
+            bundle.problem, BenchmarkPhase.INITIAL_OPTIMIZATION, completed, elapsed_ns
+        )
+        if not finite:
+            return "nonfinite_state"
+        if completed >= max_iters:
+            return "iteration_budget_exhausted"
+        if _final_gradient_norm(bundle.problem) < run_spec.initial_optimization_grad_tol:
+            return "gradient_tolerance"
+        return None
+
+    _, summary, _ = PP_utils.run_pp_true_area_from_uv(
+        bundle.normalized_mesh,
+        bundle.problem.getVars().reshape(-1, 2),
+        execution_mode="benchmark",
+        iteration_limit=max_iters,
+        bound_distortion_K=250.0,
+        post_step_cb=record_pp_step,
+    )
+    bundle.optimizer.options.hessianProjectionController.reset()
+    reason = summary["termination_reason"]
+    return InitialOptimizerResult(
+        completed_iterations=summary["sum_iter"],
+        benchmark_converged=reason == "gradient_tolerance",
+        failed=reason == "nonfinite_state",
+        termination_reason=reason,
+        bundle=bundle,
+    )
+
+
 def register_builtin_initial_optimizers() -> InitialOptimizerRegistry:
     """Register the currently supported Phase-1 optimizer adapters."""
 
@@ -1771,6 +1827,14 @@ def register_builtin_initial_optimizers() -> InitialOptimizerRegistry:
             canonical_name="SLIM",
             aliases=(),
             run_stage=run_slim_initial_optimizer,
+        )
+    )
+    registry.register(
+        InitialOptimizerAdapter(
+            key="pp_truearea",
+            canonical_name="PP_TrueArea",
+            aliases=(),
+            run_stage=run_pp_true_area_initial_optimizer,
         )
     )
     return registry

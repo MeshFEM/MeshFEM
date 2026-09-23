@@ -125,6 +125,16 @@ def build_parser(
       --initial-optimization-iters 0 5 10 \\
       --initial-optimization-grad-tol 1.0 0.1 1e-2
 
+  Run PP_TrueArea after the selected UV initializer, then Newton:
+    python run_nf_benchmark.py \\
+      --models-dir /path/to/precut-models \\
+      --output-csv exp_results/pp_truearea.csv \\
+      --methods Newton \\
+      --initializers tutte \\
+      --initial-optimizer PP_TrueArea \\
+      --initial-optimization-iters 5 \\
+      --initial-optimization-grad-tol 2e-8
+
   Include mesh files in subdirectories of the models directory:
     python run_nf_benchmark.py \\
       --models-dir /path/to/precut-models \\

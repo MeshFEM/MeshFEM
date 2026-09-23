@@ -322,11 +322,7 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
     input_mesh = Path(input_mesh).expanduser().resolve(strict=True)
     _configure_runtime(thread_count)
     import numpy as np
-    import mesh_energy
-    import continuation_parametrization
     from Benchmark import helper_funcs
-    import extra_utils
-    import opt_utils
 
     source_mesh = helper_funcs.read_mesh(str(input_mesh))
     _validate_disk(source_mesh)
@@ -334,6 +330,69 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
     uv_init = helper_funcs.tutteInitialization(source_mesh, boundary_uv)
     if uv_init.shape != (source_mesh.numVertices(), 2) or not np.isfinite(uv_init).all():
         raise ValueError('Our initialization did not produce finite (n_vertices, 2) UVs.')
+
+    uv_final, _, history = run_pp_true_area_from_uv(
+        source_mesh, uv_init, execution_mode='standalone',
+        iteration_limit=max_iter_num, bound_distortion_K=bound_distortion_K,
+        convergence_rate=convergence_rate, return_history=return_history,
+    )
+    if not return_history:
+        return uv_final
+    history['metadata'] = {
+        'input_mesh': str(input_mesh), 'model': input_mesh.stem,
+        'experiment_name': 'true_area', 'area_mode': 'source_area',
+        'optimizer_mode': 'slim_then_cm', 'effective_thread_count': thread_count,
+        'max_iter': max_iter_num, 'convergence_rate': convergence_rate,
+        'bound_distortion_K': bound_distortion_K, 'root_residual_tol': ROOT_RESIDUAL_TOL,
+        'slim_fraction_threshold': SLIM_FRACTION_THRESHOLD,
+        'slim_change_threshold': SLIM_CHANGE_THRESHOLD,
+        'cm_change_threshold': CM_CHANGE_THRESHOLD,
+        'source_reference_threshold': SOURCE_REFERENCE_THRESHOLD,
+        'initializer': 'Benchmark.helper_funcs.tutteInitialization',
+        'boundary_initializer': 'Benchmark.helper_funcs.getBDdataOnNormalizedCircle',
+        'normalization': 'unit_source_area', 'uv_units': 'normalized_source',
+        'fixed_vars': [0, 1], 'factorizer': 'CatamariAdaptive',
+        'single_precision_factorizer': False, 'slim_projection': 'never',
+        'cm_projection': 'always', 'slim_element_shift': 0.0,
+        'cm_element_shift': CM_ELEMENT_SHIFT, 'problem_shift': 0.0,
+        'line_search': 'PP Armijo', 'armijo_c': 0.2, 'backtrack_factor': 0.5,
+        'slim_backoff': 0.8, 'cm_backoff': 0.95, 'time_clock': 'perf_counter_wall',
+        'time_scope': 'per-step: reference generation through source-energy update; excludes gradient recording',
+    }
+    return uv_final, history
+
+
+def run_pp_true_area_from_uv(source_mesh, uv_init, *, execution_mode,
+                             iteration_limit, bound_distortion_K=250.0,
+                             convergence_rate=1e-6, return_history=False,
+                             post_step_cb=None):
+    """Run PP on a validated unit-area disk and positive, caller-owned UVs.
+
+    Standalone limits count controller passes and retain PP's native stopping.
+    Benchmark limits count completed solver calls; ``post_step_cb`` receives
+    (accepted_uv, completed_calls, PP_elapsed_ns) and may return a stop reason.
+    The caller owns native thread configuration. Returns independent final UVs,
+    a summary, and optional history arrays (without path/runtime metadata).
+    """
+    if execution_mode not in ('standalone', 'benchmark'):
+        raise ValueError('execution_mode must be standalone or benchmark.')
+    if isinstance(iteration_limit, bool) or not isinstance(iteration_limit, int) or iteration_limit <= 0:
+        raise ValueError('iteration_limit must be a positive integer.')
+    if execution_mode == 'benchmark' and post_step_cb is None:
+        raise ValueError('Benchmark execution requires a post_step_cb.')
+    if not math.isfinite(bound_distortion_K) or bound_distortion_K <= 4.0:
+        raise ValueError('bound_distortion_K must be finite and greater than four.')
+    if not math.isfinite(convergence_rate) or convergence_rate <= 0.0:
+        raise ValueError('convergence_rate must be finite and positive.')
+    import numpy as np
+    import mesh_energy
+    import continuation_parametrization
+    import extra_utils
+    import opt_utils
+
+    uv_init = np.array(uv_init, dtype=float, copy=True)
+    if uv_init.shape != (source_mesh.numVertices(), 2) or not np.isfinite(uv_init).all():
+        raise ValueError('Expected finite (n_vertices, 2) initial UVs.')
     uv = mesh_energy.NodalVars(source_mesh, 2)
     uv.setVars(uv_init.ravel())
     metric_energy = continuation_parametrization.symmetric_dirichlet_param(source_mesh, uv)
@@ -343,8 +402,17 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
     events = [] if return_history else None
     counts = {'slim_progressive': 0, 'cm_progressive': 0, 'cm_source': 0}
     pass_index, recorded_t, active_lambda = 0, 0.0, 1.0
-    stage, termination_reason = 'initial', 'iteration_limit'
+    stage = 'initial'
+    termination_reason = 'iteration_limit' if execution_mode == 'standalone' else 'iteration_budget_exhausted'
     conv_percent, fraction_below_K = 1.0, np.nan
+    benchmark_timer_ns = None
+    benchmark_stop_reason = None
+
+    def can_continue():
+        """Apply the selected unit of budget across all three PP loops."""
+        if execution_mode == 'standalone':
+            return pass_index < iteration_limit
+        return benchmark_stop_reason is None and sum(counts.values()) < iteration_limit
 
     def record_row(iteration_time, step_info=None):
         """Append one completed-step record only when history collection is enabled."""
@@ -372,6 +440,7 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
     def complete_step(solver_name, step_stage, metric):
         """Call the existing one-step wrapper, update PP metrics/counters, and record."""
         nonlocal stage, source, source_grad_norm, energy_cur, conv_percent
+        nonlocal benchmark_timer_ns, benchmark_stop_reason
         stage = step_stage
         _, problem, optimizer, line_search = solvers[solver_name]
         problem.invalidateCachedHessian()
@@ -426,11 +495,20 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
         energy_cur = source[metric]
         conv_percent = abs(energy_cur - energy_pre) / energy_pre
         iteration_time = time.perf_counter() - iter_time_beg
+        benchmark_elapsed_ns = (time.perf_counter_ns() - benchmark_timer_ns
+                                if execution_mode == 'benchmark' else None)
         source_grad_norm = float(np.linalg.norm(metric_energy.gradient()))
         if not math.isfinite(source_grad_norm):
             raise RuntimeError('Nonfinite source gradient norm.')
         counts[stage] += 1
         record_row(iteration_time, step_info)
+        if execution_mode == 'benchmark':
+            benchmark_stop_reason = post_step_cb(
+                np.array(x_after.reshape(-1, 2), dtype=float, order='C', copy=True),
+                sum(counts.values()), benchmark_elapsed_ns,
+            )
+            benchmark_timer_ns = None
+            return benchmark_stop_reason
         relative_stop = conv_percent <= convergence_rate
         gradient_stop = source_grad_norm <= convergence_rate
         if relative_stop and gradient_stop:
@@ -450,11 +528,13 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
         energy_cur = source['uniform']
         record_row(0.0)
 
-        while pass_index < max_iter_num:
+        while can_continue():
             pass_index += 1
             stage = 'slim_check'
             energy_pre = energy_cur
             iter_time_beg = time.perf_counter()
+            if execution_mode == 'benchmark' and benchmark_timer_ns is None:
+                benchmark_timer_ns = time.perf_counter_ns()
             recorded_t, fraction_below_K = select_pp_t(metric_energy.elementJacobians(), bound_distortion_K)
             if (fraction_below_K < SLIM_FRACTION_THRESHOLD
                     and conv_percent > SLIM_CHANGE_THRESHOLD
@@ -466,16 +546,20 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
                 if stop:
                     if events is not None:
                         events[-1]['post_step_stop'] = stop
+                    if execution_mode == 'benchmark':
+                        termination_reason = stop
                     break  # PP leaves only the SLIM loop here.
             else:
                 record_event(stage, 'enter_cm_loop')
                 break
 
-        while pass_index < max_iter_num:
+        while can_continue():
             pass_index += 1
             stage = 'cm_check'
             energy_pre = energy_cur
             iter_time_beg = time.perf_counter()
+            if execution_mode == 'benchmark' and benchmark_timer_ns is None:
+                benchmark_timer_ns = time.perf_counter_ns()
             recorded_t, fraction_below_K = select_pp_t(metric_energy.elementJacobians(), bound_distortion_K)
             if conv_percent > CM_CHANGE_THRESHOLD and recorded_t < SOURCE_REFERENCE_THRESHOLD:
                 record_event(stage, 'cm_progressive')
@@ -491,10 +575,12 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
                 solvers['cm'][0].setInterpolatedReference(1.0, uv.getVars())
                 record_event('source_restore', 'cm_source')
                 energy_cur = source['area']
-                while pass_index < max_iter_num:
+                while can_continue():
                     pass_index += 1
                     energy_pre = energy_cur
                     iter_time_beg = time.perf_counter()
+                    if execution_mode == 'benchmark' and benchmark_timer_ns is None:
+                        benchmark_timer_ns = time.perf_counter_ns()
                     stop = complete_step('cm', 'cm_source', 'area')
                     if stop:
                         termination_reason = stop
@@ -504,8 +590,17 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
         raise RuntimeError(f'PP {stage}, controller pass {pass_index}: {exc}') from exc
     optimization_wall_time = time.perf_counter() - optimization_start
     uv_final = np.array(uv.getVars().reshape(-1, 2), dtype=float, order='C', copy=True)
+    summary = {
+        'slim_iter': counts['slim_progressive'], 'cm_iter': counts['cm_progressive'],
+        'source_cm_iter': counts['cm_source'], 'sum_iter': sum(counts.values()),
+        'controller_passes': pass_index, 'termination_reason': termination_reason,
+        'termination_stage': stage, 'final_energy': source['area'],
+        'final_grad_norm': source_grad_norm, 'final_min_source_det': source['min_det'],
+        'final_active_reference_lambda': active_lambda, 'final_recorded_t': recorded_t,
+        'optimization_wall_time': optimization_wall_time,
+    }
     if not return_history:
-        return uv_final
+        return uv_final, summary, None
 
     core_keys = ('energy', 'grad_norm', 't_sequence', 'time', 'active_reference_lambda',
                  'source_uniform_energy', 'stage', 'controller_pass')
@@ -515,37 +610,8 @@ def run_pp_true_area(input_mesh: str | Path, *, thread_count: int = 1,
         for key in rows[0] if key not in core_keys
     }
     history['reference_events'] = events
-    history['summary'] = {
-        'slim_iter': counts['slim_progressive'], 'cm_iter': counts['cm_progressive'],
-        'source_cm_iter': counts['cm_source'], 'sum_iter': sum(counts.values()),
-        'controller_passes': pass_index, 'termination_reason': termination_reason,
-        'termination_stage': stage, 'final_energy': source['area'],
-        'final_grad_norm': source_grad_norm, 'final_min_source_det': source['min_det'],
-        'final_active_reference_lambda': active_lambda, 'final_recorded_t': recorded_t,
-        'optimization_wall_time': optimization_wall_time,
-    }
-    history['metadata'] = {
-        'input_mesh': str(input_mesh), 'model': input_mesh.stem,
-        'experiment_name': 'true_area', 'area_mode': 'source_area',
-        'optimizer_mode': 'slim_then_cm', 'effective_thread_count': thread_count,
-        'max_iter': max_iter_num, 'convergence_rate': convergence_rate,
-        'bound_distortion_K': bound_distortion_K, 'root_residual_tol': ROOT_RESIDUAL_TOL,
-        'slim_fraction_threshold': SLIM_FRACTION_THRESHOLD,
-        'slim_change_threshold': SLIM_CHANGE_THRESHOLD,
-        'cm_change_threshold': CM_CHANGE_THRESHOLD,
-        'source_reference_threshold': SOURCE_REFERENCE_THRESHOLD,
-        'initializer': 'Benchmark.helper_funcs.tutteInitialization',
-        'boundary_initializer': 'Benchmark.helper_funcs.getBDdataOnNormalizedCircle',
-        'normalization': 'unit_source_area', 'uv_units': 'normalized_source',
-        'fixed_vars': [0, 1], 'factorizer': 'CatamariAdaptive',
-        'single_precision_factorizer': False, 'slim_projection': 'never',
-        'cm_projection': 'always', 'slim_element_shift': 0.0,
-        'cm_element_shift': CM_ELEMENT_SHIFT, 'problem_shift': 0.0,
-        'line_search': 'PP Armijo', 'armijo_c': 0.2, 'backtrack_factor': 0.5,
-        'slim_backoff': 0.8, 'cm_backoff': 0.95, 'time_clock': 'perf_counter_wall',
-        'time_scope': 'per-step: reference generation through source-energy update; excludes gradient recording',
-    }
-    return uv_final, history
+    history['summary'] = summary
+    return uv_final, summary, history
 
 
 def plot_pp_history(history):
