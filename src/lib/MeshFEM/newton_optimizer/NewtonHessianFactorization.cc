@@ -10,6 +10,8 @@ NewtonHessianFactorization::NewtonHessianFactorization(std::shared_ptr<NewtonPro
 
 Real NewtonHessianFactorization::tauScale() const { return (m_options.hessianScaledBeta ? m_cachedHessianL2Norm.get(*m_problem) : 1.0) / m_problem->metricL2Norm(); }
 
+bool NewtonHessianFactorization::hessianWasProjected() const { return m_problem->hessianWasProjected(); }
+
 void NewtonHessianFactorization::updateSymbolicFactorization() {
     auto &s = solver();
 
@@ -173,6 +175,7 @@ Real NewtonHessianFactorization::m_updateSparseFactorization(const NewtonHessian
                     }
 
                     s.factorizeNumericWithShift(getH(), tau * currentTauScale, *M);
+                    m_shift = std::numeric_limits<Real>::quiet_NaN();
                 }
             }
             else {

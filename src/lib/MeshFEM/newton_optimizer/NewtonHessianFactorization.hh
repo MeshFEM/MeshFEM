@@ -3,6 +3,8 @@
 
 #include "NewtonOptions.hh"
 #include "NewtonHessian.hh"
+#include <optional>
+#include <cmath>
 
 namespace MeshFEM {
 
@@ -40,6 +42,17 @@ struct MESHFEM_EXPORT NewtonHessianFactorization final : public BorderedSparseFa
     Real update(const WorkingSet &ws, Real &beta, const Real betaMin);
 
     Real tauScale() const;
+
+    // Actual multiple of I added by the numeric factorization, including
+    // relative scaling and adaptive identity shifts. A general metric shift
+    // cannot be represented by one scalar and returns nullopt.
+    std::optional<Real> identityShift() const {
+        return std::isfinite(m_shift) ? std::optional<Real>(m_shift) : std::nullopt;
+    }
+
+    // Projection mode of the problem's cached Hessian. As with solve(), the
+    // problem/Hessian must not be changed after update() without refactorizing.
+    bool hessianWasProjected() const;
 
     // The symbolic factorization must be updated if either the sparsity pattern
     // changes or the fixed variables set changes.
@@ -84,6 +97,7 @@ private:
 
     Real m_shift = 0.0; // The multiple of the identity matrix added during
                         // factorization to make the Hessian positive definite.
+                        // NaN denotes a general metric shift, not a multiple of I.
 };
 
 } // namespace MeshFEM
