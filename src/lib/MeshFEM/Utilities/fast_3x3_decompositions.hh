@@ -200,7 +200,7 @@ void sym_evecs_from_evals(const Mat3_T<Real> &M, const Vec3_T<Real> &evals, Mat3
 // sorted as the general path sorts them and Q permuted to match.
 template<bool Descending, typename Real>
 void diagonal_eigendecomposition(const Mat3_T<Real> &A, Vec3_T<Real> &lambda, Mat3_T<Real> &Q) {
-    std::array<Real, 3> diag = { A(0, 0), A(1, 1), A(2, 2) };
+    std::array<Real, 3> diag = {{ A(0, 0), A(1, 1), A(2, 2) }};
     auto order = argsort<Descending>(diag);
     Q.setZero();
     for (int k = 0; k < 3; ++k) { lambda[k] = diag[order[k]]; Q(order[k], k) = 1; }
