@@ -93,7 +93,7 @@ private:
     // Record the sparsity pattern for which the most recent symbolic
     // factorization was computed by `m_solver`.
     size_t m_factorizedSparsityPatternID = std::numeric_limits<size_t>::max(); // None
-    size_t m_factorizedSymbolicResetID = std::numeric_limits<size_t>::max();
+    size_t m_currentAnalysisPhaseTemporalCacheID = std::numeric_limits<size_t>::max();
 
     Real m_shift = 0.0; // The multiple of the identity matrix added during
                         // factorization to make the Hessian positive definite.

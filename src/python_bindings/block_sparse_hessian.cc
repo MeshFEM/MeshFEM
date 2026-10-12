@@ -134,6 +134,7 @@ PYBIND11_MODULE(block_sparse_hessian, m) {
 
     using NHF = NewtonHessianFactorization;
     py::class_<NHF, BSF>(m, "NewtonHessianFactorization")
+        .def_property_readonly("solver", [](NHF &f) -> CholeskyFactorizerBase & { return f.solver(); }, py::return_value_policy::reference_internal)
         .def("recordFinalSymbolicMatrix", &NHF::recordFinalSymbolicMatrix)
         ;
 

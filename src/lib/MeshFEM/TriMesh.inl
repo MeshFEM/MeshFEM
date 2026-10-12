@@ -1,4 +1,10 @@
-#include <map>
+#include <algorithm>
+#include <MeshFEM/HalfedgeDictionary.hh>
+#if MESHFEM_WITH_TBB
+#include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
+#include <tbb/global_control.h>
+#endif
 #include <stdexcept>
 #include <iostream>
 #include <MeshFEM/Geometry.hh>
@@ -11,7 +17,6 @@ namespace MeshFEM {
 // Constructor
 // Build index tables from triangle soup
 ////////////////////////////////////////////////////////////////////////////////
-#include <map>
 template<class VertexData, class HalfEdgeData, class TriData,
          class BoundaryVertexData, class BoundaryEdgeData>
 template<typename Tris>
@@ -30,56 +35,118 @@ TriMesh(const Tris &tris, size_t nVertices, bool suppressNonmanifoldWarning) {
         V[3 * t + 2] = EAA::get(tris, t, 2);
     }
 
-    // Validate vertex indices
+    // Use the vertex-incidence array temporarily to detect high valence while
+    // validating indices. Reset it before constructing the actual incidences.
+    VH.assign(nVertices, 0);
+    bool highValence = false;
     for (size_t i = 0; i < V.size(); ++i) {
         if (size_t(V[i]) >= nVertices)
             throw std::runtime_error("Bad vertex index encountered.");
+        highValence |= ++VH[V[i]] > 256;
     }
 
     // TriMesh::numVertices() is used below and needs VH.size()
-    VH.assign(nVertices, -1);
+    std::fill(VH.begin(), VH.end(), -1);
 
-    using EdgeMap = std::map<UnorderedPair, int>;
-    // Half-edge Adjacency
-    EdgeMap halfEdgeForEdge;
-    // std::runtime_error nonManifold("Non-manifold input detected.");
+    // Half-edge adjacency. Retain the first incidence after pairing so a third
+    // incidence is detected without a second dictionary or a separate pass.
     O.assign(3 * nt, -1);
     const size_t nHalfEdges = O.size();
-    {
-        EdgeMap incidentTris;
-        for (size_t he = 0; he < nHalfEdges; ++he) {
-            UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),
-                               m_vertexOfHE<HEVertex::TAIL>(he));
-            incidentTris[edge]++;
+    auto edgeOf = [&](size_t he) {
+        return UnorderedPair(m_vertexOfHE<HEVertex::TIP >(he),
+                             m_vertexOfHE<HEVertex::TAIL>(he));
+    };
+    auto pairHalfedges = [&](size_t he, size_t other) {
+        if (O[other] != -1) throw std::runtime_error("Non-manifold edge detected");
+        if (m_vertexOfHE<HEVertex::TIP >(he) != m_vertexOfHE<HEVertex::TAIL>(other) ||
+            m_vertexOfHE<HEVertex::TAIL>(he) != m_vertexOfHE<HEVertex::TIP >(other))
+            throw std::runtime_error("Inconsistent triangle orientations.");
+        O[he] = other;
+        O[other] = he;
+    };
+    auto insertHalfedge = [&](HalfedgeDictionary &dictionary, size_t he, size_t numDictionaries) {
+        const auto edge = edgeOf(he);
+        const size_t start = edge[0] / numDictionaries;
+        const size_t other = dictionary.halfedge(start, edge[1]);
+        if (other == HalfedgeDictionary::INVALID_INDEX) dictionary.insert(start, edge[1], he);
+        else pairHalfedges(he, other);
+    };
+
+    // The dictionary assumes bounded vertex valence. Sorting avoids its long
+    // bucket chains on unusual inputs such as a large fan around one vertex.
+    using EdgeHalfedge = std::pair<UnorderedPair, int>;
+    if (highValence) {
+        std::vector<EdgeHalfedge> edges;
+        edges.reserve(nHalfEdges);
+        for (size_t he = 0; he < nHalfEdges; ++he) edges.emplace_back(edgeOf(he), he);
+        std::sort(edges.begin(), edges.end());
+        for (size_t begin = 0, end; begin < edges.size(); begin = end) {
+            for (end = begin + 1; end < edges.size() && edges[end].first == edges[begin].first; ++end) { }
+            if (end - begin > 2) throw std::runtime_error("Non-manifold edge detected");
+            if (end - begin == 2) pairHalfedges(edges[begin].second, edges[begin + 1].second);
         }
-        for (const auto &p : incidentTris)
-            if (p.second > 2) throw std::runtime_error("Non-manifold edge detected");
+    }
+    else {
+        size_t numDictionaries = 1;
+#if MESHFEM_WITH_TBB
+        // Serial wins on the measured <=32k triangle meshes. Above this size,
+        // use up to four dictionaries per worker, with >=4096 triangles each.
+        constexpr size_t parallelThreshold = 32768;
+        const size_t workers = std::min(size_t(tbb::this_task_arena::max_concurrency()),
+                tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism));
+        if (nt >= parallelThreshold && workers > 1)
+            numDictionaries = std::min(4 * workers, nt / 4096);
+#endif
+        if (numDictionaries == 1) {
+            HalfedgeDictionary dictionary(nVertices, nHalfEdges);
+            for (size_t he = 0; he < nHalfEdges; ++he) insertHalfedge(dictionary, he, 1);
+        }
+#if MESHFEM_WITH_TBB
+        else {
+            // Assign an edge (u,v), u < v, to dictionary u % numDictionaries.
+            // Its local start index is u / numDictionaries; v stays global.
+            // Both incident halfedges therefore share one dictionary owner.
+            constexpr size_t chunkSize = 4096;
+            const size_t numChunks = (nHalfEdges + chunkSize - 1) / chunkSize;
+            std::vector<size_t> cursors(numChunks * numDictionaries, 0);
+            std::vector<size_t> offsets(numDictionaries + 1, 0);
+            auto owner = [&](size_t he) { return size_t(edgeOf(he)[0]) % numDictionaries; };
+            tbb::parallel_for(size_t(0), numChunks, [&](size_t c) {
+                for (size_t he = c * chunkSize; he < std::min(nHalfEdges, (c + 1) * chunkSize); ++he)
+                    ++cursors[c * numDictionaries + owner(he)];
+            });
+            // Turn per-chunk counts into disjoint scatter ranges within each
+            // dictionary's bucket. Neither scatter nor pairing needs atomics.
+            for (size_t s = 0; s < numDictionaries; ++s) {
+                size_t next = offsets[s];
+                for (size_t c = 0; c < numChunks; ++c) {
+                    auto &cursor = cursors[c * numDictionaries + s];
+                    const size_t count = cursor;
+                    cursor = next;
+                    next += count;
+                }
+                offsets[s + 1] = next;
+            }
+            std::vector<int> order(nHalfEdges);
+            tbb::parallel_for(size_t(0), numChunks, [&](size_t c) {
+                for (size_t he = c * chunkSize; he < std::min(nHalfEdges, (c + 1) * chunkSize); ++he)
+                    order[cursors[c * numDictionaries + owner(he)]++] = he;
+            });
+            tbb::parallel_for(size_t(0), numDictionaries, [&](size_t s) {
+                HalfedgeDictionary dictionary((nVertices + numDictionaries - 1) / numDictionaries,
+                                              offsets[s + 1] - offsets[s]);
+                for (size_t k = offsets[s]; k < offsets[s + 1]; ++k)
+                    insertHalfedge(dictionary, order[k], numDictionaries);
+            });
+        }
+#endif
     }
 
-    for (size_t he = 0; he < nHalfEdges; ++he) {
-        UnorderedPair edge(m_vertexOfHE<HEVertex::TIP >(he),
-                           m_vertexOfHE<HEVertex::TAIL>(he));
-        // Attempt to insert half-edge
-        auto res = halfEdgeForEdge.emplace(edge, he);
-        if (!res.second) { // already exists
-            auto it = res.first;
-            int heO = it->second;
-            assert(size_t(heO) < O.size());
-            if ((m_vertexOfHE<HEVertex::TIP >(he) != m_vertexOfHE<HEVertex::TAIL>(heO))  ||
-                (m_vertexOfHE<HEVertex::TAIL>(he) != m_vertexOfHE<HEVertex::TIP >(heO))) {
-                throw std::runtime_error("Inconsistent triangle orientations.");
-            }
-            if (O[heO] == -1) {
-                O[heO] = he;
-                O[he] = heO;
-            }
-            // Note: the following can't actually detect non-manifold geometry
-            // because of the halfEdgeForEdge.erase(it) call...
-            // else throw nonManifold;
-            else assert(false);
-            halfEdgeForEdge.erase(it);
-        }
-    }
+    // Preserve the map constructor's lexicographic boundary-edge ordering.
+    std::vector<EdgeHalfedge> halfEdgeForEdge;
+    for (size_t he = 0; he < nHalfEdges; ++he)
+        if (O[he] == -1) halfEdgeForEdge.emplace_back(edgeOf(he), he);
+    std::sort(halfEdgeForEdge.begin(), halfEdgeForEdge.end());
 
     // Boundary Extraction
     // Boundary edges are those with no opposites--the ones left in

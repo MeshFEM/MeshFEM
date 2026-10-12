@@ -40,7 +40,7 @@ struct PatternTerm : NewtonObjectiveTermBase {
 // SLRU's policy for requesting one.
 struct ResettableProblem : NewtonMultiobjectiveProblem {
     using NewtonMultiobjectiveProblem::NewtonMultiobjectiveProblem;
-    void requestReset() { m_requestSymbolicFactorizationReset(); }
+    void requestReset() { m_requestAnalysisPhaseTemporalCacheInvalidation(); }
 };
 
 const CholmodParallelNesdis::TemporalReuseStatistics &stats(NewtonHessianFactorization &f) {
@@ -48,7 +48,7 @@ const CholmodParallelNesdis::TemporalReuseStatistics &stats(NewtonHessianFactori
 }
 }
 
-TEST_CASE("SLRU expiration resets ND reuse for every factorizer", "[temporal_nd][slru]") {
+TEST_CASE("SLRU hard expiration invalidates ND history without forcing unrelated analysis", "[temporal_nd][slru]") {
     using Frequency = NewtonObjectiveTermBase::SparsityUpdateFrequency;
     const auto frequency = GENERATE(Frequency::SOMETIMES, Frequency::ALWAYS);
     auto staticTerm = std::make_shared<PatternTerm>(Frequency::NEVER);
@@ -70,18 +70,25 @@ TEST_CASE("SLRU expiration resets ND reuse for every factorizer", "[temporal_nd]
     second.updateSymbolicFactorization();
     REQUIRE(stats(first).full_rebuild);
     REQUIRE(stats(second).full_rebuild);
-    const size_t resetID = problem->symbolicFactorizationResetID();
+    const size_t cacheID = problem->analysisPhaseTemporalCacheID();
 
     // New connectivity updates symbolic factorization while preserving ND.
     dynamicTerm->setEdges({{0, 3}, {1, 4}});
     first.updateSymbolicFactorization();
+    second.updateSymbolicFactorization();
     REQUIRE_FALSE(stats(first).full_rebuild);
-    REQUIRE(problem->symbolicFactorizationResetID() == resetID);
+    REQUIRE_FALSE(stats(second).full_rebuild);
+    REQUIRE(problem->analysisPhaseTemporalCacheID() == cacheID);
+
+    bool invalidatesCache = true;
+    bool changesPattern = true;
+    const size_t patternID = problem->sparsityPatternID();
+    const Eigen::VectorXd rhs = Eigen::VectorXd::LinSpaced(PatternTerm::n, -1, 1);
 
     SECTION("hard expiration with a nonempty dynamic pattern") {
         dynamicTerm->setEdges({{1, 4}});
         first.updateSymbolicFactorization(); // Retained edge age 1, no rebuild.
-        REQUIRE(problem->symbolicFactorizationResetID() == resetID);
+        REQUIRE(problem->analysisPhaseTemporalCacheID() == cacheID);
         problem->updateSparsityPattern(); // age 2
         problem->updateSparsityPattern(); // age 3, expires
     }
@@ -89,43 +96,74 @@ TEST_CASE("SLRU expiration resets ND reuse for every factorizer", "[temporal_nd]
         slru.entryCacheBudgetRatio = 2; // Exercise update's empty-pattern fast path.
         dynamicTerm->setEdges({});
         first.updateSymbolicFactorization();
-        REQUIRE(problem->symbolicFactorizationResetID() == resetID);
+        REQUIRE(problem->analysisPhaseTemporalCacheID() == cacheID);
         problem->updateSparsityPattern();
         problem->updateSparsityPattern();
     }
     SECTION("budget eviction without new entries") {
+        invalidatesCache = false;
         slru.entryCacheBudgetRatio = 0;
         dynamicTerm->setEdges({{1, 4}});
         problem->updateSparsityPattern();
     }
     SECTION("budget eviction with new entries") {
+        invalidatesCache = false;
         slru.entryCacheBudgetRatio = 0;
         dynamicTerm->setEdges({{1, 4}, {2, 6}});
         problem->updateSparsityPattern();
     }
     SECTION("reset without a sparsity change") {
-        const size_t patternID = problem->sparsityPatternID();
+        changesPattern = false;
+        // Numeric factors must remain usable after a cache-only invalidation.
+        auto matrix = problem->hessianSparsityPattern(false).toScalar();
+        matrix.setIdentity(true);
+        first.solver().factorizeNumeric(matrix);
+        second.solver().factorizeNumeric(matrix);
         problem->requestReset();
         REQUIRE(problem->sparsityPatternID() == patternID);
     }
 
-    REQUIRE(problem->symbolicFactorizationResetID() == resetID + 1);
+    REQUIRE(problem->analysisPhaseTemporalCacheID() == cacheID + size_t(invalidatesCache));
+    REQUIRE((problem->sparsityPatternID() != patternID) == changesPattern);
     // Additional pattern queries must not lose the reset before either solver
     // consumes it. A boolean that clears on the next update would fail here.
     problem->updateSparsityPattern();
-    first.updateSymbolicFactorization();
-    REQUIRE(stats(first).full_rebuild);
-    second.updateSymbolicFactorization();
-    REQUIRE(stats(second).full_rebuild);
+    for (auto *f : {&first, &second}) {
+        f->updateSymbolicFactorization();
+        if (changesPattern) {
+            REQUIRE(stats(*f).graph_vertices == PatternTerm::n);
+            REQUIRE(stats(*f).full_rebuild == invalidatesCache);
+        }
+        else {
+            // Clearing history also clears statistics. A new analysis would
+            // repopulate them and discard the existing numeric factorization.
+            REQUIRE(stats(*f).graph_vertices == 0);
+            REQUIRE(f->solver().hasNumericFactorization());
+            REQUIRE((f->solver().solve(rhs) - rhs).norm() < 1e-12);
+            f->updateSymbolicFactorization();
+            REQUIRE(stats(*f).graph_vertices == 0);
+            REQUIRE(f->solver().hasNumericFactorization());
+        }
+    }
 
-    // An ordinary addition after the reset can reuse the fresh ND tree again.
+    // A deferred invalidation takes effect on the next required analysis.
+    // Otherwise, an ordinary addition can reuse the existing ND tree.
     auto edges = dynamicTerm->edges;
     edges.emplace_back(5, 9);
     dynamicTerm->setEdges(std::move(edges));
     first.updateSymbolicFactorization();
     second.updateSymbolicFactorization();
+    REQUIRE(stats(first).full_rebuild == !changesPattern);
+    REQUIRE(stats(second).full_rebuild == !changesPattern);
+    REQUIRE(problem->analysisPhaseTemporalCacheID() == cacheID + size_t(invalidatesCache));
+
+    // Once acknowledged, the same invalidation must not reset history again.
+    edges = dynamicTerm->edges;
+    edges.emplace_back(6, 10);
+    dynamicTerm->setEdges(std::move(edges));
+    first.updateSymbolicFactorization();
+    second.updateSymbolicFactorization();
     REQUIRE_FALSE(stats(first).full_rebuild);
     REQUIRE_FALSE(stats(second).full_rebuild);
-    REQUIRE(problem->symbolicFactorizationResetID() == resetID + 1);
 }
 #endif

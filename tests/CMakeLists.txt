@@ -15,6 +15,7 @@ add_executable(unit_tests
     test_materials.cc
     test_tensors.cc
     test_mass.cc
+    test_trimesh_construction.cc
     test_femmesh_traversal.cc
     test_edensity_adaptors.cc
     test_edensities.cc

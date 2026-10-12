@@ -173,7 +173,7 @@ PYBIND11_MODULE(py_newton_optimizer, m) {
         .def_readwrite("useRelativeHessianShift", &NewtonProblem::useRelativeHessianShift)
 
         .def_property_readonly("hessianWasProjected",             &NewtonProblem::hessianWasProjected,             "Whether a projected Hessian was requested in the last call to `hessian()`")
-        .def_property_readonly("lastFactorizationShiftMagnitude", &NewtonProblem::lastFactorizationShiftMagnitude, "The last `tau` parameter that was used to make the Hessian positive definite during newton_step")
+        .def_property_readonly("lastFactorizationShiftMagnitude", &NewtonProblem::lastFactorizationShiftMagnitude, "The adaptive tau from optimize() or update_factorizations(), before Hessian/metric scaling; excludes the configured hessianShift")
 
         .def("optimizer", [](std::shared_ptr<NewtonProblem> prob) { return std::make_shared<NewtonOptimizer>(prob); })
 

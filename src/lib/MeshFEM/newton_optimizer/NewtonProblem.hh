@@ -107,10 +107,9 @@ struct MESHFEM_EXPORT NewtonProblem {
     // sparsity pattern updates.
     size_t sparsityPatternID() const { return m_sparsityPatternID; }
 
-    // A separate generation for requests to discard symbolic-analysis history.
-    // Each factorizer observes it independently, even if sparsity is updated
-    // several times before that factorizer next runs.
-    size_t symbolicFactorizationResetID() const { return m_symbolicFactorizationResetID; }
+    // A separate identifier for determining when temporal cache used by the
+    // analysis phase (e.g., for incremental ND updates) should be invalidated.
+    size_t analysisPhaseTemporalCacheID() const { return m_analysisPhaseTemporalCacheID; }
 
     // A **sorted, unique** list of indices of variables that are fixed in this problem.
     const std::vector<size_t> &fixedVars() const { return m_fixedVars; }
@@ -291,11 +290,15 @@ struct MESHFEM_EXPORT NewtonProblem {
     Real hessianShift = 0.0;
     bool useRelativeHessianShift = true;
 
+    // Adaptive tau reported by optimize() or update_factorizations(), before
+    // Hessian/metric scaling. Zero means no adaptive shift; a configured
+    // hessianShift may still be present. For the actual multiple of I added
+    // to the factorized matrix, use NewtonHessianFactorization::identityShift().
     Real lastFactorizationShiftMagnitude() const { return m_lastFactorizationShiftMagnitude; }
     void setLastFactorizationShiftMagnitude(Real val) { m_lastFactorizationShiftMagnitude = val; }
 
 protected:
-    void m_requestSymbolicFactorizationReset() const { ++m_symbolicFactorizationResetID; }
+    void m_requestAnalysisPhaseTemporalCacheInvalidation() const { ++m_analysisPhaseTemporalCacheID; }
 
     // Clear the cached per-iterate quantities
     void m_clearCache() { m_cachedHessianUpToDate = false, m_cachedMetric.reset(); /* TODO: decide if we want this: m_metricL2Norm = -1; */ }
@@ -330,7 +333,7 @@ protected:
     Real m_lastFactorizationShiftMagnitude = 0;
 
     mutable size_t m_sparsityPatternID = 0;
-    mutable size_t m_symbolicFactorizationResetID = 0;
+    mutable size_t m_analysisPhaseTemporalCacheID = 0;
 };
 
 } // namespace MeshFEM

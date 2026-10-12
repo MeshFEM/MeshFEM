@@ -258,7 +258,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         .def("factorize", [](CFB &c, const SuiteSparseMatrix &mat, const std::vector<size_t> &pinnedVars, bool isInTryCatch) {
                     c.factorize(mat, pinnedVars, isInTryCatch); }, py::arg("mat"), py::arg("pinnedVars") = std::vector<size_t>(), py::arg("isInTryCatch") = false)
         .def("clearFactors", &CFB::clearFactors)
-        .def("resetSymbolicFactorizationReuse", &CFB::resetSymbolicFactorizationReuse)
+        .def("resetAnalysisPhaseTemporalCache", &CFB::resetAnalysisPhaseTemporalCache)
         .def("checkPosDef",  &CFB::checkPosDef)
         .def("getFactorNNZ",    &CFB::getFactorNNZ)
         .def("getFlopEstimate", &CFB::getFlopEstimate)
@@ -282,6 +282,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
     using CatF = CatamariFactorizer;
     py::class_<CatF, CFB> pyCatF(detail_module, "CatamariFactorizer");
 #ifndef MESHFEM_USE_LEGACY_CATAMARI
+    pyCatF.def_property("identityPinning", &CatF::getIdentityPinning, &CatF::setIdentityPinning);
     pyCatF.def("getInversePermutation", &CatF::getInversePermutation,
               "Final new-to-old permutation of reduced scalar variables, including amalgamation; available after symbolic analysis.");
 #endif
@@ -310,7 +311,6 @@ PYBIND11_MODULE(sparse_matrices, m) {
         ;
     pyCatF.def_readwrite("orderingMethod", &CatF::orderingMethod);
     pyCatF.def_property("temporalReusePeriod", &CatF::temporalReusePeriod, &CatF::setTemporalReusePeriod);
-    pyCatF.def("resetTemporalReuse", &CatF::resetTemporalReuse);
 #if MESHFEM_WITH_CHOLMOD
     pyCatF.def_property_readonly("temporalReuseStatistics", [](const CatF &f) {
         const auto &s = f.temporalReuseStatistics();

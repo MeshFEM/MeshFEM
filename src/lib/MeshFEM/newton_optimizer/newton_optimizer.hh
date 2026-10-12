@@ -49,7 +49,10 @@ struct MESHFEM_EXPORT NewtonOptimizer {
     // previous iteration (before the final linesearch step).
     void update_factorizations(const WorkingSet &ws) {
         BENCHMARK_SCOPED_TIMER_SECTION timer("update_factorizations");
-        m_hessianFactorization.update(ws, options.beta, std::min(options.beta, 1e-6));
+        // Standalone updates can follow pin edits made outside optimize().
+        m_hessianFactorization.m_fixedVarsCouldHaveChanged = true;
+        const Real tau = m_hessianFactorization.update(ws, options.beta, std::min(options.beta, 1e-6));
+        prob->setLastFactorizationShiftMagnitude(tau);
     }
 
     void update_factorizations() { update_factorizations(WorkingSet(*prob)); }

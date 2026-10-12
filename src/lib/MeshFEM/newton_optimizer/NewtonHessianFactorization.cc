@@ -20,39 +20,49 @@ void NewtonHessianFactorization::updateSymbolicFactorization() {
     m_problem->updateSparsityPattern();
 
     bool needsUpdate = (m_problem->sparsityPatternID() != m_factorizedSparsityPatternID);
-    const size_t resetID = m_problem->symbolicFactorizationResetID();
-    const bool resetSymbolicReuse = resetID != m_factorizedSymbolicResetID;
-    needsUpdate |= resetSymbolicReuse;
 
     // If the solver changed out from under us, it won't have a symbolic
     // factorization for the current pattern, and we need to force an update.
     needsUpdate |= !s.hasFactorization(CholeskyFactorizerBase::FactorizationType::Symbolic);
 
-    if (!needsUpdate) {
-        // Even if the sparsity pattern ID is the same, the fixed variables might have changed.
-        m_setFixedVars(m_problem->fixedVars());
-        const bool fixedVarsChanged = m_fixedVarsCouldHaveChanged && !s.fixesSameVarsAsSortedUnique(sparseFixedVars());
-
-        needsUpdate |= fixedVarsChanged;
-    }
-
     if (!needsUpdate && s.wantsSymbolicFactorizationRecompute()) {
         std::cout << "Solver triggered a symbolic factorization recomputation!" << std::endl;
         needsUpdate = true;
     }
-    needsUpdate |= s.wantsSymbolicFactorizationRecompute();
 
-    if (needsUpdate) {
+    bool fixedVarsChangedOnly = false;
+    if (!needsUpdate) {
+        // Even if the sparsity pattern isn't updated, the fixed variables might have changed.
+        m_setFixedVars(m_problem->fixedVars());
+        fixedVarsChangedOnly = m_fixedVarsCouldHaveChanged && !s.fixesSameVarsAsSortedUnique(sparseFixedVars());
+    }
+
+    {
+        // Invalidate/reset analysis cache if this has been requested
+        // (but retain existing symbolic factorization if it needs no update).
+        const size_t cacheID = m_problem->analysisPhaseTemporalCacheID();
+        const bool resetAnalysisTemporalCache = cacheID != m_currentAnalysisPhaseTemporalCacheID;
+        if (resetAnalysisTemporalCache) {
+            s.resetAnalysisPhaseTemporalCache();
+            m_currentAnalysisPhaseTemporalCacheID = cacheID;
+        }
+    }
+
+    if (needsUpdate || fixedVarsChangedOnly) {
         // std::cout << "symbolic factorization update " << s.symbolic_mat_name_suffix << std::endl;
-        NewtonHessian Hsp = m_problem->hessianSparsityPattern(/*needsUpdate = */ false);
+        NewtonHessian Hsp = m_problem->hessianSparsityPattern(/* needsUpdate = */ false);
         m_sparseDenseStructure = Hsp.varStructure().sparseDenseStructure();
-        m_setFixedVars(m_problem->fixedVars()); // Note, this must happen after m_sparseDenseStructure has been initialized!
+        if (!fixedVarsChangedOnly) // Note: in the `fixedVarsChangedOnly` path we already have called `m_setFixedVars`.
+            m_setFixedVars(m_problem->fixedVars()); // Note, this must happen after m_sparseDenseStructure has been initialized!
 
         // std::cout << "Symbolic factorization of sparsity pattern with " << Hsp.H_ss->scalarNNZ() << " nonzeros" << std::endl;
-        if (resetSymbolicReuse) s.resetSymbolicFactorizationReuse();
-        s.factorizeSymbolic(*(Hsp.H_ss), sparseFixedVars());
-        m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
-        m_factorizedSymbolicResetID = resetID;
+
+        if (fixedVarsChangedOnly)
+            s.updateFixedVars(*Hsp.H_ss, sparseFixedVars());
+        else {
+            s.factorizeSymbolic(*(Hsp.H_ss), sparseFixedVars());
+            m_factorizedSparsityPatternID = m_problem->sparsityPatternID();
+        }
         m_lowRankRank = Hsp.low_rank_rank();
     }
 

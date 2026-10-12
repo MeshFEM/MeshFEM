@@ -93,3 +93,50 @@ TEST_CASE("Newton options copies preserve factorizer precision", "[newton_option
     REQUIRE(assigned.single_precision_factorizer);
     REQUIRE(options.clone()->single_precision_factorizer);
 }
+
+TEST_CASE("Explicit factorization updates refresh shift telemetry", "[newton_options][shift_telemetry]") {
+    auto makeMatrix = [](Real firstDiagonal) {
+        TripletMatrix<> t(2, 2);
+        t.addNZ(0, 0, firstDiagonal);
+        t.addNZ(1, 1, 4.0);
+        SuiteSparseMatrix matrix(t);
+        matrix.symmetry_mode = SuiteSparseMatrix::SymmetryMode::UPPER_TRIANGLE;
+        return matrix;
+    };
+    Eigen::Matrix2d dense = Eigen::Vector2d(-1.0, 4.0).asDiagonal();
+    auto problem = std::make_shared<QuadraticProblem>(makeMatrix(-1.0), dense);
+    NewtonOptimizer optimizer(problem);
+    optimizer.options.beta = 2.0;
+    optimizer.options.hessianScaledBeta = false;
+    optimizer.options.useIdentityMetric = true;
+    optimizer.options.verboseNonPosDef = false;
+
+    // Use unscaled shifting so this two-variable test does not invoke the
+    // spectral estimator (which requires a larger matrix). Check the public
+    // no-argument overload against the actual factorization and solution.
+    optimizer.update_factorizations();
+    REQUIRE(problem->lastFactorizationShiftMagnitude() == Approx(2.0));
+    auto shift = optimizer.hessianFactorization().identityShift();
+    REQUIRE(shift.has_value());
+    REQUIRE(*shift == Approx(2.0));
+    const Eigen::Vector2d rhs(1.0, 6.0);
+    Eigen::VectorXd solution;
+    optimizer.hessianFactorization().solve(rhs, solution);
+    REQUIRE((solution - Eigen::Vector2d::Ones()).norm() < 1e-12);
+
+    // A subsequent unshifted factorization must clear the old nonzero tau.
+    // Exercise the working-set overload too.
+    problem->matrix = makeMatrix(2.0);
+    problem->dense(0, 0) = 2.0;
+    problem->invalidateCachedHessian();
+    optimizer.update_factorizations(WorkingSet(*problem));
+    REQUIRE(problem->lastFactorizationShiftMagnitude() == 0.0);
+    REQUIRE(*optimizer.hessianFactorization().identityShift() == 0.0);
+
+    // An explicit user shift is not an adaptive tau.
+    problem->hessianShift = 0.25;
+    problem->useRelativeHessianShift = false;
+    optimizer.update_factorizations();
+    REQUIRE(problem->lastFactorizationShiftMagnitude() == 0.0);
+    REQUIRE(*optimizer.hessianFactorization().identityShift() == Approx(0.25));
+}
