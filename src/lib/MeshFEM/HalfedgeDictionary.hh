@@ -45,8 +45,8 @@ private:
               nextRecord(INVALID_INDEX)
         { }
 
-        EdgeRecord(size_t end, size_t halfedge)
-            : endVertex(end), halfedge(halfedge),
+        EdgeRecord(size_t end, size_t halfedge_in)
+            : endVertex(end), halfedge(halfedge_in),
               nextRecord(INVALID_INDEX)
         { }
     };

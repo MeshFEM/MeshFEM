@@ -12,8 +12,8 @@ Soup grid(size_t width) {
     for (size_t y = 0; y + 1 < width; ++y) {
         for (size_t x = 0; x + 1 < width; ++x) {
             const int a = y * width + x, b = a + width;
-            tris.push_back({a, a + 1, b});
-            tris.push_back({a + 1, b + 1, b});
+            tris.push_back({{a, a + 1, b}});
+            tris.push_back({{a + 1, b + 1, b}});
         }
     }
     return tris;
@@ -75,7 +75,7 @@ TEST_CASE("Triangle construction preserves adjacency across the parallel thresho
 TEST_CASE("Triangle construction handles high-valence fans", "[trimesh]") {
     for (int n : {255, 256, 257, 16384, 40000}) {
         Soup tris;
-        for (int i = 0; i < n; ++i) tris.push_back({0, i + 1, (i + 1) % n + 1});
+        for (int i = 0; i < n; ++i) tris.push_back({{0, i + 1, (i + 1) % n + 1}});
         Mesh mesh(tris, n + 1);
         checkPairs(mesh);
         const auto loops = mesh.boundaryLoops();
