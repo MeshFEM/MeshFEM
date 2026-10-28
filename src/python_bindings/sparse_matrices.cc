@@ -311,6 +311,8 @@ PYBIND11_MODULE(sparse_matrices, m) {
         ;
     pyCatF.def_readwrite("orderingMethod", &CatF::orderingMethod);
     pyCatF.def_property("temporalReusePeriod", &CatF::temporalReusePeriod, &CatF::setTemporalReusePeriod);
+    pyCatF.def_property("temporalReusePromotionDepth", &CatF::temporalReusePromotionDepth, &CatF::setTemporalReusePromotionDepth,
+                       "Separator promotion: 0 disables, -1 permits all levels, positive d permits LCA depth < d (root depth 0). Requires a nonzero temporalReusePeriod.");
 #if MESHFEM_WITH_CHOLMOD
     pyCatF.def_property_readonly("temporalReuseStatistics", [](const CatF &f) {
         const auto &s = f.temporalReuseStatistics();
@@ -319,6 +321,7 @@ PYBIND11_MODULE(sparse_matrices, m) {
         result["graph_vertices"] = s.graph_vertices;
         result["recomputed_subtrees"] = s.recomputed_subtrees;
         result["repartitioned_vertices"] = s.repartitioned_vertices;
+        result["promoted_vertices"] = s.promoted_vertices;
         result["nd_seconds"] = s.nd_seconds;
         return result;
     });
