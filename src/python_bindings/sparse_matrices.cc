@@ -283,6 +283,9 @@ PYBIND11_MODULE(sparse_matrices, m) {
     py::class_<CatF, CFB> pyCatF(detail_module, "CatamariFactorizer");
 #ifndef MESHFEM_USE_LEGACY_CATAMARI
     pyCatF.def_property("identityPinning", &CatF::getIdentityPinning, &CatF::setIdentityPinning);
+    pyCatF.def_property("diagonalPerturbationEpsilon", &CatF::getDiagonalPerturbationEpsilon,
+                        &CatF::setDiagonalPerturbationEpsilon,
+                        "Relative diagonal perturbation epsilon used during conversion-plan injection.");
     pyCatF.def("getInversePermutation", &CatF::getInversePermutation,
               "Final new-to-old permutation of reduced scalar variables, including amalgamation; available after symbolic analysis.");
 #endif
